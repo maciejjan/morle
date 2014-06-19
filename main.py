@@ -46,6 +46,7 @@ def main(mode, modules):
 
 	MODULE_SRULES = 'srules'
 	MODULE_LEXEMES = 'infl'
+	MODULE_MDL_TRAIN = 'mdl-train'
 	MODULE_DERIV = 'deriv'
 	MODULE_TRAIN = 'train'
 
@@ -67,6 +68,8 @@ def main(mode, modules):
 			derivation.run()
 		if MODULE_TRAIN in modules:
 			train.run()
+		if MODULE_MDL_TRAIN in modules:
+			mdltrain.run()
 	if MODE_EVAL in mode:
 		if MODULE_SRULES in modules:
 			surface_rules.evaluate()

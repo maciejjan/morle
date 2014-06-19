@@ -4,20 +4,27 @@ import os
 import os.path
 import utils.printer
 
-def load_tsv_file(filename, print_progress=False, print_msg=None):
+# TODO types as parameter
+
+def read_tsv_file(filename, types=None, print_progress=False, print_msg=None):
 	pp = None
 	if print_progress:
 		print print_msg
 		pp = utils.printer.progress_printer(get_file_size(filename))
 	with codecs.open(settings.WORKING_DIR+filename, 'r', settings.ENCODING) as fp:
 		for line in fp:
-			yield tuple(line.rstrip().split('\t'))
+			row = line.rstrip().split('\t')
+			if isinstance(types, tuple):
+				for i in range(min(len(row), len(types))):
+					row[i] = types[i](row[i])
+			yield tuple(row)
 			if print_progress:
 				pp.next()
 
-def load_tsv_file_by_key(filename, key_col=1, print_progress=False, print_msg=None):
+def read_tsv_file_by_key(filename, key_col=1, types=None,\
+		print_progress=False, print_msg=None):
 	current_key, entries = None, []
-	for row in load_tsv_file(filename, print_progress, print_msg):
+	for row in read_tsv_file(filename, types, print_progress, print_msg):
 		key, entry = None, None
 		if isinstance(key_col, tuple):
 			key = tuple([row[i-1] for i in key_col])
@@ -57,7 +64,7 @@ def get_file_size(filename):
 	if FILE_SIZES.has_key(filename):
 		return FILE_SIZES[filename]
 	else:
-		load_index_file()
+		read_index_file()
 		if FILE_SIZES.has_key(filename):
 			return FILE_SIZES[filename]
 		else:
@@ -65,10 +72,10 @@ def get_file_size(filename):
 			set_file_size(filename, size)
 			return size
 
-def load_index_file():
+def read_index_file():
 	global FILE_SIZES
 	if os.path.isfile(settings.WORKING_DIR + settings.FILES['index']):
-		for filename, size in load_tsv_file(settings.FILES['index']):
+		for filename, size in read_tsv_file(settings.FILES['index']):
 			if not FILE_SIZES.has_key(filename):
 				FILE_SIZES[filename] = int(size)
 
@@ -82,7 +89,7 @@ def update_file_size(filename):
 
 def update_index_file():
 	global FILE_SIZES
-	load_index_file()
+	read_index_file()
 	with open_to_write(settings.FILES['index']) as fp:
 		for filename, size in FILE_SIZES.iteritems():
 			write_line(fp, (filename, size))

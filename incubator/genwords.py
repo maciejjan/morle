@@ -1,27 +1,29 @@
-from datastruct.rules import Rule
-from incubator.mdl2 import *
-import re
+from datastruct.rules import *
+import algorithms.ngrams
 
-# generating words with MDL model
+def rule_score(ruledata, unigrams):
+	score = 1.0
+	rule = Rule.from_string(ruledata.rule)
+	score *= unigrams.word_prob(rule.prefix[0]) / unigrams.word_prob(rule.prefix[1])
+	for (x, y) in rule.alternations:
+		score *= unigrams.word_prob(x) / unigrams.word_prob(y)
+	score *= unigrams.word_prob(rule.suffix[0]) / unigrams.word_prob(rule.suffix[1])
+	score *= ruledata.prod
+	return score
 
-def make_right_pattern(rule):
-	pattern = '^'+rule.prefix[1] + '.*'
-	pattern += '.*'.join([y for x, y in rule.alternations])
-	pattern += ('.*' if rule.alternations else '') + rule.suffix[1] + '$'
-	return re.compile(pattern)
+def prepare_rules_list(rules_file, input_file):
+	rules = RuleSet.load_from_file(rules_file)
+	del rules[u'#']
+	unigrams = algorithms.ngrams.NGramModel(1)
+	unigrams.train_from_file(input_file)
+	rules_list = [(Rule.from_string(r.rule), rule_score(r, unigrams)) for r in rules.values()]
+	rules_list.sort(reverse = True, key = lambda x: x[1])
+	return rules_list
 
-def make_patterns(rules):
-	patterns = {}
-	for r in rules.values():
-		patterns[r.tr] = make_right_pattern(Rule.from_string(r.tr))
-	return patterns
-
-def analyze_new_word(rules, lexicon, patterns, word):
-	for r, p in patterns.iteritems():
-		if p.match(word):
-			print r
-
-rules = load_rules('rules.txt.451')
-lexicon = load_lexicon('lexicon.txt.451')
-patterns = make_patterns(rules)
+def generate_analysis(word, rules_list):
+	results = []
+	for r, score in rules_list:
+		if r.rmatch(word) and score > 1.0:
+			results.append((r.to_string(), score))
+	return results
 

@@ -40,7 +40,7 @@
 #import incubator.ruleprob
 #incubator.ruleprob.run()
 
-import incubator.genwords
+from incubator.genwords import *
 #incubator.genwords.run()
 
 #import incubator.optrules
