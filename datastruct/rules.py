@@ -27,22 +27,28 @@ class Rule:
 		affixes.append(self.suffix[1])
 		return [x for x in affixes if x]
 	
+	def make_left_pattern(self):
+		self.left_pattern = re.compile('^' +\
+			self.prefix[0] +\
+			('(.*)' if self.alternations else '') + \
+			'(.*)'.join([x for x, y in self.alternations]) +\
+			'(.*)' + self.suffix[0] + '$')
+	
+	def make_right_pattern(self):
+		self.right_pattern = re.compile('^' +\
+			self.prefix[1] +\
+			('(.*)' if self.alternations else '') + \
+			'(.*)'.join([y for x, y in self.alternations]) +\
+			'(.*)' + self.suffix[1] + '$')
+	
 	def lmatch(self, word):
 		if self.left_pattern is None:
-			self.left_pattern = re.compile('^' +\
-				self.prefix[0] +\
-				('(.+)' if self.alternations else '') + \
-				'(.+)'.join([x for x, y in self.alternations]) +\
-				'(.+)' + self.suffix[0] + '$')
+			self.make_left_pattern()
 		return True if self.left_pattern.match(word) else False
 	
 	def rmatch(self, word):
 		if self.right_pattern is None:
-			self.right_pattern = re.compile('^' +\
-				self.prefix[1] +\
-				('(.+)' if self.alternations else '') + \
-				'(.+)'.join([y for x, y in self.alternations]) +\
-				'(.+)' + self.suffix[1] + '$')
+			self.make_right_pattern()
 		return True if self.right_pattern.match(word) else False
 	
 	def reverse(self):

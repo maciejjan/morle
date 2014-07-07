@@ -55,3 +55,9 @@ def print_opt(opt):
 		for w1, w2 in wordpairs:
 			print '\t'.join((w1, w2))
 
+from datastruct.lexicon import *
+lexicon = Lexicon.load_from_file('lexicon.txt.5')
+rules = RuleSet.load_from_file('rules.txt.5')
+#for w in sorted(list(lexicon.roots)):
+#	lexicon[w].show_tree()
+

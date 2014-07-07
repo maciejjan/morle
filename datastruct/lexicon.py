@@ -28,6 +28,11 @@ class LexiconNode:
 			analysis.append(node.word)
 		return analysis
 	
+	def show_tree(self, space=''):
+		print space + self.word.encode('utf-8'), self.freq #, self.sigma
+		for w in self.next.values():
+			w.show_tree(space=space+'\t')
+	
 	def forward_multiply_corpus_prob(self, p):
 		self.corpus_prob *= p
 		for child in self.next.values():
@@ -45,7 +50,7 @@ class Lexicon:
 		self.rules_c = Counter()
 		self.rules_freq = Counter()
 		self.total = 0
-#		self.sigma_total = self.total
+		self.sigma_total = self.total
 	
 	def __len__(self):
 		return len(self.nodes)
@@ -73,8 +78,9 @@ class Lexicon:
 			logl += math.log(self.nodes[root_w].ngram_prob)
 		for r, count in self.rules_c.iteritems():
 			m = rules[r].domsize - count
-			logl += count * math.log(rules[r].prod) +\
-				m * math.log(1.0 - rules[r].prod)
+			logl += count * math.log(rules[r].prod)
+			if m > 0:
+				logl += m * math.log(1.0 - rules[r].prod)
 		return logl
 	
 	def corpus_logl(self, rules):
@@ -101,7 +107,7 @@ class Lexicon:
 		for word in self.values():
 			for r in word.next.keys():
 				d[r] -= float(word.sigma) / word.sum_weights
-			d[u'#'] -= float(word.freq) / word.sum_weights
+			d[u'#'] -= float(word.sigma) / word.sum_weights
 		return d
 	
 	def try_weights(self, rules_w):
@@ -117,6 +123,26 @@ class Lexicon:
 		logl += self.total * math.log(rules_w[u'#'])
 		return logl
 	
+	def try_edge_pr(self, word_1, word_2, rule):
+		w1, w2 = self.nodes[word_1], self.nodes[word_2]
+		root = w1.root()
+		print word_1.encode('utf-8'), word_2.encode('utf-8')
+		# change of corpus log-likelihood
+		result = root.sigma * (math.log(root.sigma + w2.sigma) - math.log(root.sigma))
+		print result
+		result += w2.sigma * (math.log(root.sigma + w2.sigma) - math.log(w2.sigma))
+		print result
+		result += w2.sigma * (math.log(w1.corpus_prob * w1.sum_weights * rule.weight) -\
+			math.log(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
+		print result
+		result += w1.sigma * (math.log(w1.sum_weights) - math.log(w1.sum_weights + rule.weight))
+		print result
+		# change of lexicon log-likelihood
+		result += math.log(rule.prod) - math.log(len(self.roots) * w2.ngram_prob * (1.0 - rule.prod))
+		print result
+		print ''
+		return result
+	
 	def try_edge(self, word_1, word_2, rule):
 		w1, w2 = self.nodes[word_1], self.nodes[word_2]
 		root = w1.root()
@@ -130,20 +156,22 @@ class Lexicon:
 		result += math.log(rule.prod) - math.log(len(self.roots) * w2.ngram_prob * (1.0 - rule.prod))
 		return result
 	
-	def draw_edge(self, word_1, word_2, rule):
+	def draw_edge(self, word_1, word_2, rule, corpus_prob=True):
 		w1, w2 = self.nodes[word_1], self.nodes[word_2]
 		root = w1.root()
 
 		# update word probabilities
-		w2.forward_multiply_corpus_prob(w1.corpus_prob * w1.sum_weights * rule.weight /\
-			(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
-		root.forward_multiply_corpus_prob(float(root.sigma + w2.sigma) / root.sigma)
-		w2.forward_multiply_corpus_prob(float(root.sigma + w2.sigma) / w2.sigma)
-		w1.forward_multiply_corpus_prob(float(w1.sum_weights) / (w1.sum_weights + rule.weight))
+		if corpus_prob:
+			w2.forward_multiply_corpus_prob(w1.corpus_prob * w1.sum_weights * rule.weight /\
+				(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
+			root.forward_multiply_corpus_prob(float(root.sigma + w2.sigma) / root.sigma)
+			w2.forward_multiply_corpus_prob(float(root.sigma + w2.sigma) / w2.sigma)
+			w1.forward_multiply_corpus_prob(float(w1.sum_weights) / (w1.sum_weights + rule.weight))
 
 		# update frequency and weight sums
 		w1.backward_add_sigma(w2.sigma)
 		w1.sum_weights += rule.weight
+		self.sigma_total += w2.sigma * (len(w1.analysis()) + 1)
 
 		# draw the edge
 		w2.prev = w1
@@ -163,12 +191,6 @@ class Lexicon:
 					break
 			n = n.prev
 
-#		self.sigma_total += w2.sigma * (len(w1.analysis()) + 1)
-#		if self.sigma_total != self.rules_freq.total + self.total:
-#			raise Exception('ASSERTION FAILED: %s, %s, %s, %d = %d, %d != %d, %s, %d, %d, %d' %\
-#				(word_1, word_2, rule.rule, before_1, before_2,\
-#				self.sigma_total, self.rules_freq.total + self.total, w1.analysis(), w1.sigma, w2.sigma, c))
-	
 	# remove all edges
 	def reset(self):
 		self.rules_c = Counter()
@@ -214,8 +236,8 @@ class Lexicon:
 			lexicon[word_2] = LexiconNode(word_2, freq, sigma, ngram_prob, corpus_prob, sum_weights)
 			lexicon.total += freq
 			if word_1 and rule:
-				lexicon[word_2].prev = word_1
-				lexicon[word_1].next[rule] = word_2
+				lexicon[word_2].prev = lexicon[word_1]
+				lexicon[word_1].next[rule] = lexicon[word_2]
 				lexicon.rules_c.inc(rule)
 				lexicon.rules_freq.inc(rule, sigma)
 			else:

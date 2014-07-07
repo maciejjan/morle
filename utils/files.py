@@ -15,8 +15,11 @@ def read_tsv_file(filename, types=None, print_progress=False, print_msg=None):
 		for line in fp:
 			row = line.rstrip().split('\t')
 			if isinstance(types, tuple):
+				row_converted = []
 				for i in range(min(len(row), len(types))):
-					row[i] = types[i](row[i])
+#					row[i] = types[i](row[i])
+					row_converted.append(types[i](row[i]))
+				row = row_converted
 			yield tuple(row)
 			if print_progress:
 				pp.next()

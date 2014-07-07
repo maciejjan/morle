@@ -8,6 +8,8 @@ MAX_AFFIX_LENGTH = 5
 INDEPENDENCY_THRESHOLD = 0.001
 DERIVATION_THRESHOLD = 0.1
 
+SUPERVISED = True
+
 # load settings from file or create a settings file
 def process_settings_file():
 	import os.path

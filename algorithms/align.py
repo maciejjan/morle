@@ -16,6 +16,7 @@ def lcs(word_1, word_2):
 		previous_row = current_row
 	return previous_row[-1]
 
+# TODO change to use make_rule (currently in algorithms.mdl)
 def extract_rule(word_1, word_2, pattern):
 	m1 = pattern.search(word_1)
 	m2 = pattern.search(word_2)
