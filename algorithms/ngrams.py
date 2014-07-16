@@ -4,18 +4,27 @@ import random
 def generate_n_grams(word, n=None):
 	if n is None:
 		n = len(word)
-	return [word[max(j-n, 0):j] for j in range(len(word)+1)]
+	return [word[max(j-n, 0):j] for j in range(len(word)+1) if word[max(j-n, 0):j]]
 
 class NGramModel:
 	def __init__(self, n):
 		self.n = n
-		self.trie = NGramTrie()
+		self.ngrams = {}
+#		self.trie = NGramTrie()
 
 	def train(self, words):
+		total = 0
 		for word, freq in words:
 			for ngr in generate_n_grams(word + '#', self.n):
-				self.trie.inc(ngr, freq)
-		self.trie.normalize()
+				if not self.ngrams.has_key(ngr):
+					self.ngrams[ngr] = 0
+				self.ngrams[ngr] += freq
+				total += freq
+#				self.trie.inc(ngr, freq)
+		for ngr, count in self.ngrams.iteritems():
+			self.ngrams[ngr] = float(count) / total
+		print sum(self.ngrams.values())
+#		self.trie.normalize()
 	
 	def train_from_file(self, filename):
 		self.train(read_tsv_file(filename, (unicode, int), print_progress=True,\
@@ -24,14 +33,28 @@ class NGramModel:
 	def word_prob(self, word):
 		p = 1.0
 		for ngr in generate_n_grams(word + '#', self.n):
-			if self.trie.has_key(ngr):
-				p *= self.trie[ngr].value
+			if self.ngrams.has_key(ngr):
+				p *= self.ngrams[ngr]
+#				p *= self.trie[ngr].value
 			else:
 				return 0.0
 		return p
 	
-	def random_word(self):
-		return self.trie.random_word()
+#	def random_word(self):
+#		return self.trie.random_word()
+	
+	def save_to_file(self, filename):
+		with open_to_write(filename) as fp:
+			for ngr, p in self.ngrams.iteritems():
+				write_line(fp, (ngr, p))
+	
+	@staticmethod
+	def load_from_file(filename):
+		model = NGramModel(None)
+		for ngr, p in read_tsv_file(filename, (unicode, float)):
+			model.ngrams[ngr] = p
+		model.n = max([len(ngr) for ngr in model.ngrams.keys()])
+		return model
 
 class NGramTrie:
 	def __init__(self):
@@ -64,6 +87,9 @@ class NGramTrie:
 				return False
 		else:
 			return False
+	
+	def keys(self):
+		pass
 
 	def inc(self, key, count=1):
 		if not key:

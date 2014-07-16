@@ -50,7 +50,7 @@ def apply_global_filters(rule, wordpairs):
 def load_training_infl_rules(filename):
 	i_rules_c = {}
 	print 'Loading inflectional rules...'
-	for rule, ifreq, freq, weight in load_tsv_file(filename):
+	for rule, ifreq, freq, weight in read_tsv_file(filename):
 		i_rules_c[rule] = weight
 	return i_rules_c
 
@@ -72,7 +72,7 @@ def extract_rules_from_substrings(input_file, output_file, i_rules_c=None):
 	pp = progress_printer(get_file_size(input_file))
 	print 'Extracting rules from substrings...'
 	with open_to_write(output_file) as outfp:
-		for s_len, substr, word, freq in load_tsv_file(input_file):	# TODO _by_key
+		for s_len, substr, word, freq in read_tsv_file(input_file):	# TODO _by_key
 			if substr != cur_substr:
 				if len(words) > 1:
 					extract_rules_from_words(words, cur_substr, outfp, i_rules_c)
@@ -91,7 +91,7 @@ def filter_and_count_rules(input_file):
 	print 'Filtering and counting rules...'
 	with open_to_write(output_file) as outfp:
 		pp = progress_printer(get_file_size(input_file))
-		for rule_str, wordpairs in load_tsv_file_by_key(input_file, 3):
+		for rule_str, wordpairs in read_tsv_file_by_key(input_file, 3):
 			rule = Rule.from_string(rule_str)
 			if apply_global_filters(rule, wordpairs):
 				for (w1, w2) in wordpairs:
@@ -117,7 +117,7 @@ def calculate_rule_prob(input_file, rules_c):
 			.replace('.*.*', '.*'))
 	print 'Calculating rule probability...'
 	pp = progress_printer(get_file_size(input_file))
-	for word, freq in load_tsv_file(input_file):
+	for word, freq in read_tsv_file(input_file):
 		for r in rules_c.keys():
 			if re.match(patterns[r], word):
 				counts.inc(r)
@@ -136,28 +136,28 @@ def save_rules(rules_c, ruleprob, filename):
 ### MAIN FUNCTIONS ###
 
 def run():
-#	algorithms.fastss.create_substrings_file(\
-#		settings.FILES['wordlist'], settings.FILES['surface.substrings'])
-#	if file_exists(settings.FILES['trained.rules']):
-#		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
-#			settings.FILES['surface.graph'],\
-#			load_training_infl_rules(settings.FILES['trained.rules']))
-#	else:
-#		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
-#			settings.FILES['surface.graph'])
-#	sort_file(settings.FILES['surface.graph'], key=(1,2), unique=True)
-#	sort_file(settings.FILES['surface.graph'], key=3)
-#	update_file_size(settings.FILES['surface.graph'])
-#	rules_c = filter_and_count_rules(settings.FILES['surface.graph'])
-##	rules_c.save_to_file(settings.FILES['surface.rules'])
+	algorithms.fastss.create_substrings_file(\
+		settings.FILES['training.wordlist'], settings.FILES['surface.substrings'])
+	if file_exists(settings.FILES['trained.rules']):
+		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
+			settings.FILES['surface.graph'],\
+			load_training_infl_rules(settings.FILES['trained.rules']))
+	else:
+		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
+			settings.FILES['surface.graph'])
+	sort_file(settings.FILES['surface.graph'], key=(1,2), unique=True)
+	sort_file(settings.FILES['surface.graph'], key=3)
+	update_file_size(settings.FILES['surface.graph'])
+	rules_c = filter_and_count_rules(settings.FILES['surface.graph'])
+	rules_c.save_to_file(settings.FILES['surface.rules'])
 #	ruleprob = calculate_rule_prob(settings.FILES['wordlist'], rules_c)
 #	save_rules(rules_c, ruleprob, settings.FILES['surface.rules'])
 #	sort_file(settings.FILES['surface.graph'], key=1)
-	rules_c = Counter.load_from_file(settings.FILES['surface.rules'])
-	if not file_exists(settings.FILES['trained.rules.cooc']):
-		algorithms.cooccurrences.calculate_rules_cooc(\
-			settings.FILES['surface.graph'],\
-			settings.FILES['surface.rules.cooc'], rules_c)
+#	rules_c = Counter.load_from_file(settings.FILES['surface.rules'])
+#	if not file_exists(settings.FILES['trained.rules.cooc']):
+#		algorithms.cooccurrences.calculate_rules_cooc(\
+#			settings.FILES['surface.graph'],\
+#			settings.FILES['surface.rules.cooc'], rules_c)
 
 def evaluate():
 	print '\nSurface rules: nothing to evaluate.\n'
@@ -166,7 +166,7 @@ def import_from_db():
 	utils.db.connect()
 	print 'Importing wordlist...'
 	utils.db.pull_table(settings.WORDS_TABLE, ('word', 'freq'),\
-		settings.FILES['wordlist'])
+		settings.FILES['training.wordlist'])
 	print 'Importing surface rules...'
 	utils.db.pull_table(settings.S_RUL_TABLE, ('rule', 'freq', 'prob'),\
 		settings.FILES['surface.rules'])
@@ -194,7 +194,7 @@ def import_from_db():
 def export_to_db():
 	# words <- insert ID
 	print 'Converting wordlist...'
-	word_ids = utils.db.insert_id(settings.FILES['wordlist'],\
+	word_ids = utils.db.insert_id(settings.FILES['training.wordlist'],\
 		settings.FILES['wordlist.db'])
 	# surface rules <- insert ID
 	print 'Converting surface rules...'

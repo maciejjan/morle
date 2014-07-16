@@ -13,6 +13,7 @@ class LexiconNode:
 		self.sum_weights = sum_weights
 		self.prev = None
 		self.next = {}
+		self.training = True
 
 	def root(self):
 		root = self
@@ -69,6 +70,14 @@ class Lexicon:
 	
 	def __setitem__(self, key, val):
 		self.nodes[key] = val
+	
+	def add_word(self, word, freq, ngram_prob):
+		self.nodes[word] = LexiconNode(word, freq, freq, ngram_prob, 0.0, 1.0)
+		self.total += freq
+		self.nodes[word].corpus_prob = float(freq) / self.total
+		for rt in self.roots:
+			self.nodes[rt].forward_multiply_corpus_prob(float(self.total-freq) / self.total)
+		self.roots.add(word)
 	
 	def lexicon_logl(self, rules):
 		logl = 0.0

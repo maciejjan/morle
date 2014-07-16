@@ -59,7 +59,7 @@ def build_lexicon(rules, lexicon):
 				print_progress=False):
 #				print_progress=True, print_msg='Building lexicon...'):
 		edges = sorted([(word_1, word_2, rule,\
-			lexicon.try_edge_pr(word_1, word_2, rules[rule]))\
+			lexicon.try_edge(word_1, word_2, rules[rule]))\
 			for (word_1, rule, _) in rest],\
 			reverse=True, key = lambda x: x[3])
 		for edge in edges:
@@ -81,6 +81,8 @@ def reestimate_rule_prod(rules, lexicon):
 	for r in rules.keys():
 		if rules_c.has_key(r):
 			rules[r].prod = float(rules_c[r]) / rules[r].domsize
+			if rules[r].prod > 0.9:
+				rules[r].prod = 0.9
 		elif r == u'#':
 			pass
 		else:
@@ -153,5 +155,5 @@ def load_training_file(filename):
 	# compute corpus probabilities
 	for w in lexicon.values():
 		w.corpus_prob = float(w.sigma) / lexicon.total * w.sum_weights
-	return rules, lexicon
+	return unigrams, rules, lexicon
 	

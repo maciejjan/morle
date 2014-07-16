@@ -17,7 +17,24 @@ class Rule:
 			return False
 	
 	def apply(self, word):
-		raise Exception('Not implemented yet!')
+		if not self.lmatch(word):
+			return []
+		i, j = len(self.prefix[0]), len(self.suffix[0])
+		word = word[i:-j] if j > 0 else word[i:]
+		if self.alternations:
+			results = []
+			alt_pat = re.compile(u'(.*?)'.join([x for x, y in self.alternations]))
+			m = alt_pat.search(word, 1)
+			while m is not None:
+				w = word[:m.start()] + self.alternations[0][1]
+				for i in range(1, len(self.alternations)):
+					w += m.group(i) + self.alternations[i][1]
+				w += word[m.end():]
+				results.append(self.prefix[1] + w + self.suffix[1])
+				m = alt_pat.search(word, m.start()+1) if m.start()+1 < len(word) else None
+			return results
+		else:
+			return [self.prefix[1] + word + self.suffix[1]]
 	
 	def get_affixes(self):
 		affixes = []

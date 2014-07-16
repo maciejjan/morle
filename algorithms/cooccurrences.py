@@ -30,7 +30,7 @@ def calculate_rules_cooc(input_file, output_file, rules_c):
 	cur_word, rules = None, []
 	pp = progress_printer(get_file_size(input_file))
 	print 'Calculating surface rules co-occurrences...'
-	for word, edges in load_tsv_file_by_key(input_file, 1):
+	for word, edges in read_tsv_file_by_key(input_file, 1):
 #		words_count += len(edges)
 		words_count += 1
 		if len(edges) >= 2:
@@ -52,13 +52,13 @@ def calculate_cooc(input_file, output_file):
 	# count frequencies of items
 	freqs = Counter()
 	total_count = 0
-	for row in load_tsv_file(input_file):
+	for row in read_tsv_file(input_file):
 		freqs.inc(row[1])
 		total_count += 1
 	# calculate cooccurence significance
 	pairs_c = Counter()
 	pp = progress_printer(get_file_size(input_file))
-	for key, values in load_tsv_file_by_key(input_file, 1):
+	for key, values in read_tsv_file_by_key(input_file, 1):
 		values = [v[0] for v in values]
 		for v1 in values:
 			if freqs.has_key(v1):

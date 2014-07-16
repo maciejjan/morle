@@ -11,6 +11,7 @@ def setup():
 	ap.add_argument('modules', type=str, help='srules, infl, deriv')
 	# optional arguments
 	ap.add_argument('-d', action='store', dest='workdir', help='working directory')
+	ap.add_argument('-s', action='store_true', dest='supervised', help='supervised learning')
 #	ap.add_argument('-f', '--force', action='store_true', help='force')
 	ap.add_argument('--db-host', type=str, action='store', dest='db_host',\
 		help='database host (default: localhost) (import/export mode)')
@@ -25,6 +26,8 @@ def setup():
 	args = ap.parse_args()
 	if args.workdir is not None:
 		settings.WORKING_DIR = args.workdir
+	if args.supervised:
+		settings.SUPERVISED = True
 	if args.db_host is not None:
 		settings.DB_HOST = args.db_host
 	if args.db_user is not None:
@@ -47,6 +50,7 @@ def main(mode, modules):
 	MODULE_SRULES = 'srules'
 	MODULE_LEXEMES = 'infl'
 	MODULE_MDL_TRAIN = 'mdl-train'
+	MODULE_MDL_ANALYZE = 'mdl-analyze'
 	MODULE_DERIV = 'deriv'
 	MODULE_TRAIN = 'train'
 
@@ -70,6 +74,8 @@ def main(mode, modules):
 			train.run()
 		if MODULE_MDL_TRAIN in modules:
 			mdltrain.run()
+		if MODULE_MDL_ANALYZE in modules:
+			mdlanalyze.run()
 	if MODE_EVAL in mode:
 		if MODULE_SRULES in modules:
 			surface_rules.evaluate()
@@ -79,6 +85,8 @@ def main(mode, modules):
 			derivation.evaluate()
 		if MODULE_TRAIN in modules:
 			train.evaluate()
+		if MODULE_MDL_ANALYZE in modules:
+			mdlanalyze.evaluate()
 	if MODE_EXPORT in mode:
 		if MODULE_SRULES in modules:
 			surface_rules.export_to_db()

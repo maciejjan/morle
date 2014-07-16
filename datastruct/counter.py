@@ -80,7 +80,7 @@ class Counter:
 	def load_from_file(filename, max_entries=None, convert=False):
 		counter = Counter(convert)
 		processed = 0
-		for row in load_tsv_file(filename):
+		for row in read_tsv_file(filename):
 			counter.add(row[0], int(row[1]))
 #			if len(row) == 2:
 #				counter.add(row[0], int(row[1]))

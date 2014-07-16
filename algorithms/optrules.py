@@ -4,7 +4,6 @@ from datastruct.lexicon import *
 from utils.files import *
 from utils.printer import *
 import algorithms.align
-#import algorithms.ngrams as ngr
 import math
 import re
 
@@ -23,12 +22,6 @@ def make_rule(alignment):
 			alt.append((x, y))
 	suf = alignment[-1]
 	return Rule(pref, alt, suf)
-
-#def make_pattern(rule):
-#	pattern = '^'+rule.prefix[0] + '.*'
-#	pattern += '.*'.join([x for x, y in rule.alternations])
-#	pattern += ('.*' if rule.alternations else '') + rule.suffix[0] + '$'
-#	return re.compile(pattern)
 
 def fix_alignment(al):
 	if al[0] == (u'', u'') and al[1][0] != al[1][1]:
@@ -155,17 +148,20 @@ def optimize_rule(rule, wordpairs, wordlist, matching=None):
 def optimize_rules_in_graph(wordlist_file, input_file, output_file, rules_file):
 #	sort_file(input_file, key=3)
 	wordlist = []
-	for word, freq in load_tsv_file(wordlist_file):
+	for word, freq in read_tsv_file(wordlist_file):
 		wordlist.append(word)
 	with open_to_write(output_file) as outfp:
 		with open_to_write(rules_file) as rulesfp:
-			for rule, wordpairs in load_tsv_file_by_key(input_file, 3,\
+			for rule, wordpairs in read_tsv_file_by_key(input_file, 3,\
 					print_progress=True, print_msg='Optimizing rules in the graph...'):
 				opt = optimize_rule(rule, wordpairs, wordlist)
 				for new_rule, freq, domsize, new_wordpairs in opt:
 					for nw1, nw2 in new_wordpairs:
 						write_line(outfp, (nw1, nw2, new_rule))
-					write_line(rulesfp, (new_rule, float(freq)/domsize, 1.0, domsize))
+					prod = float(freq) / domsize
+					if prod > 0.9:
+						prod = 0.9
+					write_line(rulesfp, (new_rule, prod, 1.0, domsize))
 
 def optimize_rules_in_lexicon(input_file, output_file, rules_file):
 	lexicon = Lexicon.load_from_file(input_file)

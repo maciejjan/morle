@@ -1,1 +1,1 @@
-__all__ = ['surface_rules', 'lexemes', 'derivation', 'train', 'mdltrain']
+__all__ = ['surface_rules', 'lexemes', 'derivation', 'train', 'mdltrain', 'mdlanalyze']

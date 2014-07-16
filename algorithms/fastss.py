@@ -13,7 +13,7 @@ COMPOUNDING_RULES = True
 
 def load_wordset(input_file):
 	wordset = set([])
-	for word, freq in load_tsv_file(input_file):
+	for word, freq in read_tsv_file(input_file):
 		wordset.add(word)
 	return wordset
 
@@ -77,7 +77,7 @@ def generate_substrings(input_file, output_file, wordset):
 		lines_written = 0
 		print 'Generating substrings...'
 		pp = progress_printer(get_file_size(input_file))
-		for word, freq in load_tsv_file(input_file):
+		for word, freq in read_tsv_file(input_file):
 			for s in substrings_for_word(word, wordset):
 				bytes_written += write_line(fp, (len(s), s, word, freq),
 					count_bytes=True)

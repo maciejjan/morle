@@ -3,12 +3,12 @@ ENCODING = 'utf-8'
 WORKING_DIR = ''
 
 #MIN_BASE_FREQ = 167
-MIN_RULE_FREQ = 100
+MIN_RULE_FREQ = 2
 MAX_AFFIX_LENGTH = 5
 INDEPENDENCY_THRESHOLD = 0.001
 DERIVATION_THRESHOLD = 0.1
 
-SUPERVISED = True
+SUPERVISED = False
 
 # load settings from file or create a settings file
 def process_settings_file():
@@ -36,7 +36,6 @@ FILES = {
 	'surface.substrings' : 'substrings.txt',
 	'surface.rules'	: 's_rul.txt',
 	'surface.rules.cooc'	: 's_rul_co.txt',
-	'wordlist'		: 'input.txt',
 	'index' : 'index.txt',
 	'segmentation' : 'segmentation.txt',
 	'settings' : 'settings.ini',
@@ -61,9 +60,16 @@ FILES = {
 	'trained.rules.cooc' : 'tr_rules_cooc.txt',
 	'training.inflection' : 'tr_infl.txt',
 	'training.inflection.graph' : 'tr_infl_graph.txt',
-	'training.wordlist' : 'tr_wordlist.txt',
+	'training.lexicon' : 'lexicon.training',
+	'training.wordlist' : 'input.training',
 	'training.substrings' : 'tr_substrings.txt',
-	'training.surface.graph' : 'tr_graph.txt'
+	'training.surface.graph' : 'tr_graph.txt',
+
+	# model data
+	'model.lexicon' : 'lexicon.txt',
+	'model.rules' : 'rules.txt',
+	'model.ngrams' : 'unigrams.txt',
+	'analyses' : 'analyses.txt'
 }
 
 # DB access data
