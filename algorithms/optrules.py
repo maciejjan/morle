@@ -4,6 +4,7 @@ from datastruct.lexicon import *
 from utils.files import *
 from utils.printer import *
 import algorithms.align
+import settings
 import math
 import re
 
@@ -14,14 +15,14 @@ IMPROVEMENT_THRESHOLD = 50.0
 def max_prod_ratio(x):
 	return x / (x+1) * math.exp(-math.log(x+1)/x)
 
-def make_rule(alignment):
+def make_rule(alignment, tag):
 	pref = alignment[0]
 	alt = []
 	for i, (x, y) in enumerate(alignment[1:-1], 1):
 		if x != y:
 			alt.append((x, y))
 	suf = alignment[-1]
-	return Rule(pref, alt, suf)
+	return Rule(pref, alt, suf, tag)
 
 def fix_alignment(al):
 	if al[0] == (u'', u'') and al[1][0] != al[1][1]:
@@ -35,7 +36,7 @@ def fix_alignment(al):
 def process_alignments(alignments):
 	rules_tree = {}
 	for i, al in enumerate(alignments):
-		rule = make_rule(al)
+#		rule = make_rule(al)
 		new_alignments = []
 		for j in range(len(al)-1):
 			x1, y1, x2, y2 = al[j][0], al[j][1], al[j+1][0], al[j+1][1]
@@ -61,6 +62,11 @@ def process_alignments(alignments):
 	return alignments
 
 def extract_all_rules(word_1, word_2):
+	tag = None
+	if settings.USE_TAGS:
+		p1, p2 = word_1.rfind(u'_'), word_2.rfind(u'_')
+		tag = (word_1[p1+1:], word_2[p2+1:])
+		word_1, word_2 = word_1[:p1], word_2[:p2]
 	cs = algorithms.align.lcs(word_1, word_2)
 	pattern = re.compile('(.*)' + '(.*?)'.join([\
 		letter for letter in cs]) + '(.*)')
@@ -74,7 +80,7 @@ def extract_all_rules(word_1, word_2):
 	alignments = process_alignments([alignment])
 	rules = []
 	for al in alignments:
-		rules.append(make_rule(al).to_string())
+		rules.append(make_rule(al, tag).to_string())
 	return set(rules)
 
 def improvement_fun(r, n1, m1, n2, m2):

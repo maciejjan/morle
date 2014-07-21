@@ -13,6 +13,7 @@ EVALUATION_FILE = 'eval.txt'
 
 # TODO take 5 best analyses and try to analyse them further
 # word frequencies on/off
+# TODO conversion of only tags, with word staying the same (e.g. VVINF->VVFIN)
 
 def rule_score(ruledata, freq, unigrams):
 	rule = Rule.from_string(ruledata.rule)
@@ -35,11 +36,12 @@ def analyze_word(word, freq, unigrams, rules, lexicon):
 	for r in rules.values():
 		if r.prod == 1.0:
 			r.prod = 0.999
+#	print word, ngr_prob
 	rules_list = [(r.rule, r.prod / (ngr_prob * (1.0 - r.prod))) for r in rules.values() if r.rule != u'#']
 	rules_list.sort(reverse = True, key = lambda x:x[1])
 	max_imp, max_imp_word = 0.0, None
 	max_imp_rule = None
-	print word.encode('utf-8')
+#	print word.encode('utf-8')
 	for r, imp in rules_list:
 		if imp < max_imp:
 			break
@@ -50,12 +52,13 @@ def analyze_word(word, freq, unigrams, rules, lexicon):
 					break
 				score = lexicon.try_edge(w, word, rules[r]) if lexicon.has_key(w)\
 					else rule_score(rules[r], freq, unigrams)
-				print irule.to_string().encode('utf-8'), score, lexicon.has_key(w)
-				if score > max_imp:
+#				print irule.to_string().encode('utf-8'), score, lexicon.has_key(w)
+				if score > max_imp and\
+						not (lexicon.has_key(w) and word in lexicon[w].analysis()):
 					max_imp = score
 					max_imp_word = w
 					max_imp_rule = r
-	print ''
+#	print ''
 	if max_imp_word is not None:
 		if not lexicon.has_key(max_imp_word):
 			lexicon.add_word(max_imp_word, 0.001, unigrams.word_prob(max_imp_word))
@@ -91,12 +94,12 @@ def run():
 	lexicon = Lexicon.load_from_file(LEXICON_FILE)
 	unigrams = NGramModel.load_from_file(NGRAM_MODEL_FILE)
 #	print analyze_word(u'schwest', unigrams, rules, lexicon)
-	analyze_wordlist(settings.FILES['wordlist'], ANALYSES_FILE, unigrams, rules, lexicon)
+	analyze_wordlist(settings.FILES['testing.wordlist'], ANALYSES_FILE, unigrams, rules, lexicon)
 
 def evaluate_direct():
 	stems_gs = {}
 	for word, freq, stem in read_tsv_file(EVAL_LEXICON_FILE):
-		if stem == u'-':
+		if stem == u'-' or stem == word:
 			stems_gs[word] = None
 		else:
 			stems_gs[word] = stem

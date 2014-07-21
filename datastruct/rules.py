@@ -2,16 +2,17 @@ from utils.files import *
 import re
 
 class Rule:
-	def __init__(self, prefix, alternations, suffix):
+	def __init__(self, prefix, alternations, suffix, tag=None):
 		self.prefix = prefix
 		self.alternations = alternations
 		self.suffix = suffix
 		self.left_pattern = None
 		self.right_pattern = None
+		self.tag = tag
 	
 	def __eq__(self, other):
 		if self.prefix == other.prefix and self.alternations == other.alternations \
-			and self.suffix == other.suffix:
+			and self.suffix == other.suffix and self.tag == other.tag:
 			return True
 		else:
 			return False
@@ -19,6 +20,8 @@ class Rule:
 	def apply(self, word):
 		if not self.lmatch(word):
 			return []
+		if self.tag:
+			word = word[:-len(self.tag[0])-1]
 		i, j = len(self.prefix[0]), len(self.suffix[0])
 		word = word[i:-j] if j > 0 else word[i:]
 		if self.alternations:
@@ -30,11 +33,13 @@ class Rule:
 				for i in range(1, len(self.alternations)):
 					w += m.group(i) + self.alternations[i][1]
 				w += word[m.end():]
-				results.append(self.prefix[1] + w + self.suffix[1])
+				results.append(self.prefix[1] + w + self.suffix[1] +\
+					(u'_' + self.tag[1] if self.tag else u''))
 				m = alt_pat.search(word, m.start()+1) if m.start()+1 < len(word) else None
 			return results
 		else:
-			return [self.prefix[1] + word + self.suffix[1]]
+			return [self.prefix[1] + word + self.suffix[1] +\
+				(u'_' + self.tag[1] if self.tag else u'')]
 	
 	def get_affixes(self):
 		affixes = []
@@ -45,43 +50,59 @@ class Rule:
 		return [x for x in affixes if x]
 	
 	def make_left_pattern(self):
-		self.left_pattern = re.compile('^' +\
+		pattern = '^' +\
 			self.prefix[0] +\
 			('(.*)' if self.alternations else '') + \
 			'(.*)'.join([x for x, y in self.alternations]) +\
-			'(.*)' + self.suffix[0] + '$')
+			'(.*)' + self.suffix[0] +\
+			('_' + self.tag[0] if self.tag else '') + '$'
+		self.left_pattern = re.compile(pattern)
 	
 	def make_right_pattern(self):
-		self.right_pattern = re.compile('^' +\
+		pattern = '^' +\
 			self.prefix[1] +\
 			('(.*)' if self.alternations else '') + \
 			'(.*)'.join([y for x, y in self.alternations]) +\
-			'(.*)' + self.suffix[1] + '$')
+			'(.*)' + self.suffix[1] +\
+			('_' + self.tag[1] if self.tag else '') + '$'
+		self.right_pattern = re.compile(pattern)
 	
 	def lmatch(self, word):
 		if self.left_pattern is None:
 			self.make_left_pattern()
-		return True if self.left_pattern.match(word) else False
+		return True if word and self.left_pattern.match(word) else False
 	
 	def rmatch(self, word):
 		if self.right_pattern is None:
 			self.make_right_pattern()
-		return True if self.right_pattern.match(word) else False
+		return True if word and self.right_pattern.match(word) else False
 	
 	def reverse(self):
 		prefix_r = (self.prefix[1], self.prefix[0])
 		alternations_r = [(y, x) for (x, y) in self.alternations]
 		suffix_r = (self.suffix[1], self.suffix[0])
-		return Rule(prefix_r, alternations_r, suffix_r)
+		tag_r = None
+		if self.tag:
+			tag_r = (self.tag[1], self.tag[0])
+		return Rule(prefix_r, alternations_r, suffix_r, tag_r)
 
 	def to_string(self):
-		return self.prefix[0]+':'+self.prefix[1]+'/' +\
+		rule_str = self.prefix[0]+':'+self.prefix[1]+'/' +\
 			'/'.join([x+':'+y for (x, y) in self.alternations]) +\
 			('/' if self.alternations else '') +\
 			self.suffix[0]+':'+self.suffix[1]
+		if self.tag:
+			rule_str += '___' + self.tag[0] + ':' + self.tag[1]
+		return rule_str
 	
 	@staticmethod
 	def from_string(string):
+		p = string.find('___')
+		tag = None
+		if p > -1:
+			tag_sp = string[p+3:].split(':')
+			tag = (tag_sp[0], tag_sp[1])
+			string = string[:p]
 		split = string.split('/')
 		prefix_sp = split[0].split(':')
 		prefix = (prefix_sp[0], prefix_sp[1])
@@ -91,7 +112,7 @@ class Rule:
 		for alt_str in split[1:-1]:
 			alt_sp = alt_str.split(':')
 			alternations.append((alt_sp[0], alt_sp[1]))
-		return Rule(prefix, alternations, suffix)
+		return Rule(prefix, alternations, suffix, tag)
 
 
 class RuleData:

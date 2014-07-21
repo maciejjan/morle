@@ -1,4 +1,5 @@
 from utils.files import *
+import settings
 import random
 
 def generate_n_grams(word, n=None):
@@ -10,20 +11,22 @@ class NGramModel:
 	def __init__(self, n):
 		self.n = n
 		self.ngrams = {}
+		self.total = 0
 #		self.trie = NGramTrie()
-
+	
 	def train(self, words):
 		total = 0
 		for word, freq in words:
+			if settings.USE_TAGS:
+				word = word[:word.rfind(u'_')]
 			for ngr in generate_n_grams(word + '#', self.n):
 				if not self.ngrams.has_key(ngr):
 					self.ngrams[ngr] = 0
 				self.ngrams[ngr] += freq
-				total += freq
+				self.total += freq
 #				self.trie.inc(ngr, freq)
 		for ngr, count in self.ngrams.iteritems():
-			self.ngrams[ngr] = float(count) / total
-		print sum(self.ngrams.values())
+			self.ngrams[ngr] = float(count) / self.total
 #		self.trie.normalize()
 	
 	def train_from_file(self, filename):
@@ -32,12 +35,15 @@ class NGramModel:
 	
 	def word_prob(self, word):
 		p = 1.0
+		if settings.USE_TAGS:
+			word = word[:word.rfind(u'_')]
 		for ngr in generate_n_grams(word + '#', self.n):
 			if self.ngrams.has_key(ngr):
 				p *= self.ngrams[ngr]
 #				p *= self.trie[ngr].value
 			else:
-				return 0.0
+				p *= 1.0 / self.total
+#				return 0.0
 		return p
 	
 #	def random_word(self):
@@ -45,6 +51,7 @@ class NGramModel:
 	
 	def save_to_file(self, filename):
 		with open_to_write(filename) as fp:
+			write_line(fp, (u'', self.total))
 			for ngr, p in self.ngrams.iteritems():
 				write_line(fp, (ngr, p))
 	
@@ -52,7 +59,10 @@ class NGramModel:
 	def load_from_file(filename):
 		model = NGramModel(None)
 		for ngr, p in read_tsv_file(filename, (unicode, float)):
-			model.ngrams[ngr] = p
+			if ngr == u'':
+				model.total = int(p)
+			else:
+				model.ngrams[ngr] = p
 		model.n = max([len(ngr) for ngr in model.ngrams.keys()])
 		return model
 

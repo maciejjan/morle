@@ -6,13 +6,7 @@ from utils.files import *
 from utils.printer import *
 import settings
 
-#NUM_ITERATIONS = 3
 GAMMA_THRESHOLD = 1e-30
-#RULES_FILE = 'rules.txt'
-#LEXICON_FILE = 'lexicon.txt'
-#TRAINING_LEXICON_FILE = 'lexicon.training'
-#ANALYSES_FILE = 'analyses.txt'
-#NGRAM_MODEL_FILE = 'unigrams.txt'
 
 def expectation_maximization(lexicon, rules, iter_count):
 	# load rules and add the end-derivation-rule
@@ -22,7 +16,8 @@ def expectation_maximization(lexicon, rules, iter_count):
 	# build lexicon and reestimate parameters
 	lexicon = algorithms.mdl.build_lexicon(rules, lexicon)
 	algorithms.mdl.reestimate_rule_prod(rules, lexicon)
-	algorithms.mdl.reestimate_rule_weights(rules, lexicon)
+	if settings.USE_WORD_FREQ:
+		algorithms.mdl.reestimate_rule_weights(rules, lexicon)
 	logl = lexicon.logl(rules)
 	print 'LogL =', logl
 	return rules, lexicon, logl

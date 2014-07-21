@@ -4,6 +4,7 @@ from datastruct.lexicon import *
 from datastruct.rules import *
 from utils.files import *
 import settings
+import re
 
 GRAPH_MDL_FILE = 'graph_mdl.txt'
 GAMMA_THRESHOLD = 1e-20
@@ -132,7 +133,7 @@ def reestimate_rule_weights(rules, lexicon):
 		n.sum_weights = 1.0 + sum([rules[r].weight for r in n.next.keys()])
 	print lexicon.corpus_logl(rules)
 
-def load_training_file(filename):
+def load_training_file_with_freq(filename):
 	rules, lexicon = RuleSet(), Lexicon()
 	unigrams = algorithms.ngrams.NGramModel(1)
 	words, total = [], 0
@@ -142,9 +143,10 @@ def load_training_file(filename):
 		lexicon.roots.add(word)
 		lexicon.total += freq
 	unigrams.train(words)
-	for word_2, freq, word_1 in read_tsv_file(filename, (unicode, int, unicode), print_progress=True):
+	for word_2, freq, word_1 in read_tsv_file(filename, (unicode, int, unicode),\
+			print_progress=True, print_msg='Building lexicon from training data...'):
 		lexicon[word_2].ngram_prob = unigrams.word_prob(word_2)
-		if word_1 != u'-':
+		if word_1 != u'-' and word_1 != word_2 and word_2 in lexicon.roots:
 			if not lexicon.has_key(word_1):
 				lexicon[word_1] = LexiconNode(word_1, 0, 0, unigrams.word_prob(word_1), 0.0, 1.0)
 				lexicon.roots.add(word_1)
@@ -156,4 +158,32 @@ def load_training_file(filename):
 	for w in lexicon.values():
 		w.corpus_prob = float(w.sigma) / lexicon.total * w.sum_weights
 	return unigrams, rules, lexicon
+
+def load_training_file_without_freq(filename):
+	rules, lexicon = RuleSet(), Lexicon()
+	unigrams = algorithms.ngrams.NGramModel(1)
+	words, total = [], 0
+	for word in read_tsv_file(filename, (unicode)):
+		words.append((word, 1))
+		lexicon[word] = LexiconNode(word, 0, 0, 0.0, 0.0, 1.0)
+		lexicon.roots.add(word)
+	unigrams.train(words)
+	for word_2, word_1 in read_tsv_file(filename, (unicode, unicode),\
+			print_progress=True, print_msg='Building lexicon from training data...'):
+		lexicon[word_2].ngram_prob = unigrams.word_prob(word_2)
+		if word_1 != u'-' and word_1 != word_2:
+			if not lexicon.has_key(word_1):
+				lexicon[word_1] = LexiconNode(word_1, 0, 0, unigrams.word_prob(word_1), 0.0, 1.0)
+				lexicon.roots.add(word_1)
+			rule = algorithms.align.align(word_1, word_2).to_string()
+			if not rules.has_key(rule):
+				rules[rule] = RuleData(rule, 1.0, 1.0, 0)
+			lexicon.draw_edge(word_1, word_2, rules[rule], corpus_prob=False)
+	return unigrams, rules, lexicon
+
+def load_training_file(filename):
+	if settings.USE_WORD_FREQ:
+		return load_training_file_with_freq(filename)
+	else:
+		return load_training_file_without_freq(filename)
 	

@@ -4,8 +4,6 @@ import os
 import os.path
 import utils.printer
 
-# TODO types as parameter
-
 def read_tsv_file(filename, types=None, print_progress=False, print_msg=None):
 	pp = None
 	if print_progress:
@@ -17,7 +15,6 @@ def read_tsv_file(filename, types=None, print_progress=False, print_msg=None):
 			if isinstance(types, tuple):
 				row_converted = []
 				for i in range(min(len(row), len(types))):
-#					row[i] = types[i](row[i])
 					row_converted.append(types[i](row[i]))
 				row = row_converted
 			yield tuple(row)

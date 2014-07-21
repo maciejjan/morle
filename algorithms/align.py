@@ -3,6 +3,9 @@ import re
 
 # compute the longest common substring of two words
 def lcs(word_1, word_2):
+	if settings.USE_TAGS:
+		word_1 = word_1[:word_1.rfind(u'_')]
+		word_2 = word_2[:word_2.rfind(u'_')]
 	previous_row = ['']
 	for i in range(0, len(word_1)):
 		previous_row.append('')
@@ -18,6 +21,11 @@ def lcs(word_1, word_2):
 
 # TODO change to use make_rule (currently in algorithms.mdl)
 def extract_rule(word_1, word_2, pattern):
+	tag = None
+	if settings.USE_TAGS:
+		p1, p2 = word_1.rfind(u'_'), word_2.rfind(u'_')
+		tag = (word_1[p1+1:], word_2[p2+1:])
+		word_1, word_2 = word_1[:p1], word_2[:p2]
 	m1 = pattern.search(word_1)
 	m2 = pattern.search(word_2)
 	z = zip(m1.groups(), m2.groups())
@@ -33,7 +41,7 @@ def extract_rule(word_1, word_2, pattern):
 		if x or y:
 			alt.append((x, y))
 	suf = z[-1]
-	return Rule(pref, alt, suf)
+	return Rule(pref, alt, suf, tag)
 
 # extracts the morphological operation needed to turn word_1 into word_2
 def align(word_1, word_2):

@@ -9,6 +9,8 @@ INDEPENDENCY_THRESHOLD = 0.001
 DERIVATION_THRESHOLD = 0.1
 
 SUPERVISED = False
+USE_WORD_FREQ = True
+USE_TAGS = True
 
 # load settings from file or create a settings file
 def process_settings_file():
@@ -69,6 +71,7 @@ FILES = {
 	'model.lexicon' : 'lexicon.txt',
 	'model.rules' : 'rules.txt',
 	'model.ngrams' : 'unigrams.txt',
+	'testing.wordlist' : 'input.testing',
 	'analyses' : 'analyses.txt'
 }
 

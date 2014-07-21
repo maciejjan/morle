@@ -1,6 +1,7 @@
 from datastruct.counter import *
 import algorithms.ngrams
 from utils.files import *
+import settings
 import math
 
 class LexiconNode:
@@ -106,7 +107,10 @@ class Lexicon:
 		return logl
 
 	def logl(self, rules):
-		return self.lexicon_logl(rules) + self.corpus_logl(rules)
+		if settings.USE_WORD_FREQ:
+			return self.lexicon_logl(rules) + self.corpus_logl(rules)
+		else:
+			return self.lexicon_logl(rules)
 	
 	def logl_gradient(self, rules):
 		d = {}
@@ -155,22 +159,26 @@ class Lexicon:
 	def try_edge(self, word_1, word_2, rule):
 		w1, w2 = self.nodes[word_1], self.nodes[word_2]
 		root = w1.root()
-		# change of corpus log-likelihood
-		result = root.sigma * (math.log(root.sigma + w2.sigma) - math.log(root.sigma))
-		result += w2.sigma * (math.log(root.sigma + w2.sigma) - math.log(w2.sigma))
-		result += w2.sigma * (math.log(w1.corpus_prob * w1.sum_weights * rule.weight) -\
-			math.log(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
-		result += w1.sigma * (math.log(w1.sum_weights) - math.log(w1.sum_weights + rule.weight))
 		# change of lexicon log-likelihood
-		result += math.log(rule.prod) - math.log(len(self.roots) * w2.ngram_prob * (1.0 - rule.prod))
+		result = math.log(rule.prod) - math.log(len(self.roots) * w2.ngram_prob * (1.0 - rule.prod))
+		# change of corpus log-likelihood
+		if settings.USE_WORD_FREQ:
+			result += root.sigma * (math.log(root.sigma + w2.sigma) - math.log(root.sigma))
+			result += w2.sigma * (math.log(root.sigma + w2.sigma) - math.log(w2.sigma))
+			result += w2.sigma * (math.log(w1.corpus_prob * w1.sum_weights * rule.weight) -\
+				math.log(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
+			result += w1.sigma * (math.log(w1.sum_weights) - math.log(w1.sum_weights + rule.weight))
 		return result
 	
 	def draw_edge(self, word_1, word_2, rule, corpus_prob=True):
 		w1, w2 = self.nodes[word_1], self.nodes[word_2]
+		if w1.prev is not None and w1.prev.word == word_2:
+			print word_1, word_2
+			raise Exception('Cycle detected: %s, %s' % (word_1, word_2))
 		root = w1.root()
 
 		# update word probabilities
-		if corpus_prob:
+		if settings.USE_WORD_FREQ and corpus_prob:
 			w2.forward_multiply_corpus_prob(w1.corpus_prob * w1.sum_weights * rule.weight /\
 				(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
 			root.forward_multiply_corpus_prob(float(root.sigma + w2.sigma) / root.sigma)
@@ -208,7 +216,8 @@ class Lexicon:
 			n.prev = None
 			n.next = {}
 			n.sigma = n.freq
-			n.corpus_prob = float(n.freq) / self.total
+			if settings.USE_WORD_FREQ:
+				n.corpus_prob = float(n.freq) / self.total
 			n.sum_weights = 1.0
 			self.roots.add(n.word)
 	
@@ -227,14 +236,18 @@ class Lexicon:
 		lexicon = Lexicon()
 		unigrams = algorithms.ngrams.NGramModel(1)
 		unigrams.train_from_file(filename)
-		for word, freq in read_tsv_file(filename, (unicode, int)):
-			lexicon[word] = LexiconNode(word, freq, freq, unigrams.word_prob(word), 0.0, 1.0)
-			lexicon.roots.add(word)
-			lexicon.total += freq
-#			lexicon.sigma_total += freq
-		# compute corpus probabilities
-		for word in lexicon.values():
-			word.corpus_prob = float(word.freq) / lexicon.total
+		if settings.USE_WORD_FREQ:
+			for word, freq in read_tsv_file(filename, (unicode, int)):
+				lexicon[word] = LexiconNode(word, freq, freq, unigrams.word_prob(word), 0.0, 1.0)
+				lexicon.roots.add(word)
+				lexicon.total += freq
+			# compute corpus probabilities
+			for word in lexicon.values():
+				word.corpus_prob = float(word.freq) / lexicon.total
+		else:
+			for word in read_tsv_file(filename, (unicode)):
+				lexicon[word] = LexiconNode(word, 0, 0, unigrams.word_prob(word), 0.0, 1.0)
+				lexicon.roots.add(word)
 		return lexicon
 	
 	@staticmethod
