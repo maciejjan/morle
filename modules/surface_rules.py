@@ -1,3 +1,5 @@
+# -*- encoding: utf-8 -*-
+
 import algorithms.align
 import algorithms.fastss
 import algorithms.cooccurrences
@@ -56,33 +58,52 @@ def load_training_infl_rules(filename):
 
 ### RULE EXTRACTING FUNCTIONS ###
 
-def extract_rules_from_words(words, substring, outfp, i_rules_c):
+def extract_rules_from_words(words, substring, outfp, comp_outfp, i_rules_c, wordset):
 	pattern = re.compile('(.*)' + '(.*?)'.join([letter for letter in substring]) + '(.*)')
 	for w1, w1_freq in words:
 		for w2, w2_freq in words:
 			if w1 < w2:
 				rule = algorithms.align.extract_rule(w1, w2, pattern)
+				if rule is not None and settings.COMPOUNDING_RULES:
+					for i in range(3, min(len(w1), len(w2))):
+						if i <= len(rule.prefix[0]) and rule.prefix[0][:i] in wordset:
+							rr = rule.copy()
+							rr.prefix = (u'*' + rule.prefix[0][i:], rule.prefix[1])
+							write_line(comp_outfp, (w2, w1, rule.prefix[0][:i], rr.reverse().to_string()))
+						if i <= len(rule.prefix[1]) and rule.prefix[1][:i] in wordset:
+							rr = rule.copy()
+							rr.prefix = (rule.prefix[0], u'*' + rule.prefix[1][i:])
+							write_line(comp_outfp, (w1, w2, rule.prefix[1][:i], rr.to_string()))
+						if i <= len(rule.suffix[0]) and rule.suffix[0][-i:] in wordset:
+							rr = rule.copy()
+							rr.suffix = (rule.suffix[0][:-i] + u'*', rule.suffix[1])
+							write_line(comp_outfp, (w2, w1, rule.suffix[0][-i:], rr.reverse().to_string()))
+						if i <= len(rule.suffix[1]) and rule.suffix[1][-i:] in wordset:
+							rr = rule.copy()
+							rr.suffix = (rule.suffix[0], rule.suffix[1][:-i] + u'*')
+							write_line(comp_outfp, (w1, w2, rule.suffix[1][-i:], rr.to_string()))
 				if rule is not None and (i_rules_c is None or i_rules_c.has_key(rule.to_string())):
 					if apply_local_filters(rule, ((w1, w1_freq), (w2, w2_freq))):
 						write_line(outfp, (w1, w2, rule.to_string()))
 						write_line(outfp, (w2, w1, rule.reverse().to_string()))
 
-def extract_rules_from_substrings(input_file, output_file, i_rules_c=None):
+def extract_rules_from_substrings(input_file, output_file, i_rules_c=None, wordset=None):
 	cur_substr, words = '', []
 	pp = progress_printer(get_file_size(input_file))
 	print 'Extracting rules from substrings...'
 	with open_to_write(output_file) as outfp:
-		for s_len, substr, word, freq in read_tsv_file(input_file):	# TODO _by_key
-			if substr != cur_substr:
-				if len(words) > 1:
-					extract_rules_from_words(words, cur_substr, outfp, i_rules_c)
-				cur_substr = substr
-				words = [(word, int(freq))]
-			else:
-				words.append((word, int(freq)))
-			pp.next()
-		if len(words) > 1:
-			extract_rules_from_words(words, cur_substr, outfp, i_rules_c)
+		with open_to_write(output_file + '.comp') as comp_outfp:
+			for s_len, substr, word, freq in read_tsv_file(input_file):	# TODO _by_key
+				if substr != cur_substr:
+					if len(words) > 1:
+						extract_rules_from_words(words, cur_substr, outfp, comp_outfp, i_rules_c, wordset)
+					cur_substr = substr
+					words = [(word, int(freq))]
+				else:
+					words.append((word, int(freq)))
+				pp.next()
+			if len(words) > 1:
+				extract_rules_from_words(words, cur_substr, outfp, i_rules_c)
 
 def filter_and_count_rules(input_file):
 	rules_c = Counter()
@@ -133,23 +154,35 @@ def save_rules(rules_c, ruleprob, filename):
 		for r in rules_c.keys():
 			write_line(fp, (r, rules_c[r], ruleprob[r], 0.0))
 
+def load_wordset(input_file):
+	wordset = set([])
+	for word, freq in read_tsv_file(input_file):
+		wordset.add(word)
+	return wordset
+
 ### MAIN FUNCTIONS ###
 
 def run():
-	algorithms.fastss.create_substrings_file(\
-		settings.FILES['training.wordlist'], settings.FILES['surface.substrings'])
+	wordset = load_wordset(settings.FILES['training.wordlist']) if settings.COMPOUNDING_RULES else None
+#	algorithms.fastss.create_substrings_file(\
+#		settings.FILES['training.wordlist'], settings.FILES['surface.substrings'], wordset)
 	if file_exists(settings.FILES['trained.rules']):
 		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
 			settings.FILES['surface.graph'],\
 			load_training_infl_rules(settings.FILES['trained.rules']))
 	else:
 		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
-			settings.FILES['surface.graph'])
+			settings.FILES['surface.graph'], wordset=wordset)
 	sort_file(settings.FILES['surface.graph'], key=(1,2), unique=True)
 	sort_file(settings.FILES['surface.graph'], key=3)
 	update_file_size(settings.FILES['surface.graph'])
-	rules_c = filter_and_count_rules(settings.FILES['surface.graph'])
-	rules_c.save_to_file(settings.FILES['surface.rules'])
+	aggregate_file(settings.FILES['surface.graph'], settings.FILES['surface.rules'], 3)
+	sort_file(settings.FILES['surface.graph'] + '.comp', key=(1,3), unique=True)
+	sort_file(settings.FILES['surface.graph'] + '.comp', key=4)
+	update_file_size(settings.FILES['surface.graph'] + '.comp')
+	aggregate_file(settings.FILES['surface.graph'] + '.comp', settings.FILES['surface.rules'] + '.comp', 4)
+#	rules_c = filter_and_count_rules(settings.FILES['surface.graph'])
+#	rules_c.save_to_file(settings.FILES['surface.rules'])
 #	ruleprob = calculate_rule_prob(settings.FILES['wordlist'], rules_c)
 #	save_rules(rules_c, ruleprob, settings.FILES['surface.rules'])
 #	sort_file(settings.FILES['surface.graph'], key=1)

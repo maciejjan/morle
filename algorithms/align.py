@@ -29,18 +29,17 @@ def extract_rule(word_1, word_2, pattern):
 	m1 = pattern.search(word_1)
 	m2 = pattern.search(word_2)
 	z = zip(m1.groups(), m2.groups())
-	for x, y in z:
-		if set([l for l in x]) & set([l for l in y]):		# TODO ???
-			return None
-#			print '\n'+pattern.pattern+'\n', z
-#			raise Exception("Sth went wrong: %s, %s" % (word_1, word_2))
 	substr = re.sub('\(\.\*\??\)', '', pattern.pattern)
 	pref = z[0]
 	alt = []
 	for i, (x, y) in enumerate(z[1:-1], 1):
 		if x or y:
+			if x == y:
+				return None
 			alt.append((x, y))
 	suf = z[-1]
+	if pref[0] == pref[1] != u'' or suf[0] == suf[1] != u'':
+		return None
 	return Rule(pref, alt, suf, tag)
 
 # extracts the morphological operation needed to turn word_1 into word_2

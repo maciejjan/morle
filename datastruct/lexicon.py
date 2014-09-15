@@ -93,7 +93,7 @@ class Lexicon:
 				logl += m * math.log(1.0 - rules[r].prod)
 		return logl
 	
-	def corpus_logl(self, rules):
+	def corpus_logl_old(self, rules):
 		logl = 0.0
 		# corpus logl-likelihood given lexicon and rules
 		for root_w in self.roots:
@@ -104,6 +104,13 @@ class Lexicon:
 		for rule, freq in self.rules_freq.iteritems():
 			logl += freq * math.log(rules[rule].weight)
 		logl += self.total * math.log(rules[u'#'].weight)
+		return logl
+	
+	def corpus_logl(self, rules):
+		logl = 0.0
+		for w1 in self.values():
+			for rule, w2 in w1.next.iteritems():
+				logl += math.log(rules[rule].freqprob(w2.freq - w1.freq))
 		return logl
 
 	def logl(self, rules):
@@ -139,7 +146,10 @@ class Lexicon:
 	def try_edge_pr(self, word_1, word_2, rule):
 		w1, w2 = self.nodes[word_1], self.nodes[word_2]
 		root = w1.root()
-		print word_1.encode('utf-8'), word_2.encode('utf-8')
+		print word_1.encode('utf-8'), w1.sigma, w1.corpus_prob, w1.sum_weights
+		print word_2.encode('utf-8'), w2.sigma, w2.corpus_prob, w2.sum_weights
+		print root.word.encode('utf-8'), root.sigma, root.corpus_prob, root.sum_weights
+		print rule.weight
 		# change of corpus log-likelihood
 		result = root.sigma * (math.log(root.sigma + w2.sigma) - math.log(root.sigma))
 		print result
@@ -162,12 +172,14 @@ class Lexicon:
 		# change of lexicon log-likelihood
 		result = math.log(rule.prod) - math.log(len(self.roots) * w2.ngram_prob * (1.0 - rule.prod))
 		# change of corpus log-likelihood
+#		if settings.USE_WORD_FREQ:
+#			result += root.sigma * (math.log(root.sigma + w2.sigma) - math.log(root.sigma))
+#			result += w2.sigma * (math.log(root.sigma + w2.sigma) - math.log(w2.sigma))
+#			result += w2.sigma * (math.log(w1.corpus_prob * w1.sum_weights * rule.weight) -\
+#				math.log(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
+#			result += w1.sigma * (math.log(w1.sum_weights) - math.log(w1.sum_weights + rule.weight))
 		if settings.USE_WORD_FREQ:
-			result += root.sigma * (math.log(root.sigma + w2.sigma) - math.log(root.sigma))
-			result += w2.sigma * (math.log(root.sigma + w2.sigma) - math.log(w2.sigma))
-			result += w2.sigma * (math.log(w1.corpus_prob * w1.sum_weights * rule.weight) -\
-				math.log(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
-			result += w1.sigma * (math.log(w1.sum_weights) - math.log(w1.sum_weights + rule.weight))
+			result += math.log(rule.freqprob(w2.freq - w1.freq))
 		return result
 	
 	def draw_edge(self, word_1, word_2, rule, corpus_prob=True):
@@ -178,17 +190,17 @@ class Lexicon:
 		root = w1.root()
 
 		# update word probabilities
-		if settings.USE_WORD_FREQ and corpus_prob:
-			w2.forward_multiply_corpus_prob(w1.corpus_prob * w1.sum_weights * rule.weight /\
-				(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
-			root.forward_multiply_corpus_prob(float(root.sigma + w2.sigma) / root.sigma)
-			w2.forward_multiply_corpus_prob(float(root.sigma + w2.sigma) / w2.sigma)
-			w1.forward_multiply_corpus_prob(float(w1.sum_weights) / (w1.sum_weights + rule.weight))
-
-		# update frequency and weight sums
-		w1.backward_add_sigma(w2.sigma)
-		w1.sum_weights += rule.weight
-		self.sigma_total += w2.sigma * (len(w1.analysis()) + 1)
+#		if settings.USE_WORD_FREQ and corpus_prob:
+#			w2.forward_multiply_corpus_prob(w1.corpus_prob * w1.sum_weights * rule.weight /\
+#				(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
+#			root.forward_multiply_corpus_prob(float(root.sigma + w2.sigma) / root.sigma)
+#			w2.forward_multiply_corpus_prob(float(root.sigma + w2.sigma) / w2.sigma)
+#			w1.forward_multiply_corpus_prob(float(w1.sum_weights) / (w1.sum_weights + rule.weight))
+#
+#		# update frequency and weight sums
+#		w1.backward_add_sigma(w2.sigma)
+#		w1.sum_weights += rule.weight
+#		self.sigma_total += w2.sigma * (len(w1.analysis()) + 1)
 
 		# draw the edge
 		w2.prev = w1
@@ -197,16 +209,16 @@ class Lexicon:
 		# update global information
 		self.roots.remove(word_2)
 		self.rules_c.inc(rule.rule)
-		self.rules_freq.inc(rule.rule, w2.sigma)
+#		self.rules_freq.inc(rule.rule, w2.sigma)
 
 		# update rule frequencies on the path
-		n = w1
-		while n.prev is not None:
-			for r, n2 in n.prev.next.iteritems():
-				if n2 == n:
-					self.rules_freq.inc(r, w2.sigma)
-					break
-			n = n.prev
+#		n = w1
+#		while n.prev is not None:
+#			for r, n2 in n.prev.next.iteritems():
+#				if n2 == n:
+#					self.rules_freq.inc(r, w2.sigma)
+#					break
+#			n = n.prev
 
 	# remove all edges
 	def reset(self):

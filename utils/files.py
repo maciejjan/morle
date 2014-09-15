@@ -21,21 +21,21 @@ def read_tsv_file(filename, types=None, print_progress=False, print_msg=None):
 			if print_progress:
 				pp.next()
 
-def read_tsv_file_by_key(filename, key_col=1, types=None,\
+def read_tsv_file_by_key(filename, key=1, types=None,\
 		print_progress=False, print_msg=None):
 	current_key, entries = None, []
 	for row in read_tsv_file(filename, types, print_progress, print_msg):
-		key, entry = None, None
-		if isinstance(key_col, tuple):
-			key = tuple([row[i-1] for i in key_col])
-			entry = tuple([row[i] for i in range(0, len(row)) if not i+1 in key_col])
-		elif isinstance(key_col, int):
-			key = row[key_col-1]
-			entry = tuple([row[i] for i in range(0, len(row)) if i+1 != key_col])
-		if key != current_key:
+		key_, entry = None, None
+		if isinstance(key, tuple):
+			key_ = tuple([row[i-1] for i in key])
+			entry = tuple([row[i] for i in range(0, len(row)) if not i+1 in key])
+		elif isinstance(key, int):
+			key_ = row[key-1]
+			entry = tuple([row[i] for i in range(0, len(row)) if i+1 != key])
+		if key_ != current_key:
 			if entries:
 				yield current_key, entries
-			current_key, entries = key, []
+			current_key, entries = key_, []
 		entries.append(entry)
 	if entries:
 		yield current_key, entries
@@ -131,4 +131,11 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False, stab
 	if outfile is None:
 		remove_file(infile)
 		rename_file(infile + '.sorted', infile)
+
+def aggregate_file(infile, outfile=None, key=1):
+	if outfile is None:
+		outfile = infile + '.agg'
+	with open_to_write(outfile) as fp:
+		for key_, rows in read_tsv_file_by_key(infile, key):
+			write_line(fp, (key_, len(rows)))
 

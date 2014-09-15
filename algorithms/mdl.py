@@ -21,6 +21,37 @@ GAMMA_THRESHOLD = 1e-20
 # - switch: use frequencies or not (if not -- ignore corpus probability)
 # - integrate word generation (mdl-analyze) into the module
 
+def build_lexicon_new(rules, lexicon):
+	print 'Resetting lexicon...'
+	lexicon.reset()
+
+	for r in rules.keys():
+		if rules[r].weight < 0:
+			del rules[r]
+
+	# compute the improvement for each possible edge
+	edges = []
+	with open_to_write('edges.txt') as outfp:
+		for word_1, word_2, rule in read_tsv_file(settings.FILES['surface.graph'],\
+#			print_progress=False):
+				print_progress=True, print_msg='Computing edge scores...'):
+			if rules.has_key(rule):
+				delta_logl = lexicon.try_edge(word_1, word_2, rules[rule])
+				if delta_logl < 0:
+					continue
+				delta_cor_logl = math.log(rules[rule].freqprob(lexicon[word_2].freq - lexicon[word_1].freq))
+				edges.append((word_1, word_2, rule, delta_logl))
+				write_line(outfp, (word_1, lexicon[word_1].freq, word_2, lexicon[word_2].freq,\
+					rule, int(rules[rule].weight), delta_logl, delta_logl-delta_cor_logl, delta_cor_logl))
+	edges.sort(reverse=True, key=lambda x: x[3])
+
+	for (word_1, word_2, rule, delta_logl) in edges:
+		if lexicon[word_2].prev is None and not word_2 in lexicon[word_1].analysis()\
+				and not lexicon[word_1].next.has_key(rule):
+			lexicon.draw_edge(word_1, word_2, rules[rule])
+	
+	return lexicon
+
 def build_lexicon(rules, lexicon):
 	print 'Resetting lexicon...'
 	lexicon.reset()
@@ -28,8 +59,8 @@ def build_lexicon(rules, lexicon):
 	# compute the improvement for each possible edge
 	word_best_edge = {}
 	for word_1, word_2, rule in read_tsv_file(settings.FILES['surface.graph'],\
-			print_progress=False):
-#			print_progress=True, print_msg='Computing edge scores...'):
+#			print_progress=False):
+			print_progress=True, print_msg='Computing edge scores...'):
 		if rules.has_key(rule):
 			delta_logl = lexicon.try_edge(word_1, word_2, rules[rule])
 			if delta_logl < 0:
@@ -90,48 +121,58 @@ def reestimate_rule_prod(rules, lexicon):
 			del rules[r]
 
 def reestimate_rule_weights(rules, lexicon):
-	# gradient descent
-	rules_w = dict([(r.rule, r.weight) for r in rules.values()])
-	old_logl = lexicon.corpus_logl(rules)
-	while True:
-		d = lexicon.logl_gradient(rules)
-		new_rules_w = {}
-		gamma = 1000.0
-		while gamma >= GAMMA_THRESHOLD:
-#			print 'gamma = ', gamma
-			gamma_too_big = False
-			for r in rules_w.keys():
-				new_rules_w[r] = rules_w[r] + gamma * d[r]
-				if new_rules_w[r] <= 0.0:
-					gamma_too_big = True
-#					print r, d[r]
-					break
-			if gamma_too_big:
-				gamma /= 10
-				continue
+	rules_w = {}
+	for w1 in lexicon.values():
+		for rule, w2 in w1.next.iteritems():
+			if not rules_w.has_key(rule):
+				rules_w[rule] = 0
+			rules_w[rule] += w2.freq - w1.freq
+	for r in rules_w.keys():
+		rules[r].weight = rules_w[r] / lexicon.rules_c[r]
+
+#def reestimate_rule_weights(rules, lexicon):
+#	# gradient descent
+#	rules_w = dict([(r.rule, r.weight) for r in rules.values()])
+#	old_logl = lexicon.corpus_logl(rules)
+#	while True:
+#		d = lexicon.logl_gradient(rules)
+#		new_rules_w = {}
+#		gamma = 1000.0
+#		while gamma >= GAMMA_THRESHOLD:
+##			print 'gamma = ', gamma
+#			gamma_too_big = False
+#			for r in rules_w.keys():
+#				new_rules_w[r] = rules_w[r] + gamma * d[r]
+#				if new_rules_w[r] <= 0.0:
+#					gamma_too_big = True
+##					print r, d[r]
+#					break
+#			if gamma_too_big:
+#				gamma /= 10
+#				continue
+##			else:
+##				print 'ok'
+#			new_logl = lexicon.try_weights(new_rules_w)
+#			if new_logl > old_logl + 100.0:
+#				print 'improvement', new_logl, 'over', old_logl, 'with gamma =', gamma
+#				rules_w = new_rules_w
+#				old_logl = new_logl
+#				# TODO update weights here!
+#				break
 #			else:
-#				print 'ok'
-			new_logl = lexicon.try_weights(new_rules_w)
-			if new_logl > old_logl + 100.0:
-				print 'improvement', new_logl, 'over', old_logl, 'with gamma =', gamma
-				rules_w = new_rules_w
-				old_logl = new_logl
-				# TODO update weights here!
-				break
-			else:
-#				print 'no improvement', new_logl, old_logl
-				gamma /= 10
-		if gamma < GAMMA_THRESHOLD:
-			break
-	print lexicon.corpus_logl(rules)
-	# normalize the rule weight
-	print rules_w[u'#']
-	for r in rules.values():
-		r.weight = rules_w[r.rule] / rules_w[u'#']
-	# update weight sums in lexicon nodes
-	for n in lexicon.values():
-		n.sum_weights = 1.0 + sum([rules[r].weight for r in n.next.keys()])
-	print lexicon.corpus_logl(rules)
+##				print 'no improvement', new_logl, old_logl
+#				gamma /= 10
+#		if gamma < GAMMA_THRESHOLD:
+#			break
+#	print lexicon.corpus_logl(rules)
+#	# normalize the rule weight
+#	print rules_w[u'#']
+#	for r in rules.values():
+#		r.weight = rules_w[r.rule] / rules_w[u'#']
+#	# update weight sums in lexicon nodes
+#	for n in lexicon.values():
+#		n.sum_weights = 1.0 + sum([rules[r].weight for r in n.next.keys()])
+#	print lexicon.corpus_logl(rules)
 
 def load_training_file_with_freq(filename):
 	rules, lexicon = RuleSet(), Lexicon()

@@ -1,5 +1,6 @@
 from utils.files import *
 import re
+from scipy.stats import norm
 
 class Rule:
 	def __init__(self, prefix, alternations, suffix, tag=None):
@@ -16,6 +17,9 @@ class Rule:
 			return True
 		else:
 			return False
+	
+	def copy(self):
+		return Rule(self.prefix, self.alternations, self.suffix, self.tag)
 	
 	def apply(self, word):
 		if not self.lmatch(word):
@@ -121,6 +125,9 @@ class RuleData:
 		self.prod = prod
 		self.weight = weight
 		self.domsize = domsize
+	
+	def freqprob(self, f):
+		return norm.pdf(f, self.weight, 1)
 
 class RuleSet:
 	def __init__(self):

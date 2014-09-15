@@ -14,13 +14,13 @@ def expectation_maximization(lexicon, rules, iter_count):
 	if not rules.has_key(u'#'):
 		rules[u'#'] = RuleData(u'#', 1.0, 1.0, len(lexicon))
 	# build lexicon and reestimate parameters
-	lexicon = algorithms.mdl.build_lexicon(rules, lexicon)
+	lexicon = algorithms.mdl.build_lexicon_new(rules, lexicon)
 	algorithms.mdl.reestimate_rule_prod(rules, lexicon)
 	if settings.USE_WORD_FREQ:
 		algorithms.mdl.reestimate_rule_weights(rules, lexicon)
 	logl = lexicon.logl(rules)
 	print 'LogL =', logl
-	return rules, lexicon, logl
+	return logl
 
 def save_analyses(lexicon, filename):
 	with open_to_write(filename) as fp:
@@ -28,12 +28,12 @@ def save_analyses(lexicon, filename):
 			write_line(fp, (word.word, '<- ' + ' <- '.join(word.analysis())))
 
 def train_unsupervised():
-	algorithms.optrules.optimize_rules_in_graph(\
-		settings.FILES['training.wordlist'],\
-		settings.FILES['surface.graph'],\
-		settings.FILES['surface.graph'] + '.opt',\
-		settings.FILES['model.rules'] + '.0')
-	rename_file(settings.FILES['surface.graph'] + '.opt', settings.FILES['surface.graph'])
+#	algorithms.optrules.optimize_rules_in_graph(\
+#		settings.FILES['training.wordlist'],\
+#		settings.FILES['surface.graph'],\
+#		settings.FILES['surface.graph'] + '.opt',\
+#		settings.FILES['model.rules'] + '.0')
+#	rename_file(settings.FILES['surface.graph'] + '.opt', settings.FILES['surface.graph'])
 	lexicon = Lexicon.init_from_file(settings.FILES['training.wordlist'])
 	rules = RuleSet()
 	rules[u'#'] = RuleData(u'#', 1.0, 1.0, len(lexicon))
@@ -42,18 +42,24 @@ def train_unsupervised():
 	old_logl = lexicon.logl(rules)
 	print 'null logl:', old_logl
 	rules = RuleSet.load_from_file(settings.FILES['model.rules'] + '.0')
+#	rules = RuleSet.load_from_file(settings.FILES['model.rules'])
+	old_num_rules = len(rules)
 	while True:
+#	while i < 1:
 		i += 1
 		print '\n===   Iteration %d   ===\n' % i
-		new_rules, new_lexicon, logl = expectation_maximization(lexicon, rules, i)
-		if logl > old_logl:
-			rules, lexicon = new_rules, new_lexicon
-			old_logl = logl
-		else:
+		print 'number of rules:', old_num_rules
+		logl = expectation_maximization(lexicon, rules, i)
+		num_rules = len(rules)
+		if num_rules == old_num_rules and logl - old_logl < 1.0:
+#		if logl <= old_logl:
 			break
+		else:
+			rules.save_to_file(settings.FILES['model.rules'])
+			lexicon.save_to_file(settings.FILES['model.lexicon'])
+			old_logl = logl
+			old_num_rules = num_rules
 	# save results
-	rules.save_to_file(settings.FILES['model.rules'])
-	lexicon.save_to_file(settings.FILES['model.lexicon'])
 	save_analyses(lexicon, settings.FILES['analyses'])
 
 def train_supervised():

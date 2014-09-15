@@ -10,7 +10,9 @@ DERIVATION_THRESHOLD = 0.1
 
 SUPERVISED = False
 USE_WORD_FREQ = True
-USE_TAGS = True
+USE_TAGS = False
+DEBUG_MODE = False
+COMPOUNDING_RULES = True
 
 # load settings from file or create a settings file
 def process_settings_file():

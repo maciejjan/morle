@@ -61,7 +61,7 @@ def substrings_for_word(word, wordset):
 	for substring_set in substrings:
 		result.extend([s for s, mask in substring_set])
 	# generate substrings for compounding rules
-	if COMPOUNDING_RULES:
+	if settings.COMPOUNDING_RULES:
 		for i in range(1, len(word)-1):
 			if word[i:] in wordset and len(word[i:]) >= MIN_COMP_LEN:
 				result.append(word[i:])
