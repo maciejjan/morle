@@ -40,8 +40,8 @@ def read_tsv_file_by_key(filename, key=1, types=None,\
 	if entries:
 		yield current_key, entries
 
-def open_to_write(filename):
-	return codecs.open(settings.WORKING_DIR + filename, 'w+', settings.ENCODING)
+def open_to_write(filename, mode='w+'):
+	return codecs.open(settings.WORKING_DIR + filename, mode, settings.ENCODING)
 
 # if count_bytes set to true, returns the number of bytes written
 def write_line(fp, line, count_bytes=False):

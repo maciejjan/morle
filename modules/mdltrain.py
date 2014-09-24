@@ -11,8 +11,8 @@ GAMMA_THRESHOLD = 1e-30
 def expectation_maximization(lexicon, rules, iter_count):
 	# load rules and add the end-derivation-rule
 #	rules = RuleSet.load_from_file(RULES_FILE + '.' + str(iter_count-1))
-	if not rules.has_key(u'#'):
-		rules[u'#'] = RuleData(u'#', 1.0, 1.0, len(lexicon))
+#	if not rules.has_key(u'#'):
+#		rules[u'#'] = RuleData(u'#', 1.0, 1.0, len(lexicon))
 	# build lexicon and reestimate parameters
 	lexicon = algorithms.mdl.build_lexicon_new(rules, lexicon)
 	algorithms.mdl.reestimate_rule_prod(rules, lexicon)
@@ -20,12 +20,13 @@ def expectation_maximization(lexicon, rules, iter_count):
 		algorithms.mdl.reestimate_rule_weights(rules, lexicon)
 	logl = lexicon.logl(rules)
 	print 'LogL =', logl
+	algorithms.mdl.check_rules(rules, lexicon)
 	return logl
 
 def save_analyses(lexicon, filename):
 	with open_to_write(filename) as fp:
 		for word in lexicon.values():
-			write_line(fp, (word.word, '<- ' + ' <- '.join(word.analysis())))
+			write_line(fp, (word.word, '<- ' + ' <- '.join(word.analysis_comp())))
 
 def train_unsupervised():
 #	algorithms.optrules.optimize_rules_in_graph(\
@@ -36,7 +37,7 @@ def train_unsupervised():
 #	rename_file(settings.FILES['surface.graph'] + '.opt', settings.FILES['surface.graph'])
 	lexicon = Lexicon.init_from_file(settings.FILES['training.wordlist'])
 	rules = RuleSet()
-	rules[u'#'] = RuleData(u'#', 1.0, 1.0, len(lexicon))
+#	rules[u'#'] = RuleData(u'#', 1.0, 1.0, len(lexicon))
 #	for i in range(1, NUM_ITERATIONS+1):
 	i = 0
 	old_logl = lexicon.logl(rules)

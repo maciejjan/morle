@@ -1,5 +1,5 @@
 from datastruct.counter import *
-from datastruct.rules import Rule
+from datastruct.rules import *
 from datastruct.lexicon import *
 from utils.files import *
 from utils.printer import *
@@ -151,23 +151,34 @@ def optimize_rule(rule, wordpairs, wordlist, matching=None):
 	else:
 		return [(rule, applying[rule], matching[rule], wordpairs)]
 
-def optimize_rules_in_graph(wordlist_file, input_file, output_file, rules_file):
+def calculate_rule_params(wordlist_file, graph_file, key, rules):
+	word_freq = Counter.load_from_file(wordlist_file)
+	for r, rows in read_tsv_file_by_key(graph_file, key,\
+			print_progress=True, print_msg='Calculating rule parameters...'):
+		rule = Rule.from_string(r)
+		weight = sum([word_freq[row[1]]-word_freq[row[0]] for row in rows]) / len(rows)
+		domsize = sum([1 for word in word_freq.keys() if rule.lmatch(word)])
+		rules[r] = RuleData(r, float(len(rows)) / domsize, weight, domsize)
+
+def optimize_rules_in_graph(wordlist_file, input_file, output_file, rules):
 #	sort_file(input_file, key=3)
-	wordlist = []
-	for word, freq in read_tsv_file(wordlist_file):
-		wordlist.append(word)
+	word_freq = Counter.load_from_file(wordlist_file)
+#	wordlist = []
+#	for word, freq in read_tsv_file(wordlist_file):
+#		wordlist.append(word)
 	with open_to_write(output_file) as outfp:
-		with open_to_write(rules_file) as rulesfp:
-			for rule, wordpairs in read_tsv_file_by_key(input_file, 3,\
-					print_progress=True, print_msg='Optimizing rules in the graph...'):
-				opt = optimize_rule(rule, wordpairs, wordlist)
-				for new_rule, freq, domsize, new_wordpairs in opt:
-					for nw1, nw2 in new_wordpairs:
-						write_line(outfp, (nw1, nw2, new_rule))
-					prod = float(freq) / domsize
-					if prod > 0.9:
-						prod = 0.9
-					write_line(rulesfp, (new_rule, prod, 1.0, domsize))
+		for rule, wordpairs in read_tsv_file_by_key(input_file, 3,\
+				print_progress=True, print_msg='Optimizing rules in the graph...'):
+			opt = optimize_rule(rule, wordpairs, word_freq.keys())
+			for new_rule, freq, domsize, new_wordpairs in opt:
+				for nw1, nw2 in new_wordpairs:
+					write_line(outfp, (nw1, nw2, new_rule))
+				prod = float(freq) / domsize
+				if prod > 0.9:
+					prod = 0.9
+				weight = sum([word_freq[w2] - word_freq[w1]\
+					for w1, w2 in wordpairs]) / len(wordpairs)
+				rules[new_rule] = RuleData(new_rule, prod, weight, domsize)
 
 def optimize_rules_in_lexicon(input_file, output_file, rules_file):
 	lexicon = Lexicon.load_from_file(input_file)

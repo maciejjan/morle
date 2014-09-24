@@ -11,6 +11,11 @@ MAX_ALTERNATION_LENGTH = 3
 MAX_AFFIX_LENGTH = 5
 IMPROVEMENT_THRESHOLD = 100.0
 
+# only compute productivity and domsize, don't optimize
+def compute_crule_productivity(input_file, output_file):
+	for rule, wordpairs in read_tsv_file(input_file, 4):
+		pass
+
 def max_prod_ratio(x):
 	return x / (x+1) * math.exp(-math.log(x+1)/x)
 

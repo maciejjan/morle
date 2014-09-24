@@ -29,7 +29,23 @@ class LexiconNode:
 			node = node.prev
 			analysis.append(node.word)
 		return analysis
-	
+
+	def analysis_comp(self):
+		analysis = []
+		node = self
+		while node.prev is not None:
+			word = node.prev.word
+			rule = [r for r, n in node.prev.next.iteritems() if n == node][0]
+			rule_sp = rule.split('*')
+			if len(rule_sp) == 3:
+				if rule_sp[0].find('/') > -1:
+					word = word + '+(' + rule_sp[1] + ')'
+				elif rule_sp[2].find('/') > -1:
+					word = '(' + rule_sp[1] + ')+' + word
+			analysis.append(word)
+			node = node.prev
+		return analysis
+
 	def show_tree(self, space=''):
 		print space + self.word.encode('utf-8'), self.freq #, self.sigma
 		for w in self.next.values():

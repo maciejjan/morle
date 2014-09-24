@@ -1,6 +1,7 @@
 from utils.files import *
 import re
 from scipy.stats import norm
+from algorithms.ngrams import *
 
 class Rule:
 	def __init__(self, prefix, alternations, suffix, tag=None):
@@ -54,20 +55,26 @@ class Rule:
 		return [x for x in affixes if x]
 	
 	def make_left_pattern(self):
+		pref = re.escape(self.prefix[0])
+		alt = [re.escape(x) for x, y in self.alternations]
+		suf = re.escape(self.suffix[0])
 		pattern = '^' +\
-			self.prefix[0] +\
-			('(.*)' if self.alternations else '') + \
-			'(.*)'.join([x for x, y in self.alternations]) +\
-			'(.*)' + self.suffix[0] +\
+			pref +\
+			('(.*)' if alt else '') + \
+			'(.*)'.join(alt) +\
+			'(.*)' + suf +\
 			('_' + self.tag[0] if self.tag else '') + '$'
 		self.left_pattern = re.compile(pattern)
 	
 	def make_right_pattern(self):
+		pref = re.escape(self.prefix[1])
+		alt = [re.escape(y) for x, y in self.alternations]
+		suf = re.escape(self.suffix[1])
 		pattern = '^' +\
-			self.prefix[1] +\
-			('(.*)' if self.alternations else '') + \
-			'(.*)'.join([y for x, y in self.alternations]) +\
-			'(.*)' + self.suffix[1] +\
+			pref +\
+			('(.*)' if alt else '') + \
+			'(.*)'.join(alt) +\
+			'(.*)' + suf +\
 			('_' + self.tag[1] if self.tag else '') + '$'
 		self.right_pattern = re.compile(pattern)
 	
@@ -170,3 +177,36 @@ class RuleSet:
 			rs[rule] = RuleData(rule, prod, weight, domsize)
 		return rs
 	
+class RuleSetPrior:
+	def __init__(self):
+		self.ngr = None
+
+	def train(self, rules_c):
+		self.ngr = NGramModel(1)
+		ngram_training_pairs = []
+		for rule_str, count in rules_c.iteritems():
+			rule = Rule.from_string(rule_str)
+			ngram_training_pairs.extend([\
+				(rule.prefix[0], count), (rule.suffix[0], count),\
+				(rule.suffix[0], count), (rule.suffix[1], count)
+			])
+			for x, y in rule.alternations:
+				ngram_training_pairs.extend([(x, count), (y, count)])
+			# an 'empty alternation' finishes the sequence of alternations
+			ngram_training_pairs.extend([(u'', count), (u'', count)])
+		self.ngr.train(ngram_training_pairs)
+	
+	def rule_prob(self, rule_str):
+		if rule_str == u':/:':
+			return 0.0
+		rule = Rule.from_string(rule_str)
+		prob = self.ngr.word_prob(rule.prefix[0]) *\
+			self.ngr.word_prob(rule.prefix[1]) *\
+			self.ngr.word_prob(rule.suffix[0]) *\
+			self.ngr.word_prob(rule.suffix[1]) *\
+			self.ngr.word_prob(u'') * self.ngr.word_prob(u'')
+		for x, y in rule.alternations:
+			prob *= self.ngr.word_prob(x) * self.ngr.word_prob(y)
+		prob /= 1.0 - self.ngr.word_prob(u'') ** 6		# empty rule not included
+		return prob
+

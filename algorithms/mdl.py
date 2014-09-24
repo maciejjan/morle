@@ -6,6 +6,8 @@ from utils.files import *
 import settings
 import re
 
+import math
+
 GRAPH_MDL_FILE = 'graph_mdl.txt'
 GAMMA_THRESHOLD = 1e-20
 
@@ -20,6 +22,52 @@ GAMMA_THRESHOLD = 1e-20
 # - switch: supervised / unsupervised
 # - switch: use frequencies or not (if not -- ignore corpus probability)
 # - integrate word generation (mdl-analyze) into the module
+
+def rule_cost(f, d):
+	#return f*math.log(float(f)/d) + (d-f)*math.log(float(d-f)/d)
+	return (d-f)*math.log(float(d-f)/d)
+
+def check_rules(rules, lexicon):
+	# check rules
+	rsp = RuleSetPrior()
+	rsp.train(lexicon.rules_c)
+	gain, analyzed = {}, set([])
+	for word_1, freq_1, word_2, freq_2, rule, weight, delta_logl, d1, d2 in\
+			read_tsv_file('edges.txt',\
+			(unicode, int, unicode, int, unicode, int, float, float, float),\
+			print_progress=True, print_msg='Checking rules...'):
+		if lexicon[word_2].prev == lexicon[word_1]:
+			if not gain.has_key(word_2):
+				gain[word_2] = 0.0
+			gain[word_2] += delta_logl
+		if not word_2 in analyzed and lexicon[word_2].prev != lexicon[word_1]\
+				and not word_2 in lexicon[word_1].analysis()\
+				and not lexicon[word_1].next.has_key(rule):
+			if not gain.has_key(word_2):
+				gain[word_2] = 0.0
+			gain[word_2] -= delta_logl
+			analyzed.add(word_2)
+	rules_gain = {}
+	for w in lexicon.values():
+		for r, w2 in w.next.iteritems():
+			if not rules_gain.has_key(r):
+				rules_gain[r] = 0.0
+			rules_gain[r] += gain[w2.word]
+	rules_score = []
+	for r, g in rules_gain.iteritems():
+		cost = rule_cost(lexicon.rules_c[r], rules[r].domsize)
+		if r.count('*') == 0:
+			cost += math.log(rsp.rule_prob(r))
+		elif r.count('*') == 2:
+			meta_rule = re.sub(r'\*.*\*', '*', r)
+			cost += math.log(rules[meta_rule].prod)
+		rules_score.append((r, g, cost, cost+g))
+		if cost+g < 0.0:
+			del rules[r]
+	rules_score.sort(key=lambda x: x[3])
+	with open_to_write('rules_gain.txt') as fp:
+		for r, g, c, sc in rules_score:
+			write_line(fp, (r, g, c, sc))
 
 def build_lexicon_new(rules, lexicon):
 	print 'Resetting lexicon...'
@@ -44,6 +92,7 @@ def build_lexicon_new(rules, lexicon):
 				write_line(outfp, (word_1, lexicon[word_1].freq, word_2, lexicon[word_2].freq,\
 					rule, int(rules[rule].weight), delta_logl, delta_logl-delta_cor_logl, delta_cor_logl))
 	edges.sort(reverse=True, key=lambda x: x[3])
+	update_file_size('edges.txt')
 
 	for (word_1, word_2, rule, delta_logl) in edges:
 		if lexicon[word_2].prev is None and not word_2 in lexicon[word_1].analysis()\
@@ -109,6 +158,10 @@ def reestimate_rule_prod(rules, lexicon):
 	for word in lexicon.values():
 		for r in word.next.keys():
 			rules_c.inc(r)
+			if r.count('*') == 2:
+				r_sp = r.split('*')
+				rules_c.inc(r_sp[0] + '*' + r_sp[2])
+				lexicon.rules_c.inc(r_sp[0] + '*' + r_sp[2])
 	# replace productivity with count / domsize
 	for r in rules.keys():
 		if rules_c.has_key(r):
@@ -124,11 +177,18 @@ def reestimate_rule_weights(rules, lexicon):
 	rules_w = {}
 	for w1 in lexicon.values():
 		for rule, w2 in w1.next.iteritems():
+			if rule.count('*') == 2:
+				r_sp = rule.split('*')
+				rule = r_sp[0] + '*' + r_sp[2]
 			if not rules_w.has_key(rule):
 				rules_w[rule] = 0
 			rules_w[rule] += w2.freq - w1.freq
 	for r in rules_w.keys():
 		rules[r].weight = rules_w[r] / lexicon.rules_c[r]
+	for r in rules.keys():
+		if r.count('*') == 2:
+			r_sp = r.split('*')
+			rules[r].weight = rules[r_sp[0] + '*' + r_sp[2]].weight
 
 #def reestimate_rule_weights(rules, lexicon):
 #	# gradient descent

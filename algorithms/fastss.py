@@ -9,13 +9,6 @@ MAX_ALTERNATION_LENGTH = 3
 MAX_AFFIX_LENGTH = 5
 INFIX_SLOTS = 2
 MAX_OUTPUT_SIZE = 5e10	# 50 GB
-COMPOUNDING_RULES = True
-
-def load_wordset(input_file):
-	wordset = set([])
-	for word, freq in read_tsv_file(input_file):
-		wordset.add(word)
-	return wordset
 
 # turns a zero into one at the chosen position in a string of zeros and ones
 def zero_to_one(old_mask, pos):
@@ -87,8 +80,7 @@ def generate_substrings(input_file, output_file, wordset):
 			pp.next()
 	set_file_size(output_file, lines_written)
 
-def create_substrings_file(input_file, substrings_file):
-	wordset = load_wordset(input_file) if COMPOUNDING_RULES else None
+def create_substrings_file(input_file, substrings_file, wordset):
 	generate_substrings(input_file, substrings_file, wordset)
 	sort_file(substrings_file, key=2)
 	sort_file(substrings_file, key=1, numeric=True, reverse=True, stable=True)

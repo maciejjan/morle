@@ -3,13 +3,16 @@
 import algorithms.align
 import algorithms.fastss
 import algorithms.cooccurrences
+import algorithms.optrules
 from datastruct.counter import *
 from datastruct.rules import *
+from datastruct.lexicon import *
 import utils.db
 from utils.files import *
 from utils.printer import *
 import settings
 import re
+import random
 
 ### LOCAL FILTERS ###
 
@@ -105,19 +108,22 @@ def extract_rules_from_substrings(input_file, output_file, i_rules_c=None, words
 			if len(words) > 1:
 				extract_rules_from_words(words, cur_substr, outfp, i_rules_c)
 
-def filter_and_count_rules(input_file):
+def filter_and_count_rules(input_file, key=3):
 	rules_c = Counter()
 	output_file = input_file + '.filtered'
 	lines_written = 0
 	print 'Filtering and counting rules...'
 	with open_to_write(output_file) as outfp:
 		pp = progress_printer(get_file_size(input_file))
-		for rule_str, wordpairs in read_tsv_file_by_key(input_file, 3):
+		for rule_str, wordpairs in read_tsv_file_by_key(input_file, key):
 			rule = Rule.from_string(rule_str)
 			if apply_global_filters(rule, wordpairs):
-				for (w1, w2) in wordpairs:
-					write_line(outfp, (w1, w2, rule_str))
+				for wp in wordpairs:
+					write_line(outfp, tuple(list(wp) + [rule_str]))
 					lines_written += 1
+#				for (w1, w2) in wordpairs:
+#					write_line(outfp, (w1, w2, rule_str))
+#					lines_written += 1
 				rules_c.inc(rule_str, len(wordpairs))
 			for i in range(0, len(wordpairs)):
 				pp.next()
@@ -126,33 +132,74 @@ def filter_and_count_rules(input_file):
 	set_file_size(input_file, lines_written)
 	return rules_c
 
-### WEIGHTING RULES ACCORDING TO PROBABILITY ###
+def filter_new(input_file):
+	with open_to_write(input_file + '.fil1') as fp:
+		for r, wordpairs in read_tsv_file_by_key(input_file, 3):
+			for w1, w2 in wordpairs:
+				write_line(fp, (w1, w2, r, len(wordpairs)))
+		for r, rows in read_tsv_file_by_key(input_file + '.comp', 4):
+			for row in rows:
+				write_line(fp, (row[0], row[1], r, len(rows)))
+	sort_file(input_file + '.fil1', key=4, reverse=True, numeric=True)
+	# build lexicon
+	lexicon = Lexicon()
+	for w1, w2, r, freq in read_tsv_file(input_file + '.fil1', print_progress=True, print_msg='Building lexicon...'):
+		if not lexicon.has_key(w1):
+			lexicon[w1] = LexiconNode(w1, 0, 0, 0, 0, 0)
+			lexicon.roots.add(w1)
+		if not lexicon.has_key(w2):
+			lexicon[w2] = LexiconNode(w2, 0, 0, 0, 0, 0)
+			lexicon.roots.add(w2)
+		if lexicon[w2].prev is None and not w2 in lexicon[w1].analysis():
+			lexicon[w2].prev = lexicon[w1]
+			lexicon[w1].next[r] = lexicon[w2]
+			lexicon.rules_c.inc(r)
+			lexicon.rules_c.inc(Rule.from_string(r).reverse().to_string())
+			lexicon.roots.remove(w2)
+	# filter both graphs
+	with open_to_write(input_file + '.fil') as fp:
+		for r, wordpairs in read_tsv_file_by_key(input_file, 3):
+			if lexicon.rules_c.has_key(r) and lexicon.rules_c[r] > 1:
+				for w1, w2 in wordpairs:
+					write_line(fp, (w1, w2, r))
+			else:
+				for w1, w2 in wordpairs:
+					if lexicon[w2].prev == lexicon[w1]:
+						write_line(fp, (w1, w2, r))
+	with open_to_write(input_file + '.comp.fil') as fp:
+		for r, rows in read_tsv_file_by_key(input_file + '.comp', 4):
+			if lexicon.rules_c.has_key(r) and lexicon.rules_c[r] > 1:
+				for w1, w2, w3 in rows:
+					if lexicon[w2].prev == lexicon[w1]: # stricter filtering
+						write_line(fp, (w1, w2, w3, r))
+	remove_file(input_file + '.fil1')
+	rename_file(input_file, input_file + '.orig')
+	rename_file(input_file + '.fil', input_file)
+	rename_file(input_file + '.comp', input_file + '.comp.orig')
+	rename_file(input_file + '.comp.fil', input_file + '.comp')
+	update_file_size(input_file)
+	update_file_size(input_file + '.comp')
+#	lexicon.rules_c.save_to_file('s_rul.txt.fil1')
+#	lexicon.save_to_file('lex_fil.txt')
 
-def calculate_rule_prob(input_file, rules_c):
-	patterns, counts = {}, Counter()
-	for r in rules_c.keys():
-		rule = Rule.from_string(r)
-		patterns[r] = re.compile(\
-			('^' + rule.prefix[0] + '.*' + \
-			'.*'.join([a[0] for a in rule.alternations]) + '.*' + rule.suffix[0] + '$')\
-			.replace('.*.*', '.*'))
-	print 'Calculating rule probability...'
-	pp = progress_printer(get_file_size(input_file))
-	for word, freq in read_tsv_file(input_file):
-		for r in rules_c.keys():
-			if re.match(patterns[r], word):
-				counts.inc(r)
-		pp.next()
-	ruleprob = {}
-	for r in rules_c.keys():
-		ruleprob[r] = float(rules_c[r]) / counts[r]
-	return ruleprob
+### CALCULATING RULE PARAMETERS ###
 
-def save_rules(rules_c, ruleprob, filename):
+def join_compounds_to_graph(graph_file, rules):
+	sort_file(graph_file + '.comp', key=(3, 4))
+	with open_to_write(graph_file, 'a') as fp:
+		for k, rows in read_tsv_file_by_key(graph_file + '.comp', (3, 4)):
+			new_rule = k[1].replace('*', '*' + k[0] + '*')
+			rules[new_rule] = RuleData(new_rule, float(len(rows)) / rules[k[1]].domsize,\
+				rules[k[1]].weight, rules[k[1]].domsize)
+			for row in rows:
+				write_line(fp, (row[0], row[1], new_rule))
+	update_file_size(graph_file)
+
+def save_rules(rules, filename):
 	print 'Saving rules...'
 	with open_to_write(filename) as fp:
-		for r in rules_c.keys():
-			write_line(fp, (r, rules_c[r], ruleprob[r], 0.0))
+		for r in rules:
+			write_line(fp, (r.rule, r.prod, r.weight, r.domsize))
 
 def load_wordset(input_file):
 	wordset = set([])
@@ -163,26 +210,33 @@ def load_wordset(input_file):
 ### MAIN FUNCTIONS ###
 
 def run():
-	wordset = load_wordset(settings.FILES['training.wordlist']) if settings.COMPOUNDING_RULES else None
+#	wordset = load_wordset(settings.FILES['training.wordlist'])\
+#		if settings.COMPOUNDING_RULES else None
 #	algorithms.fastss.create_substrings_file(\
 #		settings.FILES['training.wordlist'], settings.FILES['surface.substrings'], wordset)
-	if file_exists(settings.FILES['trained.rules']):
-		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
-			settings.FILES['surface.graph'],\
-			load_training_infl_rules(settings.FILES['trained.rules']))
-	else:
-		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
-			settings.FILES['surface.graph'], wordset=wordset)
-	sort_file(settings.FILES['surface.graph'], key=(1,2), unique=True)
-	sort_file(settings.FILES['surface.graph'], key=3)
+#	if file_exists(settings.FILES['trained.rules']):
+#		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
+#			settings.FILES['surface.graph'],\
+#			load_training_infl_rules(settings.FILES['trained.rules']))
+#	else:
+#		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
+#			settings.FILES['surface.graph'], wordset=wordset)
+#	sort_file(settings.FILES['surface.graph'], key=(1,2), unique=True)
+#	sort_file(settings.FILES['surface.graph'], key=3)
+##	sort_file(settings.FILES['surface.graph'] + '.comp', key=4)
 	update_file_size(settings.FILES['surface.graph'])
-	aggregate_file(settings.FILES['surface.graph'], settings.FILES['surface.rules'], 3)
-	sort_file(settings.FILES['surface.graph'] + '.comp', key=(1,3), unique=True)
-	sort_file(settings.FILES['surface.graph'] + '.comp', key=4)
+##	aggregate_file(settings.FILES['surface.graph'], settings.FILES['surface.rules'], 3)
+##	sort_file(settings.FILES['surface.rules'], key=2, reverse=True, numeric=True)
+#	sort_file(settings.FILES['surface.graph'] + '.comp', key=(1,3), unique=True)
+#	sort_file(settings.FILES['surface.graph'] + '.comp', key=4)
 	update_file_size(settings.FILES['surface.graph'] + '.comp')
-	aggregate_file(settings.FILES['surface.graph'] + '.comp', settings.FILES['surface.rules'] + '.comp', 4)
-#	rules_c = filter_and_count_rules(settings.FILES['surface.graph'])
+	filter_new(settings.FILES['surface.graph'])
+##	aggregate_file(settings.FILES['surface.graph'] + '.comp', settings.FILES['surface.rules'] + '.comp', 4)
+##	sort_file(settings.FILES[surface.rules], key=2, reverse=True, numeric=True)
+#	rules_c = filter_and_count_rules(settings.FILES['surface.graph'], 3)
 #	rules_c.save_to_file(settings.FILES['surface.rules'])
+#	comp_rules_c = filter_and_count_rules(settings.FILES['surface.graph'] + '.comp', 4)
+#	comp_rules_c.save_to_file(settings.FILES['surface.rules'] + '.comp')
 #	ruleprob = calculate_rule_prob(settings.FILES['wordlist'], rules_c)
 #	save_rules(rules_c, ruleprob, settings.FILES['surface.rules'])
 #	sort_file(settings.FILES['surface.graph'], key=1)
@@ -191,6 +245,18 @@ def run():
 #		algorithms.cooccurrences.calculate_rules_cooc(\
 #			settings.FILES['surface.graph'],\
 #			settings.FILES['surface.rules.cooc'], rules_c)
+	rules = RuleSet()
+	algorithms.optrules.optimize_rules_in_graph(\
+		settings.FILES['training.wordlist'],\
+		settings.FILES['surface.graph'],\
+		settings.FILES['surface.graph'] + '.opt', rules)
+	rename_file(settings.FILES['surface.graph'] + '.opt', settings.FILES['surface.graph'])
+	algorithms.optrules.calculate_rule_params(\
+		settings.FILES['training.wordlist'],\
+		settings.FILES['surface.graph'] + '.comp', 4, rules)
+	join_compounds_to_graph(settings.FILES['surface.graph'], rules)
+	rules.save_to_file('rules.txt.0')
+#	rename_file(settings.FILES['surface.graph'] + '.opt', settings.FILES['surface.graph'])
 
 def evaluate():
 	print '\nSurface rules: nothing to evaluate.\n'
