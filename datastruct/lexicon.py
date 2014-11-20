@@ -1,12 +1,30 @@
 from datastruct.counter import *
+from datastruct.rules import *
+from algorithms.align import lcs
 import algorithms.ngrams
 from utils.files import *
 import settings
 import math
 
+def align_words(word_1, word_2):
+	cs = algorithms.align.lcs(word_1, word_2)
+	pattern = re.compile('(.*)' + '(.*?)'.join([\
+		letter for letter in cs]) + '(.*)')
+	m1 = pattern.search(word_1)
+	m2 = pattern.search(word_2)
+	alignment = []
+	for i, (x, y) in enumerate(zip(m1.groups(), m2.groups())):
+		if x or y:
+			alignment.append((x, y))
+		if i < len(cs):
+			alignment.append((cs[i], cs[i]))
+	return alignment
+
+
 class LexiconNode:
 	def __init__(self, word, freq, sigma, ngram_prob, corpus_prob, sum_weights):
 		self.word = word
+#		self.stem = word
 		self.freq = freq
 		self.sigma = sigma
 		self.ngram_prob = ngram_prob
@@ -15,12 +33,16 @@ class LexiconNode:
 		self.prev = None
 		self.next = {}
 		self.training = True
+		self.structure = None
 
 	def root(self):
 		root = self
 		while root.prev is not None:
 			root = root.prev
 		return root
+	
+	def depth(self):
+		return len(self.analysis())
 	
 	def analysis(self):
 		analysis = []
@@ -42,14 +64,85 @@ class LexiconNode:
 					word = word + '+(' + rule_sp[1] + ')'
 				elif rule_sp[2].find('/') > -1:
 					word = '(' + rule_sp[1] + ')+' + word
+#			if not node.prev.prev or len(lcs(node.word, node.prev.word)) > len(lcs(node.word, node.prev.prev.word)):
 			analysis.append(word)
 			node = node.prev
+		return analysis
+
+#	def analysis_stems(self):
+#		analysis = []
+#		node = self
+#		analysis.append(node.stem)
+#		while node.prev is not None:
+#			word = node.prev.stem
+#			rule = [r for r, n in node.prev.next.iteritems() if n == node][0]
+#			rule_sp = rule.split('*')
+#			if len(rule_sp) == 3:
+#				if rule_sp[0].find('/') > -1:
+#					word = word + '+(' + rule_sp[1] + ')'
+#				elif rule_sp[2].find('/') > -1:
+#					word = '(' + rule_sp[1] + ')+' + word
+##			if not node.prev.prev or len(lcs(node.word, node.prev.word)) > len(lcs(node.word, node.prev.prev.word)):
+#			analysis.append(word)
+#			node = node.prev
+#		return analysis
+	
+	def analysis_morphochal(self):
+		analysis = []
+		node = self
+		while node.prev is not None:
+			word = node.prev.word
+			rule = [r for r, n in node.prev.next.iteritems() if n == node][0]
+			rule_sp = rule.split('*')
+			if len(rule_sp) == 3:
+				rule = rule_sp[0] + '*' + rule_sp[2]
+#				rule = rule_sp[0] + rule_sp[2]
+				analysis.append(rule_sp[1])
+			else:
+				analysis.append(rule)
+#			rule = Rule.from_string(rule)
+#			if rule.prefix[0]:
+#				analysis.append(rule.prefix[0] + '-')
+#			if rule.prefix[1]:
+#				analysis.append(rule.prefix[1] + '+')
+#			if rule.suffix[0]:
+#				analysis.append('-' + rule.suffix[0])
+#			if rule.suffix[1]:
+#				analysis.append('+' + rule.suffix[1])
+#			for x, y in rule.alternations:
+#				if x:
+#					analysis.append('-' + x + '-')
+#				if y:
+#					analysis.append('+' + y + '+')
+			node = node.prev
+		analysis.append(node.word)
+		to_remove = []
+		for x in analysis:
+			if x.find('-') > -1 and x.replace('-', '+') in analysis:
+				to_remove.append(x)
+				to_remove.append(x.replace('-', '+'))
+			elif x.find('-') > -1 and x.replace('-', '') in analysis:
+				to_remove.append(x)
+				to_remove.append(x.replace('-', ''))
+		for x in to_remove:
+			if x in analysis:
+				analysis.remove(x)
+		analysis = [x for x in analysis \
+			if (not '+' in x and not '-' in x)\
+				or (x.replace('+', '') in self.word)]
+		analysis.reverse()
 		return analysis
 
 	def show_tree(self, space=''):
 		print space + self.word.encode('utf-8'), self.freq #, self.sigma
 		for w in self.next.values():
 			w.show_tree(space=space+'\t')
+	
+	def words_in_tree(self):
+		result = [self.word]
+		for w in self.next.values():
+			result.extend(w.words_in_tree())
+		return result
 	
 	def forward_multiply_corpus_prob(self, p):
 		self.corpus_prob *= p
@@ -60,6 +153,54 @@ class LexiconNode:
 		self.sigma += s
 		if self.prev is not None:
 			self.prev.backward_add_sigma(s)
+	
+#	def backward_update_stem(self):
+#		if self.prev is not None:
+#			self.prev.stem = lcs(self.prev.stem, self.stem)
+#			self.prev.backward_update_stem()
+
+	def annotate_word_structure(self, depth=0):
+		self.structure = [depth] * len(self.word)
+		node = self
+		node_depth = depth
+		while node.prev is not None:
+			node = node.prev
+			node_depth -= 1
+			alignment = align_words(self.word, node.word)
+			i = 0
+			for x, y in alignment:
+				if x == y:
+					self.structure[i] = node_depth
+					i += 1
+				else:
+					i += len(x)
+		# fix prefixes
+		for i in range(len(self.structure)-1, 0, -1):
+			if self.structure[i-1] < self.structure[i] and not 0 in self.structure[:i]:
+				self.structure[i-1] = self.structure[i]
+		# fix suffixes
+		for i in range(len(self.structure)-1):
+			if self.structure[i+1] < self.structure[i] and not 0 in self.structure[i:]:
+				self.structure[i+1] = self.structure[i]
+		for child in self.next.values():
+			child.annotate_word_structure(depth+1)
+	
+	def split(self):
+		split = []
+		cur_morph = self.word[0]
+		for i in range(1, len(self.structure)):
+			if self.structure[i] == self.structure[i-1]:
+				cur_morph += self.word[i]
+			else:
+				split.append(cur_morph)
+				cur_morph = self.word[i]
+		split.append(cur_morph)
+		return split
+
+	def show_split_tree(self, space=''):
+		print space + '|'.join(self.split()).encode('utf-8'), self.freq #, self.sigma
+		for w in self.next.values():
+			w.show_split_tree(space=space+'\t')
 
 class Lexicon:
 	def __init__(self):
@@ -222,6 +363,9 @@ class Lexicon:
 		w2.prev = w1
 		w1.next[rule.rule] = w2
 
+#		w1.stem = lcs(w1.stem, lcs(w1.word, w2.word))
+#		w1.backward_update_stem()
+
 		# update global information
 		self.roots.remove(word_2)
 		self.rules_c.inc(rule.rule)
@@ -235,12 +379,26 @@ class Lexicon:
 #					self.rules_freq.inc(r, w2.sigma)
 #					break
 #			n = n.prev
+	
+	def remove_edge(self, word_1, word_2):
+		self.roots.add(word_2)
+		w1, w2 = self.nodes[word_1], self.nodes[word_2]
+		rule = None
+		for r, w in w1.next.iteritems():
+			if w.word == word_2:
+				rule = r
+				break
+		if rule is not None:
+			self.rules_c[rule] -= 1
+			del w1.next[rule]
+		w2.prev = None
 
 	# remove all edges
 	def reset(self):
 		self.rules_c = Counter()
 		self.rules_freq = Counter()
 		for n in self.nodes.values():
+#			n.stem = n.word
 			n.prev = None
 			n.next = {}
 			n.sigma = n.freq
@@ -252,12 +410,25 @@ class Lexicon:
 	def save_to_file(self, filename):
 		def write_subtree(fp, word_1, word_2, rule):
 			w2 = self.nodes[word_2]
+#			write_line(fp, (word_1, word_2, rule, w2.stem, w2.freq, w2.sigma, w2.ngram_prob, w2.corpus_prob, w2.sum_weights))
 			write_line(fp, (word_1, word_2, rule, w2.freq, w2.sigma, w2.ngram_prob, w2.corpus_prob, w2.sum_weights))
 			for next_rule, next_word in w2.next.iteritems():
 				write_subtree(fp, word_2, next_word.word, next_rule)
 		with open_to_write(filename) as fp:
 			for rt in self.roots:
 				write_subtree(fp, u'', rt, u'')
+	
+	def analyses_morphochal(self, filename):
+		with open_to_write(filename) as fp:
+			for w in sorted(self.values(), key=lambda x: x.word):
+				write_line(fp, (w.word, ' '.join(w.analysis_morphochal())))
+
+	def save_splits(self, filename):
+		for r in self.roots:
+			self.nodes[r].annotate_word_structure()
+		with open_to_write(filename) as fp:
+			for w in sorted(self.values(), key=lambda x: x.word):
+				write_line(fp, (w.word, ' '.join(w.split())))
 
 	@staticmethod
 	def init_from_file(filename):

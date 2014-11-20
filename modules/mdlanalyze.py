@@ -6,6 +6,7 @@ import settings
 import math
 import sys
 
+INPUT_FILE = 'input.training'
 RULES_FILE = 'rules.txt'
 LEXICON_FILE = 'lexicon.txt'
 EVAL_LEXICON_FILE = 'lexicon.eval'
@@ -24,7 +25,7 @@ def rule_score(ruledata, freq, unigrams):
 		score += math.log(unigrams.word_prob(x)) - math.log(unigrams.word_prob(y))
 	score += math.log(unigrams.word_prob(rule.suffix[0])) - math.log(unigrams.word_prob(rule.suffix[1]))
 	score += math.log(ruledata.prod)
-	score += freq * math.log(ruledata.weight / (1.0 + ruledata.weight))
+#	score += freq * math.log(ruledata.weight / (1.0 + ruledata.weight))
 	return score
 
 def analyze_word(word, freq, unigrams, rules, lexicon):
@@ -184,7 +185,9 @@ def run():
 	rules = RuleSet.load_from_file(RULES_FILE)
 #	lexicon = Lexicon()
 	lexicon = Lexicon.load_from_file(LEXICON_FILE)
-	unigrams = NGramModel.load_from_file(NGRAM_MODEL_FILE)
+#	unigrams = NGramModel.load_from_file(NGRAM_MODEL_FILE)
+	unigrams = NGramModel(1)
+	unigrams.train_from_file(INPUT_FILE)
 #	print analyze_word(u'schwest', unigrams, rules, lexicon)
 	if settings.DEBUG_MODE:
 		analyze_from_stdin(settings.FILES['testing.wordlist'], unigrams, rules, lexicon)

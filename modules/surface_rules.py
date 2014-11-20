@@ -162,10 +162,15 @@ def filter_new(input_file):
 			if lexicon.rules_c.has_key(r) and lexicon.rules_c[r] > 1:
 				for w1, w2 in wordpairs:
 					write_line(fp, (w1, w2, r))
-			else:
-				for w1, w2 in wordpairs:
-					if lexicon[w2].prev == lexicon[w1]:
-						write_line(fp, (w1, w2, r))
+#			else:
+#				for w1, w2 in wordpairs:
+#					if lexicon[w2].prev == lexicon[w1]:
+#						for rr in lexicon[w1].next.keys():
+#							# same rule, without compounding
+#							if rr.find('*') > -1 and re.match(rr.replace('*', '[^/:]+'), r)\
+#									and lexicon.rules_c[rr] > 1:
+#								print rr, r
+#								write_line(fp, (w1, w2, r))
 	with open_to_write(input_file + '.comp.fil') as fp:
 		for r, rows in read_tsv_file_by_key(input_file + '.comp', 4):
 			if lexicon.rules_c.has_key(r) and lexicon.rules_c[r] > 1:
@@ -210,41 +215,24 @@ def load_wordset(input_file):
 ### MAIN FUNCTIONS ###
 
 def run():
-#	wordset = load_wordset(settings.FILES['training.wordlist'])\
-#		if settings.COMPOUNDING_RULES else None
-#	algorithms.fastss.create_substrings_file(\
-#		settings.FILES['training.wordlist'], settings.FILES['surface.substrings'], wordset)
-#	if file_exists(settings.FILES['trained.rules']):
-#		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
-#			settings.FILES['surface.graph'],\
-#			load_training_infl_rules(settings.FILES['trained.rules']))
-#	else:
-#		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
-#			settings.FILES['surface.graph'], wordset=wordset)
-#	sort_file(settings.FILES['surface.graph'], key=(1,2), unique=True)
-#	sort_file(settings.FILES['surface.graph'], key=3)
-##	sort_file(settings.FILES['surface.graph'] + '.comp', key=4)
+	wordset = load_wordset(settings.FILES['training.wordlist'])\
+		if settings.COMPOUNDING_RULES else None
+	algorithms.fastss.create_substrings_file(\
+		settings.FILES['training.wordlist'], settings.FILES['surface.substrings'], wordset)
+	if file_exists(settings.FILES['trained.rules']):
+		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
+			settings.FILES['surface.graph'],\
+			load_training_infl_rules(settings.FILES['trained.rules']))
+	else:
+		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
+			settings.FILES['surface.graph'], wordset=wordset)
+	sort_file(settings.FILES['surface.graph'], key=(1,2), unique=True)
+	sort_file(settings.FILES['surface.graph'], key=3)
 	update_file_size(settings.FILES['surface.graph'])
-##	aggregate_file(settings.FILES['surface.graph'], settings.FILES['surface.rules'], 3)
-##	sort_file(settings.FILES['surface.rules'], key=2, reverse=True, numeric=True)
-#	sort_file(settings.FILES['surface.graph'] + '.comp', key=(1,3), unique=True)
-#	sort_file(settings.FILES['surface.graph'] + '.comp', key=4)
+	sort_file(settings.FILES['surface.graph'] + '.comp', key=(1,3), unique=True)
+	sort_file(settings.FILES['surface.graph'] + '.comp', key=4)
 	update_file_size(settings.FILES['surface.graph'] + '.comp')
 	filter_new(settings.FILES['surface.graph'])
-##	aggregate_file(settings.FILES['surface.graph'] + '.comp', settings.FILES['surface.rules'] + '.comp', 4)
-##	sort_file(settings.FILES[surface.rules], key=2, reverse=True, numeric=True)
-#	rules_c = filter_and_count_rules(settings.FILES['surface.graph'], 3)
-#	rules_c.save_to_file(settings.FILES['surface.rules'])
-#	comp_rules_c = filter_and_count_rules(settings.FILES['surface.graph'] + '.comp', 4)
-#	comp_rules_c.save_to_file(settings.FILES['surface.rules'] + '.comp')
-#	ruleprob = calculate_rule_prob(settings.FILES['wordlist'], rules_c)
-#	save_rules(rules_c, ruleprob, settings.FILES['surface.rules'])
-#	sort_file(settings.FILES['surface.graph'], key=1)
-#	rules_c = Counter.load_from_file(settings.FILES['surface.rules'])
-#	if not file_exists(settings.FILES['trained.rules.cooc']):
-#		algorithms.cooccurrences.calculate_rules_cooc(\
-#			settings.FILES['surface.graph'],\
-#			settings.FILES['surface.rules.cooc'], rules_c)
 	rules = RuleSet()
 	algorithms.optrules.optimize_rules_in_graph(\
 		settings.FILES['training.wordlist'],\
@@ -256,7 +244,6 @@ def run():
 		settings.FILES['surface.graph'] + '.comp', 4, rules)
 	join_compounds_to_graph(settings.FILES['surface.graph'], rules)
 	rules.save_to_file('rules.txt.0')
-#	rename_file(settings.FILES['surface.graph'] + '.opt', settings.FILES['surface.graph'])
 
 def evaluate():
 	print '\nSurface rules: nothing to evaluate.\n'

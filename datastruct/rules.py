@@ -2,6 +2,7 @@ from utils.files import *
 import re
 from scipy.stats import norm
 from algorithms.ngrams import *
+import math
 
 class Rule:
 	def __init__(self, prefix, alternations, suffix, tag=None):
@@ -179,34 +180,55 @@ class RuleSet:
 	
 class RuleSetPrior:
 	def __init__(self):
-		self.ngr = None
+		self.ngr_add = None
+		self.ngr_remove = None
 
 	def train(self, rules_c):
-		self.ngr = NGramModel(1)
-		ngram_training_pairs = []
+		self.ngr_add = NGramModel(3)
+		self.ngr_remove = NGramModel(3)
+		ngram_training_pairs_add = []
+		ngram_training_pairs_remove = []
 		for rule_str, count in rules_c.iteritems():
+			if rule_str.count('*') > 0:
+				continue
 			rule = Rule.from_string(rule_str)
-			ngram_training_pairs.extend([\
-				(rule.prefix[0], count), (rule.suffix[0], count),\
-				(rule.suffix[0], count), (rule.suffix[1], count)
-			])
+#			ngram_training_pairs.extend([\
+#				(rule.prefix[0], count), (rule.suffix[0], count),\
+#				(rule.suffix[0], count), (rule.suffix[1], count)
+#			])
+			ngram_training_pairs_remove.extend([\
+				(rule.prefix[0], count), (rule.suffix[0], count)])
+			ngram_training_pairs_add.extend([\
+				(rule.prefix[1], count), (rule.suffix[1], count)])
 			for x, y in rule.alternations:
-				ngram_training_pairs.extend([(x, count), (y, count)])
+				ngram_training_pairs_remove.append((x, count))
+				ngram_training_pairs_add.append((y, count))
 			# an 'empty alternation' finishes the sequence of alternations
-			ngram_training_pairs.extend([(u'', count), (u'', count)])
-		self.ngr.train(ngram_training_pairs)
+			ngram_training_pairs_remove.append((u'', count))
+			ngram_training_pairs_add.append((u'', count))
+		self.ngr_add.train(ngram_training_pairs_add)
+		self.ngr_remove.train(ngram_training_pairs_remove)
 	
 	def rule_prob(self, rule_str):
 		if rule_str == u':/:':
 			return 0.0
 		rule = Rule.from_string(rule_str)
-		prob = self.ngr.word_prob(rule.prefix[0]) *\
-			self.ngr.word_prob(rule.prefix[1]) *\
-			self.ngr.word_prob(rule.suffix[0]) *\
-			self.ngr.word_prob(rule.suffix[1]) *\
-			self.ngr.word_prob(u'') * self.ngr.word_prob(u'')
+		prob = self.ngr_remove.word_prob(rule.prefix[0]) *\
+			self.ngr_add.word_prob(rule.prefix[1]) *\
+			self.ngr_remove.word_prob(rule.suffix[0]) *\
+			self.ngr_add.word_prob(rule.suffix[1]) *\
+			self.ngr_remove.word_prob(u'') * self.ngr_add.word_prob(u'')
 		for x, y in rule.alternations:
-			prob *= self.ngr.word_prob(x) * self.ngr.word_prob(y)
-		prob /= 1.0 - self.ngr.word_prob(u'') ** 6		# empty rule not included
+			prob *= self.ngr_remove.word_prob(x) * self.ngr_add.word_prob(y)
+		prob /= 1.0 - self.ngr_add.word_prob(u'') ** 3 * self.ngr_remove.word_prob(u'') ** 3		# empty rule not included
 		return prob
+	
+	def param_cost(self, prod, weight):
+		result = 0.0
+		print prod, math.log(prod), round(math.log(prod))
+		result -= math.log(0.5) * round(math.log(prod))
+		print result
+		result += math.log(2 * norm.pdf(weight, 2, 1))
+		print result
+		return result
 
