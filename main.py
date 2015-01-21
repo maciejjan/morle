@@ -51,6 +51,7 @@ def main(mode, modules):
 	MODULE_LEXEMES = 'infl'
 	MODULE_MDL_TRAIN = 'mdl-train'
 	MODULE_MDL_ANALYZE = 'mdl-analyze'
+	MODULE_TAG = 'tag'
 	MODULE_DERIV = 'deriv'
 	MODULE_TRAIN = 'train'
 
@@ -76,6 +77,8 @@ def main(mode, modules):
 			mdltrain.run()
 		if MODULE_MDL_ANALYZE in modules:
 			mdlanalyze.run()
+		if MODULE_TAG in modules:
+			tag.run()
 	if MODE_EVAL in mode:
 		if MODULE_SRULES in modules:
 			surface_rules.evaluate()

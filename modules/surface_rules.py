@@ -61,52 +61,41 @@ def load_training_infl_rules(filename):
 
 ### RULE EXTRACTING FUNCTIONS ###
 
-def extract_rules_from_words(words, substring, outfp, comp_outfp, i_rules_c, wordset):
+def extract_rules_from_words(words, substring, outfp, wordset):
 	pattern = re.compile('(.*)' + '(.*?)'.join([letter for letter in substring]) + '(.*)')
 	for w1, w1_freq in words:
 		for w2, w2_freq in words:
 			if w1 < w2:
 				rule = algorithms.align.extract_rule(w1, w2, pattern)
-				if rule is not None and settings.COMPOUNDING_RULES:
-					for i in range(3, min(len(w1), len(w2))):
-						if i <= len(rule.prefix[0]) and rule.prefix[0][:i] in wordset:
-							rr = rule.copy()
-							rr.prefix = (u'*' + rule.prefix[0][i:], rule.prefix[1])
-							write_line(comp_outfp, (w2, w1, rule.prefix[0][:i], rr.reverse().to_string()))
-						if i <= len(rule.prefix[1]) and rule.prefix[1][:i] in wordset:
-							rr = rule.copy()
-							rr.prefix = (rule.prefix[0], u'*' + rule.prefix[1][i:])
-							write_line(comp_outfp, (w1, w2, rule.prefix[1][:i], rr.to_string()))
-						if i <= len(rule.suffix[0]) and rule.suffix[0][-i:] in wordset:
-							rr = rule.copy()
-							rr.suffix = (rule.suffix[0][:-i] + u'*', rule.suffix[1])
-							write_line(comp_outfp, (w2, w1, rule.suffix[0][-i:], rr.reverse().to_string()))
-						if i <= len(rule.suffix[1]) and rule.suffix[1][-i:] in wordset:
-							rr = rule.copy()
-							rr.suffix = (rule.suffix[0], rule.suffix[1][:-i] + u'*')
-							write_line(comp_outfp, (w1, w2, rule.suffix[1][-i:], rr.to_string()))
-				if rule is not None and (i_rules_c is None or i_rules_c.has_key(rule.to_string())):
+				if rule is not None:
 					if apply_local_filters(rule, ((w1, w1_freq), (w2, w2_freq))):
 						write_line(outfp, (w1, w2, rule.to_string()))
 						write_line(outfp, (w2, w1, rule.reverse().to_string()))
+					elif settings.COMPOUNDING_RULES:
+						for i in range(3, min(len(w1), len(w2))):
+							if i <= len(rule.prefix[1]) and rule.prefix[1][:i] in wordset:
+								write_line(outfp, (w1, w2, rule.to_string()))
+								break
+							if i <= len(rule.suffix[1]) and rule.suffix[1][-i:] in wordset:
+								write_line(outfp, (w1, w2, rule.to_string()))
+								break
 
-def extract_rules_from_substrings(input_file, output_file, i_rules_c=None, wordset=None):
+def extract_rules_from_substrings(input_file, output_file, wordset=None):
 	cur_substr, words = '', []
 	pp = progress_printer(get_file_size(input_file))
 	print 'Extracting rules from substrings...'
 	with open_to_write(output_file) as outfp:
-		with open_to_write(output_file + '.comp') as comp_outfp:
-			for s_len, substr, word, freq in read_tsv_file(input_file):	# TODO _by_key
-				if substr != cur_substr:
-					if len(words) > 1:
-						extract_rules_from_words(words, cur_substr, outfp, comp_outfp, i_rules_c, wordset)
-					cur_substr = substr
-					words = [(word, int(freq))]
-				else:
-					words.append((word, int(freq)))
-				pp.next()
-			if len(words) > 1:
-				extract_rules_from_words(words, cur_substr, outfp, i_rules_c)
+		for s_len, substr, word, freq in read_tsv_file(input_file):	# TODO _by_key
+			if substr != cur_substr:
+				if len(words) > 1:
+					extract_rules_from_words(words, cur_substr, outfp, wordset)
+				cur_substr = substr
+				words = [(word, int(freq))]
+			else:
+				words.append((word, int(freq)))
+			pp.next()
+		if len(words) > 1:
+			extract_rules_from_words(words, cur_substr, outfp)
 
 def filter_and_count_rules(input_file, key=3):
 	rules_c = Counter()
@@ -137,18 +126,18 @@ def filter_new(input_file):
 		for r, wordpairs in read_tsv_file_by_key(input_file, 3):
 			for w1, w2 in wordpairs:
 				write_line(fp, (w1, w2, r, len(wordpairs)))
-		for r, rows in read_tsv_file_by_key(input_file + '.comp', 4):
-			for row in rows:
-				write_line(fp, (row[0], row[1], r, len(rows)))
+#		for r, rows in read_tsv_file_by_key(input_file + '.comp', 4):
+#			for row in rows:
+#				write_line(fp, (row[0], row[1], r, len(rows)))
 	sort_file(input_file + '.fil1', key=4, reverse=True, numeric=True)
 	# build lexicon
 	lexicon = Lexicon()
 	for w1, w2, r, freq in read_tsv_file(input_file + '.fil1', print_progress=True, print_msg='Building lexicon...'):
 		if not lexicon.has_key(w1):
-			lexicon[w1] = LexiconNode(w1, 0, 0, 0, 0, 0)
+			lexicon[w1] = LexiconNode(w1, 0, 0)
 			lexicon.roots.add(w1)
 		if not lexicon.has_key(w2):
-			lexicon[w2] = LexiconNode(w2, 0, 0, 0, 0, 0)
+			lexicon[w2] = LexiconNode(w2, 0, 0)
 			lexicon.roots.add(w2)
 		if lexicon[w2].prev is None and not w2 in lexicon[w1].analysis():
 			lexicon[w2].prev = lexicon[w1]
@@ -162,6 +151,19 @@ def filter_new(input_file):
 			if lexicon.rules_c.has_key(r) and lexicon.rules_c[r] > 1:
 				for w1, w2 in wordpairs:
 					write_line(fp, (w1, w2, r))
+			else:	# do not filter out compounding rules
+				rule = Rule.from_string(r)
+				for i in range(3, min(len(w1), len(w2))):
+					if i <= len(rule.prefix[1]) and lexicon.has_key(rule.prefix[1][:i]) and\
+							not rule.prefix[0] and not rule.alternations and rule.suffix == (u'', u''):
+						for w1, w2 in wordpairs:
+							write_line(fp, (w1, w2, r))
+						break
+					if i <= len(rule.suffix[1]) and lexicon.has_key(rule.suffix[1][-i:]) and\
+							not rule.suffix[0] and not rule.alternations and rule.prefix == (u'', u''):
+						for w1, w2 in wordpairs:
+							write_line(fp, (w1, w2, r))
+						break
 #			else:
 #				for w1, w2 in wordpairs:
 #					if lexicon[w2].prev == lexicon[w1]:
@@ -171,19 +173,19 @@ def filter_new(input_file):
 #									and lexicon.rules_c[rr] > 1:
 #								print rr, r
 #								write_line(fp, (w1, w2, r))
-	with open_to_write(input_file + '.comp.fil') as fp:
-		for r, rows in read_tsv_file_by_key(input_file + '.comp', 4):
-			if lexicon.rules_c.has_key(r) and lexicon.rules_c[r] > 1:
-				for w1, w2, w3 in rows:
-					if lexicon[w2].prev == lexicon[w1]: # stricter filtering
-						write_line(fp, (w1, w2, w3, r))
+#	with open_to_write(input_file + '.comp.fil') as fp:
+#		for r, rows in read_tsv_file_by_key(input_file + '.comp', 4):
+#			if lexicon.rules_c.has_key(r) and lexicon.rules_c[r] > 1:
+#				for w1, w2, w3 in rows:
+#					if lexicon[w2].prev == lexicon[w1]: # stricter filtering
+#						write_line(fp, (w1, w2, w3, r))
 	remove_file(input_file + '.fil1')
 	rename_file(input_file, input_file + '.orig')
 	rename_file(input_file + '.fil', input_file)
-	rename_file(input_file + '.comp', input_file + '.comp.orig')
-	rename_file(input_file + '.comp.fil', input_file + '.comp')
+#	rename_file(input_file + '.comp', input_file + '.comp.orig')
+#	rename_file(input_file + '.comp.fil', input_file + '.comp')
 	update_file_size(input_file)
-	update_file_size(input_file + '.comp')
+#	update_file_size(input_file + '.comp')
 #	lexicon.rules_c.save_to_file('s_rul.txt.fil1')
 #	lexicon.save_to_file('lex_fil.txt')
 
@@ -219,19 +221,14 @@ def run():
 		if settings.COMPOUNDING_RULES else None
 	algorithms.fastss.create_substrings_file(\
 		settings.FILES['training.wordlist'], settings.FILES['surface.substrings'], wordset)
-	if file_exists(settings.FILES['trained.rules']):
-		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
-			settings.FILES['surface.graph'],\
-			load_training_infl_rules(settings.FILES['trained.rules']))
-	else:
-		extract_rules_from_substrings(settings.FILES['surface.substrings'],\
-			settings.FILES['surface.graph'], wordset=wordset)
+	extract_rules_from_substrings(settings.FILES['surface.substrings'],\
+		settings.FILES['surface.graph'], wordset=wordset)
 	sort_file(settings.FILES['surface.graph'], key=(1,2), unique=True)
 	sort_file(settings.FILES['surface.graph'], key=3)
 	update_file_size(settings.FILES['surface.graph'])
-	sort_file(settings.FILES['surface.graph'] + '.comp', key=(1,3), unique=True)
-	sort_file(settings.FILES['surface.graph'] + '.comp', key=4)
-	update_file_size(settings.FILES['surface.graph'] + '.comp')
+##	sort_file(settings.FILES['surface.graph'] + '.comp', key=(1,3), unique=True)
+##	sort_file(settings.FILES['surface.graph'] + '.comp', key=4)
+##	update_file_size(settings.FILES['surface.graph'] + '.comp')
 	filter_new(settings.FILES['surface.graph'])
 	rules = RuleSet()
 	algorithms.optrules.optimize_rules_in_graph(\
@@ -239,10 +236,10 @@ def run():
 		settings.FILES['surface.graph'],\
 		settings.FILES['surface.graph'] + '.opt', rules)
 	rename_file(settings.FILES['surface.graph'] + '.opt', settings.FILES['surface.graph'])
-	algorithms.optrules.calculate_rule_params(\
-		settings.FILES['training.wordlist'],\
-		settings.FILES['surface.graph'] + '.comp', 4, rules)
-	join_compounds_to_graph(settings.FILES['surface.graph'], rules)
+#	algorithms.optrules.calculate_rule_params(\
+#		settings.FILES['training.wordlist'],\
+#		settings.FILES['surface.graph'] + '.comp', 4, rules)
+#	join_compounds_to_graph(settings.FILES['surface.graph'], rules)
 	rules.save_to_file('rules.txt.0')
 
 def evaluate():

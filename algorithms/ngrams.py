@@ -138,3 +138,7 @@ class NGramTrie:
 			else:
 				p -= self.children[c].value
 
+# use to quickly retrieve all words matching the left side of a rule
+class WordNGramHash:
+	def __init__(self, n):
+		self.n = n

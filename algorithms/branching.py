@@ -1,4 +1,5 @@
 # find maximum branching
+from utils.files import open_to_write, write_line
 
 def branching(vertices, edges):
 
@@ -6,8 +7,8 @@ def branching(vertices, edges):
 		new_queue = [(v1, v2, rule, weight + value) for (v1, v2, rule, weight) in queue]
 		return new_queue
 
-	val = min([e[3] for e in edges])
-	edges = add_weight(edges, -val + 0.1)
+#	val = min([e[3] for e in edges])
+#	edges = add_weight(edges, -val + 0.1)
 	roots = list(vertices)
 	entering_edges, enter, strong, strong_sets, weak, weak_sets, root = {}, {}, {}, {}, {}, {}, {}
 	for v in vertices:
@@ -83,10 +84,14 @@ def branching(vertices, edges):
 					else:
 						break
 				roots.append(k)
+	
+	with open_to_write('strong.txt') as fp:
+		for ss in strong_sets.values():
+			write_line(fp, (', '.join(ss), ))
 
 	edges_final = []
 	root_vertices = set([root[x] for x in final])
-	print 'ROOT' in root_vertices
+#	print 'ROOT' in root_vertices
 	while result:
 		v1, v2, rule = result.pop(0)
 		if v1 in root_vertices:

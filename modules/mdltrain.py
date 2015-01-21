@@ -26,6 +26,7 @@ def expectation_maximization(unigrams, lexicon, rules, iter_count):
 #		save_analyses(lexicon, 'analyses_freq.txt')
 #	else:
 	lexicon = algorithms.mdl.build_lexicon_edmonds(unigrams, rules, lexicon)
+#	lexicon = algorithms.mdl.build_lexicon_new(rules, lexicon)
 	algorithms.mdl.reestimate_rule_prod(rules, lexicon)
 	if settings.USE_WORD_FREQ:
 		algorithms.mdl.reestimate_rule_weights(rules, lexicon)
@@ -120,8 +121,6 @@ def train_supervised():
 		settings.FILES['model.lexicon'])
 	lexicon = Lexicon.load_from_file(settings.FILES['model.lexicon'])
 	rules = RuleSet.load_from_file(settings.FILES['model.rules'])
-	if not rules.has_key(u'#'):
-		rules[u'#'] = RuleData(u'#', 1.0, 1.0, len(lexicon))
 	algorithms.mdl.reestimate_rule_weights(rules, lexicon)
 	lexicon.save_to_file(settings.FILES['model.lexicon'])
 	rules.save_to_file(settings.FILES['model.rules'])

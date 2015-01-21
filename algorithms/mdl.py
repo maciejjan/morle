@@ -86,7 +86,8 @@ def build_lexicon_edmonds(unigrams, rules, lexicon):
 
 	for r in rules.keys():
 		if rules[r].weight < 0 and r.count('*') != 1:
-			rules[r].weight = 0
+#			rules[r].weight = 0
+			del rules[r]
 
 	# compute the improvement for each possible edge
 	vertices, edges = set(['ROOT']), []
@@ -96,17 +97,17 @@ def build_lexicon_edmonds(unigrams, rules, lexicon):
 				print_progress=True, print_msg='Computing edge scores...'):
 			if rules.has_key(rule):
 				delta_logl = lexicon.try_edge(word_1, word_2, rules[rule])
-				delta_cor_logl = math.log(rules[rule].freqprob(lexicon[word_2].freq - lexicon[word_1].freq))
-				write_line(outfp, (word_1, lexicon[word_1].freq, word_2, lexicon[word_2].freq,\
+				delta_cor_logl = math.log(rules[rule].freqprob(lexicon[word_2].freqcl - lexicon[word_1].freqcl))
+				write_line(outfp, (word_1, lexicon[word_1].freqcl, word_2, lexicon[word_2].freqcl,\
 					rule, int(rules[rule].weight), delta_logl, delta_logl-delta_cor_logl, delta_cor_logl))
 				if delta_logl < 0:
 					continue
-				edges.append((word_1, word_2, rule, math.log(rules[rule].prod)))
+				edges.append((word_1, word_2, rule, delta_logl))
 			if not word_1 in vertices:
-				edges.append(('ROOT', word_1, '', math.log(unigrams.word_prob(word_1))))
+#				edges.append(('ROOT', word_1, '', math.log(unigrams.word_prob(word_1))))
 				vertices.add(word_1)
 			if not word_2 in vertices:
-				edges.append(('ROOT', word_2, '', math.log(unigrams.word_prob(word_2))))
+#				edges.append(('ROOT', word_2, '', math.log(unigrams.word_prob(word_2))))
 				vertices.add(word_2)
 	edges.sort(reverse=True, key=lambda x: x[3])
 	update_file_size('edges.txt')
@@ -147,11 +148,16 @@ def build_lexicon_new(rules, lexicon):
 	for (word_1, word_2, rule, delta_logl) in edges:
 		if lexicon[word_2].prev is None and not word_2 in lexicon[word_1].analysis()\
 				and not lexicon[word_1].next.has_key(rule):
-#			new_parent_stem = lcs(lexicon[word_1].stem, lcs(word_1, word_2))
-#			if lcs(new_parent_stem, lexicon[word_2].stem) == new_parent_stem:
-			lexicon.draw_edge(word_1, word_2, rules[rule])
+			if word_1 in lexicon.roots and not lexicon[word_2].next:
+				lexicon.draw_edge(word_1, word_2, rules[rule])
+##			new_parent_stem = lcs(lexicon[word_1].stem, lcs(word_1, word_2))
+##			if lcs(new_parent_stem, lexicon[word_2].stem) == new_parent_stem:
+#			lexicon.draw_edge(word_1, word_2, rules[rule])
 	
 	return lexicon
+
+# TODO: build_lexicon_iter
+# start with the outermost "layer", then proceed to deeper layers
 
 def build_lexicon_freq(rules, lexicon):
 	print 'Resetting lexicon...'
@@ -257,6 +263,8 @@ def reestimate_rule_prod(rules, lexicon):
 	for r in rules.keys():
 		if rules_c.has_key(r):
 #			rules[r].prod = float(rules_c[r]) / rules[r].domsize
+			if rules[r].domsize == 0:
+				print r
 			rules[r].prod = math.exp(round(math.log(float(rules_c[r]) / rules[r].domsize)))
 			if rules[r].prod > 0.9:
 				rules[r].prod = 0.9
@@ -276,6 +284,8 @@ def reestimate_rule_weights(rules, lexicon):
 	rules_w = {}
 	for w1 in lexicon.values():
 		for rule, w2 in w1.next.iteritems():
+			if w1.freqcl is None: print w1.word, w1 == lexicon[w1.word]
+			if w2.freqcl is None: print w2.word, w2 == lexicon[w2.word]
 			w3 = None
 			if rule.count('*') == 2:
 				r_sp = rule.split('*')
@@ -284,10 +294,10 @@ def reestimate_rule_weights(rules, lexicon):
 			if not rules_w.has_key(rule):
 				rules_w[rule] = 0
 			if w3 is not None:
-				rules_w[rule] += w2.freq - w1.freq - w3.freq
+				rules_w[rule] += w2.freqcl - w1.freqcl - w3.freqcl
 #				rules_w[rule] += w2.freq - w1.freq
 			else:
-				rules_w[rule] += w2.freq - w1.freq
+				rules_w[rule] += w2.freqcl - w1.freqcl
 	for r in rules_w.keys():
 		if lexicon.rules_c.has_key(r) and rules.has_key(r):
 			rules[r].weight = int(round(float(rules_w[r]) / lexicon.rules_c[r]))
@@ -296,7 +306,7 @@ def reestimate_rule_weights(rules, lexicon):
 	for r in rules.keys():
 		if r.count('*') == 2:
 			r_sp = r.split('*')
-			rules[r].weight = lexicon[r_sp[1]].freq + rules[r_sp[0] + '*' + r_sp[2]].weight
+			rules[r].weight = lexicon[r_sp[1]].freqcl + rules[r_sp[0] + '*' + r_sp[2]].weight
 #			rules[r].weight = rules[r_sp[0] + '*' + r_sp[2]].weight
 
 #def reestimate_rule_weights(rules, lexicon):
@@ -433,24 +443,23 @@ def load_training_file_with_freq(filename):
 	words, total = [], 0
 	for word, freq in read_tsv_file(filename, (unicode, int)):
 		words.append((word, freq))
-		lexicon[word] = LexiconNode(word, freq, freq, 0.0, 0.0, 1.0)
+		lexicon[word] = LexiconNode(word, freq, 0.0)
 		lexicon.roots.add(word)
 		lexicon.total += freq
+		if freq > lexicon.max_freq:
+			lexicon.max_freq = freq
+	lexicon.recalculate_freqcl()
 	unigrams.train(words)
 	for word_2, freq, word_1 in read_tsv_file(filename, (unicode, int, unicode),\
 			print_progress=True, print_msg='Building lexicon from training data...'):
 		lexicon[word_2].ngram_prob = unigrams.word_prob(word_2)
 		if word_1 != u'-' and word_1 != word_2 and word_2 in lexicon.roots:
 			if not lexicon.has_key(word_1):
-				lexicon[word_1] = LexiconNode(word_1, 0, 0, unigrams.word_prob(word_1), 0.0, 1.0)
-				lexicon.roots.add(word_1)
+				lexicon.add_word(word_1, 1, unigrams.word_prob(word_1))
 			rule = algorithms.align.align(word_1, word_2).to_string()
 			if not rules.has_key(rule):
 				rules[rule] = RuleData(rule, 1.0, 1.0, 0)
-			lexicon.draw_edge(word_1, word_2, rules[rule], corpus_prob=False)
-	# compute corpus probabilities
-	for w in lexicon.values():
-		w.corpus_prob = float(w.sigma) / lexicon.total * w.sum_weights
+			lexicon.draw_edge(word_1, word_2, rules[rule])
 	return unigrams, rules, lexicon
 
 def load_training_file_without_freq(filename):

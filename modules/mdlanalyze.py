@@ -6,7 +6,7 @@ import settings
 import math
 import sys
 
-INPUT_FILE = 'input.training'
+INPUT_FILE = 'input.testing'
 RULES_FILE = 'rules.txt'
 LEXICON_FILE = 'lexicon.txt'
 EVAL_LEXICON_FILE = 'lexicon.eval'
@@ -14,33 +14,31 @@ ANALYSES_FILE = 'analyses.txt'
 NGRAM_MODEL_FILE = 'unigrams.txt'
 EVALUATION_FILE = 'eval.txt'
 
-# TODO take 5 best analyses and try to analyse them further
-# word frequencies on/off
+# TODO graph search
 # TODO conversion of only tags, with word staying the same (e.g. VVINF->VVFIN)
 
-def rule_score(ruledata, freq, unigrams):
+def rule_score(ruledata, unigrams):
 	rule = Rule.from_string(ruledata.rule)
 	score = math.log(unigrams.word_prob(rule.prefix[0])) - math.log(unigrams.word_prob(rule.prefix[1]))
 	for (x, y) in rule.alternations:
 		score += math.log(unigrams.word_prob(x)) - math.log(unigrams.word_prob(y))
 	score += math.log(unigrams.word_prob(rule.suffix[0])) - math.log(unigrams.word_prob(rule.suffix[1]))
 	score += math.log(ruledata.prod)
-#	score += freq * math.log(ruledata.weight / (1.0 + ruledata.weight))
 	return score
 
-def analyze_word(word, freq, unigrams, rules, lexicon):
+def analyze_word(word, freqcl, unigrams, rules, lexicon):
 	if lexicon.has_key(word) and lexicon[word].training:
 		if lexicon[word].prev is not None:
 			return lexicon[word].prev.word
 		else:
 			return None
-	ngr_prob = unigrams.word_prob(word)
-	lexicon.add_word(word, freq, ngr_prob)
+#	ngr_prob = unigrams.word_prob(word)
+#	lexicon.add_word(word, freqcl, ngr_prob)
 	for r in rules.values():
 		if r.prod == 1.0:
 			r.prod = 0.999
 #	print word, ngr_prob
-	rules_list = [(r.rule, math.log(r.prod / (ngr_prob * (1.0 - r.prod)))) for r in rules.values() if r.rule != u'#']
+	rules_list = [(r.rule, math.log(r.prod / (lexicon[word].ngram_prob * (1.0 - r.prod)))) for r in rules.values() if r.rule != u'#']
 	rules_list.sort(reverse = True, key = lambda x:x[1])
 	max_imp, max_imp_word = 0.0, None
 	max_imp_rule = None
@@ -57,12 +55,12 @@ def analyze_word(word, freq, unigrams, rules, lexicon):
 				if w == word:
 					break
 				score = lexicon.try_edge(w, word, rules[r]) if lexicon.has_key(w)\
-					else rule_score(rules[r], freq, unigrams)
+					else rule_score(rules[r], unigrams)
 				if rules.has_key(irule.to_string()) and lexicon.has_key(w)\
 					and score < lexicon.try_edge(word, w, rules[irule.to_string()]):
 					continue
 				score = lexicon.try_edge(w, word, rules[r]) if lexicon.has_key(w)\
-					else rule_score(rules[r], freq, unigrams)
+					else rule_score(rules[r], unigrams)
 				if settings.DEBUG_MODE and lexicon.has_key(w):
 #					print '-', irule.to_string().encode('utf-8'),\
 					print '-', r.encode('utf-8'),\
@@ -82,20 +80,11 @@ def analyze_word(word, freq, unigrams, rules, lexicon):
 
 def analyze_wordlist(input_file, output_file, unigrams, rules, lexicon):
 	# add all words from the testing data to lexicon
-	added_freq = 0
 	for word, freq in read_tsv_file(input_file, (unicode, int), True):
 		if not lexicon.has_key(word):
 			ngr_prob = unigrams.word_prob(word)
-			lexicon[word] = LexiconNode(word, freq, freq, ngr_prob, 0.0, 1.0)
+			lexicon.add_word(word, freq, ngr_prob)
 			lexicon[word].training = False
-			lexicon.roots.add(word)
-			lexicon.total += freq
-			added_freq += freq
-	for rt in lexicon.roots:
-		if lexicon[rt].corpus_prob > 0.0:
-			lexicon[rt].forward_multiply_corpus_prob(float(lexicon.total-added_freq) / lexicon.total)
-		else:
-			lexicon[rt].corpus_prob = float(lexicon[rt].freq) / lexicon.total
 	# analyze words
 	with open_to_write(output_file) as outfp:
 		for word, freq in read_tsv_file(input_file, (unicode, int),\
@@ -105,40 +94,10 @@ def analyze_wordlist(input_file, output_file, unigrams, rules, lexicon):
 
 def analyze_from_stdin(input_file, unigrams, rules, lexicon):
 	# add all words from the testing data to lexicon
-	added_freq = 0
 	for word, freq in read_tsv_file(input_file, (unicode, int), True):
 			ngr_prob = unigrams.word_prob(word)
-			lexicon[word] = LexiconNode(word, freq, freq, ngr_prob, 0.0, 1.0)
+			lexicon.add_word(word, freq, ngr_prob)
 			lexicon[word].training = False
-			lexicon.roots.add(word)
-			lexicon.total += freq
-			added_freq += freq
-	for rt in lexicon.roots:
-		if lexicon[rt].corpus_prob > 0.0:
-			lexicon[rt].forward_multiply_corpus_prob(float(lexicon.total-added_freq) / lexicon.total)
-		else:
-			lexicon[rt].corpus_prob = float(lexicon[rt].freq) / lexicon.total
-#	for word, freq in read_tsv_file(input_file, (unicode, int), True):
-#	word_freq = {}
-#	for word, freq in read_tsv_file(input_file, (unicode, int), True):
-#		word_freq[word] = freq
-#	for w, freq, word in read_tsv_file(EVAL_LEXICON_FILE, (unicode, int, unicode), True):
-#		if word_freq.has_key(word):
-#			freq = word_freq[word]
-#		else:
-#			freq = 1
-#		if not lexicon.has_key(word):
-#			ngr_prob = unigrams.word_prob(word)
-#			lexicon[word] = LexiconNode(word, freq, freq, ngr_prob, 0.0, 1.0)
-#			lexicon[word].training = False
-#			lexicon.roots.add(word)
-#			lexicon.total += freq
-#			added_freq += freq
-#	for rt in lexicon.roots:
-#		if lexicon[rt].corpus_prob > 0.0:
-#			lexicon[rt].forward_multiply_corpus_prob(float(lexicon.total-added_freq) / lexicon.total)
-#		else:
-#			lexicon[rt].corpus_prob = float(lexicon[rt].freq) / lexicon.total
 	for line in sys.stdin:
 		word = line.rstrip().decode('utf-8')
 		if lexicon.has_key(word):
@@ -196,6 +155,9 @@ def run():
 		analyze_wordlist(settings.FILES['testing.wordlist'], ANALYSES_FILE, unigrams, rules, lexicon)
 
 def evaluate_direct():
+	unigrams = NGramModel(1)
+	unigrams.train_from_file(INPUT_FILE)
+	lexicon = Lexicon.load_from_file(LEXICON_FILE)
 	stems_gs = {}
 	for word, freq, stem in read_tsv_file(EVAL_LEXICON_FILE):
 		if stem == u'-' or stem == word:
@@ -208,12 +170,13 @@ def evaluate_direct():
 			if stem == 'None':
 				stem = None
 			if stems_gs.has_key(word):
+				known = 'kn' if (word is None or lexicon.has_key(stems_gs[word])) else 'unkn'
 				total += 1
 				if stems_gs[word] == stem:
-					write_line(outfp, (word, '+', stem))
+					write_line(outfp, (word, '+', stem, known))
 					correct += 1
 				else:
-					write_line(outfp, (word, '-', stem, stems_gs[word]))
+					write_line(outfp, (word, '-', stem, stems_gs[word], known))
 	print 'Correctness: %0.2f (%d/%d)' %\
 		(float(correct) * 100 / total, correct, total)
 

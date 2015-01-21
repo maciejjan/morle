@@ -163,6 +163,9 @@ def calculate_rule_params(wordlist_file, graph_file, key, rules):
 def optimize_rules_in_graph(wordlist_file, input_file, output_file, rules):
 #	sort_file(input_file, key=3)
 	word_freq = Counter.load_from_file(wordlist_file)
+	max_freq = max(word_freq.values())
+	for w in word_freq.keys():
+		word_freq[w] = freqcl(word_freq[w], max_freq)
 #	wordlist = []
 #	for word, freq in read_tsv_file(wordlist_file):
 #		wordlist.append(word)
