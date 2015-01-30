@@ -10,7 +10,7 @@ def freqcl(freq, maxfreq):
 	try:
 		return -int(math.log(float(freq) / maxfreq) / math.log(2))
 	except Exception:
-		print freq, maxfreq
+		print(freq, maxfreq)
 
 def align_words(word_1, word_2):
 	cs = algorithms.align.lcs(word_1, word_2)
@@ -62,7 +62,7 @@ class LexiconNode:
 		node = self
 		while node.prev is not None:
 			word = node.prev.word
-			rule = [r for r, n in node.prev.next.iteritems() if n == node][0]
+			rule = [r for r, n in node.prev.next.items() if n == node][0]
 			rule_sp = rule.split('*')
 			if len(rule_sp) == 3:
 				if rule_sp[0].find('/') > -1:
@@ -97,7 +97,7 @@ class LexiconNode:
 		node = self
 		while node.prev is not None:
 			word = node.prev.word
-			rule = [r for r, n in node.prev.next.iteritems() if n == node][0]
+			rule = [r for r, n in node.prev.next.items() if n == node][0]
 			rule_sp = rule.split('*')
 			if len(rule_sp) == 3:
 				rule = rule_sp[0] + '*' + rule_sp[2]
@@ -139,13 +139,13 @@ class LexiconNode:
 		return analysis
 
 	def show_tree(self, space=''):
-		print space + self.word.encode('utf-8'), self.freq #, self.sigma
+		print(space + self.word.encode('utf-8'), self.freq) #, self.sigma
 		for w in self.next.values():
 			w.show_tree(space=space+'\t')
 
 	def show_tree_with_prod(self, rules, space='', prod=None, rule=None):
-		print space + (('%0.4f ' % prod) if prod else '') + self.word.encode('utf-8'), self.freq, (rule if rule else '') #, self.sigma
-		for r, w in self.next.iteritems():
+		print(space + (('%0.4f ' % prod) if prod else '') + self.word.encode('utf-8'), self.freq, (rule if rule else '')) #, self.sigma)
+		for r, w in self.next.items():
 			w.show_tree_with_prod(rules, space=space+'- ', prod=rules[r].prod, rule=r)
 	
 	def words_in_tree(self):
@@ -159,7 +159,7 @@ class LexiconNode:
 		node = self
 		node_depth = depth
 		if self.word == u'adresowy':
-			print depth
+			print(depth)
 		while node.prev is not None:
 			node = node.prev
 			node_depth -= 1
@@ -195,7 +195,7 @@ class LexiconNode:
 		return split
 
 	def show_split_tree(self, space=''):
-		print space + '|'.join(self.split()).encode('utf-8'), self.freq #, self.sigma
+		print(space + '|'.join(self.split()).encode('utf-8'), self.freq) #, self.sigma)
 		for w in self.next.values():
 			w.show_split_tree(space=space+'\t')
 
@@ -247,7 +247,7 @@ class Lexicon:
 		logl += sum([math.log(i) for i in range(1, len(self.roots)+1)])
 		for root_w in self.roots:
 			logl += math.log(self.nodes[root_w].ngram_prob)
-		for r, count in self.rules_c.iteritems():
+		for r, count in self.rules_c.items():
 			m = rules[r].domsize - count
 			logl += count * math.log(rules[r].prod)
 			if m > 0:
@@ -271,7 +271,7 @@ class Lexicon:
 	def corpus_logl(self, rules):
 		logl = 0.0
 		for w1 in self.values():
-			for rule, w2 in w1.next.iteritems():
+			for rule, w2 in w1.next.items():
 				logl += math.log(rules[rule].freqprob(w2.freqcl - w1.freqcl))
 		return logl
 
@@ -308,24 +308,24 @@ class Lexicon:
 	def try_edge_pr(self, word_1, word_2, rule):
 		w1, w2 = self.nodes[word_1], self.nodes[word_2]
 		root = w1.root()
-		print word_1.encode('utf-8'), w1.sigma, w1.corpus_prob, w1.sum_weights
-		print word_2.encode('utf-8'), w2.sigma, w2.corpus_prob, w2.sum_weights
-		print root.word.encode('utf-8'), root.sigma, root.corpus_prob, root.sum_weights
-		print rule.weight
+		print(word_1.encode('utf-8'), w1.sigma, w1.corpus_prob, w1.sum_weights)
+		print(word_2.encode('utf-8'), w2.sigma, w2.corpus_prob, w2.sum_weights)
+		print(root.word.encode('utf-8'), root.sigma, root.corpus_prob, root.sum_weights)
+		print(rule.weight)
 		# change of corpus log-likelihood
 		result = root.sigma * (math.log(root.sigma + w2.sigma) - math.log(root.sigma))
-		print result
+		print(result)
 		result += w2.sigma * (math.log(root.sigma + w2.sigma) - math.log(w2.sigma))
-		print result
+		print(result)
 		result += w2.sigma * (math.log(w1.corpus_prob * w1.sum_weights * rule.weight) -\
 			math.log(root.corpus_prob * root.sum_weights * (w1.sum_weights + rule.weight)))
-		print result
+		print(result)
 		result += w1.sigma * (math.log(w1.sum_weights) - math.log(w1.sum_weights + rule.weight))
-		print result
+		print(result)
 		# change of lexicon log-likelihood
 		result += math.log(rule.prod) - math.log(len(self.roots) * w2.ngram_prob * (1.0 - rule.prod))
-		print result
-		print ''
+		print(result)
+		print('')
 		return result
 	
 	def try_edge(self, word_1, word_2, rule):
@@ -340,7 +340,7 @@ class Lexicon:
 	def draw_edge(self, word_1, word_2, rule):
 		w1, w2 = self.nodes[word_1], self.nodes[word_2]
 		if w1.prev is not None and w1.prev.word == word_2:
-			print word_1, word_2
+			print(word_1, word_2)
 			raise Exception('Cycle detected: %s, %s' % (word_1, word_2))
 		root = w1.root()
 
@@ -356,7 +356,7 @@ class Lexicon:
 		self.roots.add(word_2)
 		w1, w2 = self.nodes[word_1], self.nodes[word_2]
 		rule = None
-		for r, w in w1.next.iteritems():
+		for r, w in w1.next.items():
 			if w.word == word_2:
 				rule = r
 				break
@@ -383,7 +383,7 @@ class Lexicon:
 		def write_subtree(fp, word_1, word_2, rule):
 			w2 = self.nodes[word_2]
 			write_line(fp, (word_1, word_2, rule, w2.freq, w2.ngram_prob))
-			for next_rule, next_word in w2.next.iteritems():
+			for next_rule, next_word in w2.next.items():
 				write_subtree(fp, word_2, next_word.word, next_rule)
 		with open_to_write(filename) as fp:
 			for rt in self.roots:
@@ -402,19 +402,20 @@ class Lexicon:
 				write_line(fp, (w.word, ' '.join(w.split())))
 
 	@staticmethod
-	def init_from_file(filename):
+	def init_from_file(filename, unigrams=None):
 		lexicon = Lexicon()
-		unigrams = algorithms.ngrams.NGramModel(1)
-		unigrams.train_from_file(filename)
+		if unigrams is None:
+			unigrams = algorithms.ngrams.NGramModel(1)
+			unigrams.train_from_file(filename)
 		if settings.USE_WORD_FREQ:
-			for word, freq in read_tsv_file(filename, (unicode, int)):
+			for word, freq in read_tsv_file(filename, (str, int)):
 				lexicon[word] = LexiconNode(word, freq, unigrams.word_prob(word))
 				lexicon.roots.add(word)
 				lexicon.total += freq
 				if freq > lexicon.max_freq:
 					lexicon.max_freq = freq
 		else:
-			for word in read_tsv_file(filename, (unicode)):
+			for word in read_tsv_file(filename, (str, )):
 				lexicon[word] = LexiconNode(word, 0, unigrams.word_prob(word))
 				lexicon.roots.add(word)
 		if settings.USE_WORD_FREQ:
@@ -425,7 +426,7 @@ class Lexicon:
 	def load_from_file(filename):
 		lexicon = Lexicon()
 		for word_1, word_2, rule, freq, ngram_prob, in read_tsv_file(\
-				filename, types=(unicode, unicode, unicode, int, float)):
+				filename, types=(str, str, str, int, float)):
 			lexicon[word_2] = LexiconNode(word_2, freq, ngram_prob)
 			lexicon.total += freq
 			if freq > lexicon.max_freq:

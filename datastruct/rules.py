@@ -153,8 +153,8 @@ class RuleSet:
 	def values(self):
 		return self.rules.values()
 	
-	def has_key(self, key):
-		return self.rules.has_key(key)
+	def __contains__(self, key):
+		return self.rules.__contains__(key)
 	
 	def __getitem__(self, key):
 		return self.rules[key]
@@ -167,14 +167,14 @@ class RuleSet:
 	
 	def save_to_file(self, filename):
 		with open_to_write(filename) as fp:
-			for r_str, r in self.rules.iteritems():
+			for r_str, r in self.rules.items():
 				write_line(fp, (r_str, r.prod, r.weight, r.domsize))
 	
 	@staticmethod
 	def load_from_file(filename):
 		rs = RuleSet()
 		for rule, prod, weight, domsize in read_tsv_file(filename,\
-				types=(unicode, float, float, int)):
+				types=(str, float, float, int)):
 			rs[rule] = RuleData(rule, prod, weight, domsize)
 		return rs
 	
@@ -188,7 +188,7 @@ class RuleSetPrior:
 		self.ngr_remove = NGramModel(3)
 		ngram_training_pairs_add = []
 		ngram_training_pairs_remove = []
-		for rule_str, count in rules_c.iteritems():
+		for rule_str, count in rules_c.items():
 			if rule_str.count('*') > 0:
 				continue
 			rule = Rule.from_string(rule_str)
@@ -225,10 +225,10 @@ class RuleSetPrior:
 	
 	def param_cost(self, prod, weight):
 		result = 0.0
-		print prod, math.log(prod), round(math.log(prod))
+#		print prod, math.log(prod), round(math.log(prod))
 		result -= math.log(0.5) * round(math.log(prod))
-		print result
+#		print result
 		result += math.log(2 * norm.pdf(weight, 2, 1))
-		print result
+#		print result
 		return result
 

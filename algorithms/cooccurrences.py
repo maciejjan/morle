@@ -29,7 +29,7 @@ def calculate_rules_cooc(input_file, output_file, rules_c):
 	words_count, rule_pairs_count = 0, Counter()
 	cur_word, rules = None, []
 	pp = progress_printer(get_file_size(input_file))
-	print 'Calculating surface rules co-occurrences...'
+	print('Calculating surface rules co-occurrences...')
 	for word, edges in read_tsv_file_by_key(input_file, 1):
 #		words_count += len(edges)
 		words_count += 1

@@ -10,9 +10,8 @@ def generate_n_grams(word, n=None):
 class NGramModel:
 	def __init__(self, n):
 		self.n = n
-		self.ngrams = {}
 		self.total = 0
-#		self.trie = NGramTrie()
+		self.trie = NGramTrie()
 	
 	def train(self, words):
 		total = 0
@@ -20,17 +19,12 @@ class NGramModel:
 			if settings.USE_TAGS:
 				word = word[:word.rfind(u'_')]
 			for ngr in generate_n_grams(word + '#', self.n):
-				if not self.ngrams.has_key(ngr):
-					self.ngrams[ngr] = 0
-				self.ngrams[ngr] += freq
 				self.total += freq
-#				self.trie.inc(ngr, freq)
-		for ngr, count in self.ngrams.iteritems():
-			self.ngrams[ngr] = float(count) / self.total
-#		self.trie.normalize()
+				self.trie.inc(ngr, freq)
+		self.trie.normalize()
 	
 	def train_from_file(self, filename):
-		self.train(read_tsv_file(filename, (unicode, int), print_progress=True,\
+		self.train(read_tsv_file(filename, (str, int), print_progress=True,\
 			print_msg='Training %d-gram model...' % self.n))
 	
 	def word_prob(self, word):
@@ -38,21 +32,16 @@ class NGramModel:
 		if settings.USE_TAGS:
 			word = word[:word.rfind(u'_')]
 		for ngr in generate_n_grams(word + '#', self.n):
-			if self.ngrams.has_key(ngr):
-				p *= self.ngrams[ngr]
-#				p *= self.trie[ngr].value
+			if ngr in self.trie:
+				p *= self.trie[ngr].value
 			else:
 				p *= 1.0 / self.total
-#				return 0.0
 		return p
-	
-#	def random_word(self):
-#		return self.trie.random_word()
 	
 	def save_to_file(self, filename):
 		with open_to_write(filename) as fp:
 			write_line(fp, (u'', self.total))
-			for ngr, p in self.ngrams.iteritems():
+			for ngr, p in self.ngrams.items():
 				write_line(fp, (ngr, p))
 	
 	@staticmethod
@@ -77,7 +66,7 @@ class NGramTrie:
 				return self
 			else:
 				raise KeyError(key)
-		elif self.children.has_key(key[0]):
+		elif key[0] in self.children:
 			try:
 				return self.children[key[0]].__getitem__(key[1:])
 			except KeyError:
@@ -85,14 +74,14 @@ class NGramTrie:
 		else:
 			raise KeyError(key)
 	
-	def has_key(self, key):
+	def __contains__(self, key):
 		if not key:
 			return True
 		elif len(key) == 1:
-			return self.children.has_key(key)
+			return key in self.children
 		elif len(key) > 1:
-			if self.children.has_key(key[0]):
-				return self.children[key[0]].has_key(key[1:])
+			if key[0] in self.children:
+				return key[1:] in self.children[key[0]]
 			else:	
 				return False
 		else:
@@ -105,7 +94,7 @@ class NGramTrie:
 		if not key:
 			self.value += count
 		if len(key) >= 1:
-			if not self.children.has_key(key[0]):
+			if key[0] not in self.children:
 				self.children[key[0]] = NGramTrie()
 			self.children[key[0]].inc(key[1:], count)
 
@@ -139,6 +128,28 @@ class NGramTrie:
 				p -= self.children[c].value
 
 # use to quickly retrieve all words matching the left side of a rule
-class WordNGramHash:
-	def __init__(self, n):
-		self.n = n
+class TrigramHash:
+    def __init__(self):
+        self.entries = {}
+        self.num_words = 0
+    
+    def add_to_key(self, word, key):
+        if key not in self.entries:
+            self.entries[key] = set([])
+        self.entries[key].add(word)
+        
+    def add(self, word):
+        self.num_words += 1
+        for tr in generate_n_grams(''.join(['^', word, '$']), 3):
+            if len(tr) == 3:
+                self.add_to_key(word, tr)
+                self.add_to_key(word, '*' + tr[1:])
+                self.add_to_key(word, tr[:-1] + '*')
+                self.add_to_key(word, '*' + tr[1:-1] + '*')
+    
+    def __len__(self):
+        return self.num_words
+                
+    def retrieve(self, trigram):
+        return set(self.entries[trigram]) if trigram in self.entries else set([])
+

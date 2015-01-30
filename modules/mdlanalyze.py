@@ -43,7 +43,7 @@ def analyze_word(word, freqcl, unigrams, rules, lexicon):
 	max_imp, max_imp_word = 0.0, None
 	max_imp_rule = None
 	if settings.DEBUG_MODE:
-		print word.encode('utf-8')
+		print(word.encode('utf-8'))
 	for r, imp in rules_list:
 		if imp < max_imp:
 			break
@@ -63,15 +63,15 @@ def analyze_word(word, freqcl, unigrams, rules, lexicon):
 					else rule_score(rules[r], unigrams)
 				if settings.DEBUG_MODE and lexicon.has_key(w):
 #					print '-', irule.to_string().encode('utf-8'),\
-					print '-', r.encode('utf-8'),\
-						w.encode('utf-8'), score, lexicon.has_key(w)
+					print('-', r.encode('utf-8'),\
+						w.encode('utf-8'), score, lexicon.has_key(w))
 				if score > max_imp and lexicon.has_key(w) and\
 						not (lexicon.has_key(w) and word in lexicon[w].analysis()):
 					max_imp = score
 					max_imp_word = w
 					max_imp_rule = r
 	if settings.DEBUG_MODE:
-		print ''
+		print('')
 	if max_imp_word is not None:
 		if not lexicon.has_key(max_imp_word):
 			lexicon.add_word(max_imp_word, 0.001, unigrams.word_prob(max_imp_word))
@@ -103,11 +103,11 @@ def analyze_from_stdin(input_file, unigrams, rules, lexicon):
 		if lexicon.has_key(word):
 			w = analyze_word(word, lexicon[word].freq, unigrams, rules, lexicon)
 			if w is not None:
-				print w.encode('utf-8')
+				print(w.encode('utf-8'))
 			else:
-				print w
+				print(w)
 		else:
-			print 'Not found.'
+			print('Not found.')
 
 def analyze_with_lemmas(input_file, output_file, unigrams, rules, lexicon):
 	# add all words from the testing data to lexicon
@@ -177,8 +177,8 @@ def evaluate_direct():
 					correct += 1
 				else:
 					write_line(outfp, (word, '-', stem, stems_gs[word], known))
-	print 'Correctness: %0.2f (%d/%d)' %\
-		(float(correct) * 100 / total, correct, total)
+	print('Correctness: %0.2f (%d/%d)' %\
+		(float(correct) * 100 / total, correct, total))
 
 def evaluate():
 	evaluate_direct()

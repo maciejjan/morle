@@ -54,7 +54,7 @@ def apply_global_filters(rule, wordpairs):
 
 def load_training_infl_rules(filename):
 	i_rules_c = {}
-	print 'Loading inflectional rules...'
+	print('Loading inflectional rules...')
 	for rule, ifreq, freq, weight in read_tsv_file(filename):
 		i_rules_c[rule] = weight
 	return i_rules_c
@@ -83,7 +83,7 @@ def extract_rules_from_words(words, substring, outfp, wordset):
 def extract_rules_from_substrings(input_file, output_file, wordset=None):
 	cur_substr, words = '', []
 	pp = progress_printer(get_file_size(input_file))
-	print 'Extracting rules from substrings...'
+	print('Extracting rules from substrings...')
 	with open_to_write(output_file) as outfp:
 		for s_len, substr, word, freq in read_tsv_file(input_file):	# TODO _by_key
 			if substr != cur_substr:
@@ -96,117 +96,6 @@ def extract_rules_from_substrings(input_file, output_file, wordset=None):
 			pp.next()
 		if len(words) > 1:
 			extract_rules_from_words(words, cur_substr, outfp)
-
-def filter_and_count_rules(input_file, key=3):
-	rules_c = Counter()
-	output_file = input_file + '.filtered'
-	lines_written = 0
-	print 'Filtering and counting rules...'
-	with open_to_write(output_file) as outfp:
-		pp = progress_printer(get_file_size(input_file))
-		for rule_str, wordpairs in read_tsv_file_by_key(input_file, key):
-			rule = Rule.from_string(rule_str)
-			if apply_global_filters(rule, wordpairs):
-				for wp in wordpairs:
-					write_line(outfp, tuple(list(wp) + [rule_str]))
-					lines_written += 1
-#				for (w1, w2) in wordpairs:
-#					write_line(outfp, (w1, w2, rule_str))
-#					lines_written += 1
-				rules_c.inc(rule_str, len(wordpairs))
-			for i in range(0, len(wordpairs)):
-				pp.next()
-	remove_file(input_file)
-	rename_file(output_file, input_file)
-	set_file_size(input_file, lines_written)
-	return rules_c
-
-def filter_new(input_file):
-	with open_to_write(input_file + '.fil1') as fp:
-		for r, wordpairs in read_tsv_file_by_key(input_file, 3):
-			for w1, w2 in wordpairs:
-				write_line(fp, (w1, w2, r, len(wordpairs)))
-#		for r, rows in read_tsv_file_by_key(input_file + '.comp', 4):
-#			for row in rows:
-#				write_line(fp, (row[0], row[1], r, len(rows)))
-	sort_file(input_file + '.fil1', key=4, reverse=True, numeric=True)
-	# build lexicon
-	lexicon = Lexicon()
-	for w1, w2, r, freq in read_tsv_file(input_file + '.fil1', print_progress=True, print_msg='Building lexicon...'):
-		if not lexicon.has_key(w1):
-			lexicon[w1] = LexiconNode(w1, 0, 0)
-			lexicon.roots.add(w1)
-		if not lexicon.has_key(w2):
-			lexicon[w2] = LexiconNode(w2, 0, 0)
-			lexicon.roots.add(w2)
-		if lexicon[w2].prev is None and not w2 in lexicon[w1].analysis():
-			lexicon[w2].prev = lexicon[w1]
-			lexicon[w1].next[r] = lexicon[w2]
-			lexicon.rules_c.inc(r)
-			lexicon.rules_c.inc(Rule.from_string(r).reverse().to_string())
-			lexicon.roots.remove(w2)
-	# filter both graphs
-	with open_to_write(input_file + '.fil') as fp:
-		for r, wordpairs in read_tsv_file_by_key(input_file, 3):
-			if lexicon.rules_c.has_key(r) and lexicon.rules_c[r] > 1:
-				for w1, w2 in wordpairs:
-					write_line(fp, (w1, w2, r))
-			else:	# do not filter out compounding rules
-				rule = Rule.from_string(r)
-				for i in range(3, min(len(w1), len(w2))):
-					if i <= len(rule.prefix[1]) and lexicon.has_key(rule.prefix[1][:i]) and\
-							not rule.prefix[0] and not rule.alternations and rule.suffix == (u'', u''):
-						for w1, w2 in wordpairs:
-							write_line(fp, (w1, w2, r))
-						break
-					if i <= len(rule.suffix[1]) and lexicon.has_key(rule.suffix[1][-i:]) and\
-							not rule.suffix[0] and not rule.alternations and rule.prefix == (u'', u''):
-						for w1, w2 in wordpairs:
-							write_line(fp, (w1, w2, r))
-						break
-#			else:
-#				for w1, w2 in wordpairs:
-#					if lexicon[w2].prev == lexicon[w1]:
-#						for rr in lexicon[w1].next.keys():
-#							# same rule, without compounding
-#							if rr.find('*') > -1 and re.match(rr.replace('*', '[^/:]+'), r)\
-#									and lexicon.rules_c[rr] > 1:
-#								print rr, r
-#								write_line(fp, (w1, w2, r))
-#	with open_to_write(input_file + '.comp.fil') as fp:
-#		for r, rows in read_tsv_file_by_key(input_file + '.comp', 4):
-#			if lexicon.rules_c.has_key(r) and lexicon.rules_c[r] > 1:
-#				for w1, w2, w3 in rows:
-#					if lexicon[w2].prev == lexicon[w1]: # stricter filtering
-#						write_line(fp, (w1, w2, w3, r))
-	remove_file(input_file + '.fil1')
-	rename_file(input_file, input_file + '.orig')
-	rename_file(input_file + '.fil', input_file)
-#	rename_file(input_file + '.comp', input_file + '.comp.orig')
-#	rename_file(input_file + '.comp.fil', input_file + '.comp')
-	update_file_size(input_file)
-#	update_file_size(input_file + '.comp')
-#	lexicon.rules_c.save_to_file('s_rul.txt.fil1')
-#	lexicon.save_to_file('lex_fil.txt')
-
-### CALCULATING RULE PARAMETERS ###
-
-def join_compounds_to_graph(graph_file, rules):
-	sort_file(graph_file + '.comp', key=(3, 4))
-	with open_to_write(graph_file, 'a') as fp:
-		for k, rows in read_tsv_file_by_key(graph_file + '.comp', (3, 4)):
-			new_rule = k[1].replace('*', '*' + k[0] + '*')
-			rules[new_rule] = RuleData(new_rule, float(len(rows)) / rules[k[1]].domsize,\
-				rules[k[1]].weight, rules[k[1]].domsize)
-			for row in rows:
-				write_line(fp, (row[0], row[1], new_rule))
-	update_file_size(graph_file)
-
-def save_rules(rules, filename):
-	print 'Saving rules...'
-	with open_to_write(filename) as fp:
-		for r in rules:
-			write_line(fp, (r.rule, r.prod, r.weight, r.domsize))
 
 def load_wordset(input_file):
 	wordset = set([])
@@ -243,18 +132,18 @@ def run():
 	rules.save_to_file('rules.txt.0')
 
 def evaluate():
-	print '\nSurface rules: nothing to evaluate.\n'
+	print('\nSurface rules: nothing to evaluate.\n')
 
 def import_from_db():
 	utils.db.connect()
-	print 'Importing wordlist...'
+	print('Importing wordlist...')
 	utils.db.pull_table(settings.WORDS_TABLE, ('word', 'freq'),\
 		settings.FILES['training.wordlist'])
-	print 'Importing surface rules...'
+	print('Importing surface rules...')
 	utils.db.pull_table(settings.S_RUL_TABLE, ('rule', 'freq', 'prob'),\
 		settings.FILES['surface.rules'])
 	# pull graph
-	print 'Importing graph...'
+	print('Importing graph...')
 	with open_to_write(settings.FILES['surface.graph']) as fp:
 		for word_1, word_2, rule in utils.db.query_fetch_results('''
 			SELECT w1.word, w2.word, r.rule FROM graph g 
@@ -264,7 +153,7 @@ def import_from_db():
 			;'''):
 			write_line(fp, (word_1, word_2, rule))
 	# pull surface rules co-occurrences
-	print 'Importing surface rules co-occurrences...'
+	print('Importing surface rules co-occurrences...')
 	with open_to_write(settings.FILES['surface.rules.cooc']) as fp:
 		for rule_1, rule_2, freq, sig in utils.db.query_fetch_results('''
 			SELECT r1.rule, r2.rule, c.freq, c.sig FROM s_rul_co c
@@ -276,32 +165,32 @@ def import_from_db():
 
 def export_to_db():
 	# words <- insert ID
-	print 'Converting wordlist...'
+	print('Converting wordlist...')
 	word_ids = utils.db.insert_id(settings.FILES['training.wordlist'],\
 		settings.FILES['wordlist.db'])
 	# surface rules <- insert ID
-	print 'Converting surface rules...'
+	print('Converting surface rules...')
 	s_rule_ids = utils.db.insert_id(settings.FILES['surface.rules'],\
 		settings.FILES['surface.rules.db'])
 	# graph <- replace words and surface rules with their ID
-	print 'Converting graph...'
+	print('Converting graph...')
 	utils.db.replace_values_with_ids(settings.FILES['surface.graph'],\
 		settings.FILES['surface.graph.db'],\
 		(word_ids, word_ids, s_rule_ids))
 	# surface_rules_cooc <- replace rules with ID
-	print 'Converting surface rules co-occurrences...'
+	print('Converting surface rules co-occurrences...')
 	utils.db.replace_values_with_ids(settings.FILES['surface.rules.cooc'],\
 		settings.FILES['surface.rules.cooc.db'],\
 		(s_rule_ids, s_rule_ids, None, None))
 	# load tables into DB
 	utils.db.connect()
-	print 'Exporting wordlist...'
+	print('Exporting wordlist...')
 	utils.db.push_table(settings.WORDS_TABLE, settings.FILES['wordlist.db'])
-	print 'Exporting surface rules...'
+	print('Exporting surface rules...')
 	utils.db.push_table(settings.S_RUL_TABLE, settings.FILES['surface.rules.db'])
-	print 'Exporting graph...'
+	print('Exporting graph...')
 	utils.db.push_table(settings.GRAPH_TABLE, settings.FILES['surface.graph.db'])
-	print 'Exporting surface rules co-occurrences...'
+	print('Exporting surface rules co-occurrences...')
 	utils.db.push_table(settings.S_RUL_CO_TABLE,\
 		settings.FILES['surface.rules.cooc.db'])
 	utils.db.close_connection()

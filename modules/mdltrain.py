@@ -31,7 +31,7 @@ def expectation_maximization(unigrams, lexicon, rules, iter_count):
 	if settings.USE_WORD_FREQ:
 		algorithms.mdl.reestimate_rule_weights(rules, lexicon)
 	logl = lexicon.logl(rules)
-	print 'LogL =', logl
+	print('LogL =', logl)
 #	if iter_count > 1:
 	algorithms.mdl.check_rules(rules, lexicon)
 #	algorithms.mdl.rebuild_lexicon(lexicon, rules)
@@ -69,13 +69,13 @@ def train_unsupervised():
 
 	unigrams = NGramModel(1)
 	unigrams.train_from_file(settings.FILES['training.wordlist'])
-	lexicon = Lexicon.init_from_file(settings.FILES['training.wordlist'])
+	lexicon = Lexicon.init_from_file(settings.FILES['training.wordlist'], unigrams)
 	rules = RuleSet()
 #	rules[u'#'] = RuleData(u'#', 1.0, 1.0, len(lexicon))
 #	for i in range(1, NUM_ITERATIONS+1):
 	i = 0
 	old_logl = lexicon.logl(rules)
-	print 'null logl:', old_logl
+	print('null logl:', old_logl)
 	rules = RuleSet.load_from_file(settings.FILES['model.rules'] + '.0')
 #	rules = RuleSet.load_from_file(settings.FILES['model.rules'])
 
@@ -83,8 +83,8 @@ def train_unsupervised():
 	while True:
 #	while i < 1:
 		i += 1
-		print '\n===   Iteration %d   ===\n' % i
-		print 'number of rules:', old_num_rules
+		print('\n===   Iteration %d   ===\n' % i)
+		print('number of rules:', old_num_rules)
 		logl = expectation_maximization(unigrams, lexicon, rules, i)
 		num_rules = len(rules)
 		if num_rules == old_num_rules and logl - old_logl < 1.0:

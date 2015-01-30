@@ -7,7 +7,7 @@ import utils.printer
 def read_tsv_file(filename, types=None, print_progress=False, print_msg=None):
 	pp = None
 	if print_progress:
-		print print_msg
+		print(print_msg)
 		pp = utils.printer.progress_printer(get_file_size(filename))
 	with codecs.open(settings.WORKING_DIR+filename, 'r', settings.ENCODING) as fp:
 		for line in fp:
@@ -19,7 +19,7 @@ def read_tsv_file(filename, types=None, print_progress=False, print_msg=None):
 				row = row_converted
 			yield tuple(row)
 			if print_progress:
-				pp.next()
+				next(pp)
 
 def read_tsv_file_by_key(filename, key=1, types=None,\
 		print_progress=False, print_msg=None):
@@ -45,7 +45,7 @@ def open_to_write(filename, mode='w+'):
 
 # if count_bytes set to true, returns the number of bytes written
 def write_line(fp, line, count_bytes=False):
-	line = u'\t'.join([unicode(s) for s in line]) + u'\n'
+	line = u'\t'.join([str(s) for s in line]) + u'\n'
 	fp.write(line)
 	if count_bytes:
 		return len(line.encode(settings.ENCODING))
@@ -61,11 +61,11 @@ def count_lines(filename):
 
 def get_file_size(filename):
 	global FILE_SIZES
-	if FILE_SIZES.has_key(filename):
+	if filename in FILE_SIZES:
 		return FILE_SIZES[filename]
 	else:
 		read_index_file()
-		if FILE_SIZES.has_key(filename):
+		if filename in FILE_SIZES:
 			return FILE_SIZES[filename]
 		else:
 			size = count_lines(filename)
@@ -76,7 +76,7 @@ def read_index_file():
 	global FILE_SIZES
 	if os.path.isfile(settings.WORKING_DIR + settings.FILES['index']):
 		for filename, size in read_tsv_file(settings.FILES['index']):
-			if not FILE_SIZES.has_key(filename):
+			if filename not in FILE_SIZES:
 				FILE_SIZES[filename] = int(size)
 
 def set_file_size(filename, size):
@@ -91,7 +91,7 @@ def update_index_file():
 	global FILE_SIZES
 	read_index_file()
 	with open_to_write(settings.FILES['index']) as fp:
-		for filename, size in FILE_SIZES.iteritems():
+		for filename, size in FILE_SIZES.items():
 			write_line(fp, (filename, size))
 
 def file_exists(filename):
@@ -116,7 +116,8 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False, stab
 	if reverse:
 		sort_call.append('-r')
 	if numeric:
-		sort_call.append('-n')
+		sort_call.append('-g')
+		sort_call.insert(0, 'LC_NUMERIC=us_EN.UTF-8')
 	if stable:
 		sort_call.append('-s')
 	if unique:
@@ -126,7 +127,7 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False, stab
 		sort_call.append(settings.WORKING_DIR + outfile)
 	else:
 		sort_call.append(settings.WORKING_DIR + infile + '.sorted')
-	print ' '.join(sort_call)
+	print(' '.join(sort_call))
 	os.system(' '.join(sort_call))
 	if outfile is None:
 		remove_file(infile)

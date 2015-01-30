@@ -36,7 +36,7 @@ class Counter:
 		key = obj
 		if self.convert:
 			key = obj.to_string()
-		return self.entries.has_key(key)
+		return self.entries.__contains__(key)
 	
 	def __getitem__(self, obj):
 		key = obj
@@ -47,13 +47,8 @@ class Counter:
 	def __setitem__(self, key, val):
 		self.entries[key] = val
 	
-	def has_key(self, key):
-		if self.convert:
-			key = obj.to_string()
-		return self.entries.has_key(key)
-
-	def iteritems(self):
-		return self.entries.iteritems()
+	def items(self):
+		return self.entries.items()
 	
 	def keys(self):
 		return self.entries.keys()

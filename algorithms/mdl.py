@@ -42,30 +42,30 @@ def check_rules(rules, lexicon):
 	edges = []
 	for word_1, freq_1, word_2, freq_2, rule, weight, delta_logl, d1, d2 in\
 			read_tsv_file('edges.txt',\
-			(unicode, int, unicode, int, unicode, int, float, float, float),\
+			(str, int, str, int, str, int, float, float, float),\
 			print_progress=True, print_msg='Checking rules...'):
 		edges.append((word_1, word_2, rule, delta_logl))
 	edges.sort(reverse=True, key=lambda x: x[3])
 	for word_1, word_2, rule, delta_logl in edges:
 		if lexicon[word_2].prev == lexicon[word_1]:
-			if not gain.has_key(word_2):
+			if word_2 not in gain:
 				gain[word_2] = 0.0
 			gain[word_2] += delta_logl
-		if not word_2 in analyzed and lexicon[word_2].prev != lexicon[word_1]\
-				and not word_2 in lexicon[word_1].analysis()\
-				and not lexicon[word_1].next.has_key(rule):
-			if not gain.has_key(word_2):
+		if word_2 not in analyzed and lexicon[word_2].prev != lexicon[word_1]\
+				and word_2 not in lexicon[word_1].analysis()\
+				and rule not in lexicon[word_1].next:
+			if word_2 not in gain:
 				gain[word_2] = 0.0
 			gain[word_2] -= delta_logl
 			analyzed.add(word_2)
 	rules_gain = {}
 	for w in lexicon.values():
-		for r, w2 in w.next.iteritems():
-			if not rules_gain.has_key(r):
+		for r, w2 in w.next.items():
+			if r not in rules_gain:
 				rules_gain[r] = 0.0
 			rules_gain[r] += gain[w2.word]
 	rules_score = []
-	for r, g in rules_gain.iteritems():
+	for r, g in rules_gain.items():
 		cost = rule_cost(lexicon.rules_c[r], rules[r].domsize, rules[r].prod)
 		if r.count('*') == 0:
 			cost += math.log(rsp.rule_prob(r))
@@ -81,13 +81,16 @@ def check_rules(rules, lexicon):
 			write_line(fp, (r, g, c, sc))
 
 def build_lexicon_edmonds(unigrams, rules, lexicon):
-	print 'Resetting lexicon...'
+	print('Resetting lexicon...')
 	lexicon.reset()
 
+#	rules_to_delete = []
 	for r in rules.keys():
 		if rules[r].weight < 0 and r.count('*') != 1:
-#			rules[r].weight = 0
-			del rules[r]
+			rules[r].weight = 0
+#			rules_to_delete.append(r)
+#	for r in rules_to_delete:
+#		del rules[r]
 
 	# compute the improvement for each possible edge
 	vertices, edges = set(['ROOT']), []
@@ -95,7 +98,7 @@ def build_lexicon_edmonds(unigrams, rules, lexicon):
 		for word_1, word_2, rule in read_tsv_file(settings.FILES['surface.graph'],\
 #			print_progress=False):
 				print_progress=True, print_msg='Computing edge scores...'):
-			if rules.has_key(rule):
+			if rule in rules:
 				delta_logl = lexicon.try_edge(word_1, word_2, rules[rule])
 				delta_cor_logl = math.log(rules[rule].freqprob(lexicon[word_2].freqcl - lexicon[word_1].freqcl))
 				write_line(outfp, (word_1, lexicon[word_1].freqcl, word_2, lexicon[word_2].freqcl,\
@@ -112,7 +115,7 @@ def build_lexicon_edmonds(unigrams, rules, lexicon):
 	edges.sort(reverse=True, key=lambda x: x[3])
 	update_file_size('edges.txt')
 
-	print 'Computing maximum branching...'
+	print('Computing maximum branching...')
 	branching = algorithms.branching.branching(list(vertices), edges)
 	for v1, v2, rule in branching:
 		if not v1 == 'ROOT':
@@ -121,7 +124,7 @@ def build_lexicon_edmonds(unigrams, rules, lexicon):
 	return lexicon
 
 def build_lexicon_new(rules, lexicon):
-	print 'Resetting lexicon...'
+	print('Resetting lexicon...')
 	lexicon.reset()
 
 	for r in rules.keys():
@@ -134,7 +137,7 @@ def build_lexicon_new(rules, lexicon):
 		for word_1, word_2, rule in read_tsv_file(settings.FILES['surface.graph'],\
 #			print_progress=False):
 				print_progress=True, print_msg='Computing edge scores...'):
-			if rules.has_key(rule):
+			if rule in rules:
 				delta_logl = lexicon.try_edge(word_1, word_2, rules[rule])
 				delta_cor_logl = math.log(rules[rule].freqprob(lexicon[word_2].freq - lexicon[word_1].freq))
 				write_line(outfp, (word_1, lexicon[word_1].freq, word_2, lexicon[word_2].freq,\
@@ -147,7 +150,7 @@ def build_lexicon_new(rules, lexicon):
 
 	for (word_1, word_2, rule, delta_logl) in edges:
 		if lexicon[word_2].prev is None and not word_2 in lexicon[word_1].analysis()\
-				and not lexicon[word_1].next.has_key(rule):
+				and rule not in lexicon[word_1].next:
 			if word_1 in lexicon.roots and not lexicon[word_2].next:
 				lexicon.draw_edge(word_1, word_2, rules[rule])
 ##			new_parent_stem = lcs(lexicon[word_1].stem, lcs(word_1, word_2))
@@ -160,7 +163,7 @@ def build_lexicon_new(rules, lexicon):
 # start with the outermost "layer", then proceed to deeper layers
 
 def build_lexicon_freq(rules, lexicon):
-	print 'Resetting lexicon...'
+	print('Resetting lexicon...')
 	lexicon.reset()
 
 	for r in rules.keys():
@@ -173,7 +176,7 @@ def build_lexicon_freq(rules, lexicon):
 		for word_1, word_2, rule in read_tsv_file(settings.FILES['surface.graph'],\
 #			print_progress=False):
 				print_progress=True, print_msg='Computing edge scores...'):
-			if rules.has_key(rule):
+			if rule in rules:
 #				delta_logl = lexicon.try_edge(word_1, word_2, rules[rule])
 #				delta_cor_logl = math.log(rules[rule].freqprob(lexicon[word_2].freq - lexicon[word_1].freq))
 #				write_line(outfp, (word_1, lexicon[word_1].freq, word_2, lexicon[word_2].freq,\
@@ -182,14 +185,14 @@ def build_lexicon_freq(rules, lexicon):
 #					continue
 				delta_logl = max([rules[rule].prod * rules[rule].domsize] + \
 					[rules[r].prod * rules[r].domsize\
-					for r in extract_all_rules(word_1, word_2) if rules.has_key(r)])
+					for r in extract_all_rules(word_1, word_2) if rule in rules])
 				edges.append((word_1, word_2, rule, delta_logl))
 	edges.sort(reverse=True, key=lambda x: x[3])
 	update_file_size('edges.txt')
 
 	for (word_1, word_2, rule, delta_logl) in edges:
 		if lexicon[word_2].prev is None and not word_2 in lexicon[word_1].analysis()\
-				and not lexicon[word_1].next.has_key(rule):
+				and not rule in lexicon[word_1].next:
 			if lexicon[word_1].freq <= lexicon[word_2].freq and rules[rule].weight >= 0:
 #			new_parent_stem = lcs(lexicon[word_1].stem, lcs(word_1, word_2))
 #			if lcs(new_parent_stem, lexicon[word_2].stem) == new_parent_stem:
@@ -198,7 +201,7 @@ def build_lexicon_freq(rules, lexicon):
 	return lexicon
 
 def build_lexicon(rules, lexicon):
-	print 'Resetting lexicon...'
+	print('Resetting lexicon...')
 	lexicon.reset()
 
 	# compute the improvement for each possible edge
@@ -206,7 +209,7 @@ def build_lexicon(rules, lexicon):
 	for word_1, word_2, rule in read_tsv_file(settings.FILES['surface.graph'],\
 #			print_progress=False):
 			print_progress=True, print_msg='Computing edge scores...'):
-		if rules.has_key(rule):
+		if rule in rules:
 			delta_logl = lexicon.try_edge(word_1, word_2, rules[rule])
 			if delta_logl < 0:
 				continue
@@ -260,49 +263,56 @@ def reestimate_rule_prod(rules, lexicon):
 				lexicon.rules_c.inc(r_sp[0] + '*' + r_sp[2])
 	# replace productivity with count / domsize
 	deleted_metarules = set([])
+	rules_to_delete = []
 	for r in rules.keys():
-		if rules_c.has_key(r):
+		if r in rules_c:
 #			rules[r].prod = float(rules_c[r]) / rules[r].domsize
 			if rules[r].domsize == 0:
-				print r
-			rules[r].prod = math.exp(round(math.log(float(rules_c[r]) / rules[r].domsize)))
+				print(r)
+#			rules[r].prod = math.exp(round(math.log(float(rules_c[r]) / rules[r].domsize)))
+			rules[r].prod = rules_c[r] / rules[r].domsize
 			if rules[r].prod > 0.9:
 				rules[r].prod = 0.9
 		elif r == u'#':
 			pass
 		else:
-			del rules[r]
+			rules_to_delete.append(r)
 			if r.count('*') == 1:
 				deleted_metarules.add(r)
-	for r in rules.keys():
-		if r.count('*') == 2:
-			r_sp = r.split('*')
-			if r_sp[0]+'*'+r_sp[2] in deleted_metarules:
-				del rules[r]
+	for r in rules_to_delete:
+		del rules[r]
+#	for r in rules.keys():
+#		if r.count('*') == 2:
+#			r_sp = r.split('*')
+#			if r_sp[0]+'*'+r_sp[2] in deleted_metarules:
+#				del rules[r]
 
 def reestimate_rule_weights(rules, lexicon):
 	rules_w = {}
 	for w1 in lexicon.values():
-		for rule, w2 in w1.next.iteritems():
-			if w1.freqcl is None: print w1.word, w1 == lexicon[w1.word]
-			if w2.freqcl is None: print w2.word, w2 == lexicon[w2.word]
+		for rule, w2 in w1.next.items():
+			if w1.freqcl is None: print(w1.word, w1 == lexicon[w1.word])
+			if w2.freqcl is None: print(w2.word, w2 == lexicon[w2.word])
 			w3 = None
 			if rule.count('*') == 2:
 				r_sp = rule.split('*')
 				w3 = lexicon[r_sp[1]]
 				rule = r_sp[0] + '*' + r_sp[2]
-			if not rules_w.has_key(rule):
+			if rule not in rules_w:
 				rules_w[rule] = 0
 			if w3 is not None:
 				rules_w[rule] += w2.freqcl - w1.freqcl - w3.freqcl
 #				rules_w[rule] += w2.freq - w1.freq
 			else:
 				rules_w[rule] += w2.freqcl - w1.freqcl
+	rules_to_delete = []
 	for r in rules_w.keys():
-		if lexicon.rules_c.has_key(r) and rules.has_key(r):
+		if r in lexicon.rules_c and r in rules:
 			rules[r].weight = int(round(float(rules_w[r]) / lexicon.rules_c[r]))
-		elif rules.has_key(r):
-			del rules[r]
+		elif r in rules:
+			rules_to_delete.append(r)
+	for r in rules_to_delete:
+		del rules[r]
 	for r in rules.keys():
 		if r.count('*') == 2:
 			r_sp = r.split('*')
@@ -390,7 +400,7 @@ def find_new_ancestor(lexicon, rules, root, depth=0):
 		find_new_ancestor(lexicon, rules, child.word, max_depth+1)
 
 def rebuild_lexicon(lexicon, rules):
-	print 'Rebuilding lexicon...'
+	print('Rebuilding lexicon...')
 	pp = progress_printer(len(lexicon.roots))
 	for root in list(lexicon.roots):
 		rebuild_tree(lexicon, rules, root)

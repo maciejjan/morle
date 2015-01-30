@@ -2,7 +2,7 @@ from utils.files import *
 from utils.printer import *
 import settings
 from warnings import filterwarnings
-import MySQLdb
+#import MySQLdb
 
 #filterwarnings('ignore', category=MySQLdb.Warning)
 
@@ -53,10 +53,11 @@ def connect():
 		raise Exception("No database username supplied.")
 	if settings.DB_PASS is None:
 		raise Exception("No database password supplied.")
-	CONNECTION = MySQLdb.connect(host=settings.DB_HOST, db=settings.DB_NAME,
-		user=settings.DB_USER, passwd=settings.DB_PASS, use_unicode=True,\
-		charset='utf8', local_infile=1)
-	CURSOR = CONNECTION.cursor()
+	raise Exception('Not implemented yet!')
+#	CONNECTION = MySQLdb.connect(host=settings.DB_HOST, db=settings.DB_NAME,
+#		user=settings.DB_USER, passwd=settings.DB_PASS, use_unicode=True,\
+#		charset='utf8', local_infile=1)
+#	CURSOR = CONNECTION.cursor()
 
 def close_connection():
 	CURSOR.close()
