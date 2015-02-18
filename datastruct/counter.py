@@ -55,11 +55,19 @@ class Counter:
 	
 	def values(self):
 		return self.entries.values()
+
+	def filter(self, condition):
+		keys_to_delete = []
+		for key, val in self.entries.items():
+			if not condition(val):
+				keys_to_delete.append(key)
+		for key in keys_to_delete:
+			del self.entries[key]
 	
 	def save_to_file(self, filename):
 		# sort according to counts and save
 		lines_written = 0
-		entries_sorted = sorted([(x, y) for x, y in self.entries.iteritems()], \
+		entries_sorted = sorted([(x, y) for x, y in self.entries.items()], \
 			reverse = True, key = lambda x: x[1])
 		with open_to_write(filename) as fp:
 			for key, count in entries_sorted:

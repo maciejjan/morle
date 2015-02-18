@@ -1,3 +1,4 @@
+from algorithms.ngrams import TrigramHash, generate_n_grams
 from datastruct.counter import *
 from datastruct.rules import *
 from datastruct.lexicon import *
@@ -10,10 +11,6 @@ import re
 
 MAX_ALTERNATION_LENGTH = 3
 MAX_AFFIX_LENGTH = 5
-IMPROVEMENT_THRESHOLD = 50.0
-
-def max_prod_ratio(x):
-	return x / (x+1) * math.exp(-math.log(x+1)/x)
 
 def make_rule(alignment, tag):
 	pref = alignment[0]
@@ -56,10 +53,13 @@ def process_alignments(alignments):
 					new_al = al[:j] + [(x1+x2, y1+y2)] + al[j+k:]
 					if not new_al in alignments and not new_al in new_alignments:
 						new_alignments.append(fix_alignment(new_al))
-		if new_alignments:
-			return alignments[:i+1] +\
-				process_alignments(alignments[i+1:] + new_alignments)
-	return alignments
+#		if new_alignments:
+#			return alignments[:i+1] +\
+#				process_alignments(alignments[i+1:] + new_alignments)
+	if new_alignments:
+		return process_alignments(alignments + new_alignments)
+	else:
+		return alignments
 
 def extract_all_rules(word_1, word_2):
 	tag = None
@@ -94,110 +94,111 @@ def improvement_fun(r, n1, m1, n2, m2):
 	if m3-n3 > 0: result += (m3-n3) * (math.log(m3-n3) - math.log(m3))
 	return result
 
-def optimize_rule(rule, wordpairs, wordlist, matching=None):
+def rule_domsize(rule, trh):
+    rule = Rule.from_string(rule)
+    trigrams = rule.get_trigrams()
+    if not trigrams:
+        return len(trh)
+    words = trh.retrieve(trigrams[0])
+    for tr in trigrams[1:]:
+        words &= trh.retrieve(tr)
+    if settings.USE_TAGS:
+        words &= trh.retrieve_tag(rule.tag[0])
+    if max([len(rule.prefix[0]), len(rule.suffix[0])]) <= 2 and\
+        (not rule.alternations or max([len(x) for (x, y) in rule.alternations]) <= 3):
+        return len(words)
+    else:
+        return len([w for w in words if rule.lmatch(w)])
+
+def optimize_rule(rule, wordpairs, trh, rsp, matching=None):
 	if not wordpairs:
 		return []
 	# generate candidate rules and count to how many wordpairs they apply
-#	print 'Generating candidate rules...'
 	applying = Counter()
-#	pp = progress_printer(len(wordpairs))
 	for word_1, word_2 in wordpairs:
 		for r in extract_all_rules(word_1, word_2):
 			applying.inc(r)
-#		pp.next()
-	# remove rules with frequency 1
-	for r in applying.keys():
-		if applying[r] == 1:
-			del applying.entries[r]
-			applying.total -= 1
+#	# remove rules with frequency 1
+	applying.filter(lambda x: x > 1)
 	# TODO better handling of rules with ambigous LCS
-	if not applying.has_key(rule):
+	if rule not in applying:
 		applying.inc(rule, count=len(wordpairs))
-	rules = {}
-	for r in applying.keys():
-		rules[r] = Rule.from_string(r)
 	# count how many words match the constraints of each rule
-#	print 'Matching words against rule patterns...'
 	if matching is None:
 		matching = Counter()
-#		pp = progress_printer(len(wordlist))
-		for word in wordlist:
-			for r, r_obj in rules.iteritems():
-				if r_obj.lmatch(word):
-					matching.inc(r)
-#			pp.next()
+	for r in applying.keys():
+		if r not in matching:
+			matching[r] = rule_domsize(r, trh)
 	# compute the improvement brought by isolating each rule
 	rule_counts = [(r, improvement_fun(r, applying[rule], matching[rule],\
-		applying[r], matching[r])) for r in applying.keys() if matching.has_key(r)]
+		applying[r], matching[r])) for r in applying.keys() if r in matching]
 	if not rule_counts:
 		return []
 
-#	print rule, sorted(rule_counts, reverse=True, key=lambda x:x[1])
-#	if rule == u':/e:u/:g':
-#		print ''
-#		for r, imp in sorted(rule_counts, reverse=True, key=lambda x: x[1]):
-#			if matching.has_key(r):
-#				print r, applying[rule], matching[rule], applying[r], matching[r], imp
 	optimal_rule, improvement = max(rule_counts, key = lambda x: x[1])
-	if improvement > IMPROVEMENT_THRESHOLD:
+	optimal_rule_obj = Rule.from_string(optimal_rule)
+	if improvement + math.log(rsp.rule_prob(rule)) > 20.0:
 		wordpairs_new, wordpairs_rest = [], []
 		for w1, w2 in wordpairs:
-			if rules[optimal_rule].lmatch(w1):
+			if optimal_rule_obj.lmatch(w1):
 				wordpairs_new.append((w1, w2))
 			else:
 				wordpairs_rest.append((w1, w2))
-		return optimize_rule(optimal_rule, wordpairs_new, wordlist, matching) + \
-			optimize_rule(rule, wordpairs_rest, wordlist, matching)
+		return optimize_rule(optimal_rule, wordpairs_new, trh, rsp, matching) + \
+			optimize_rule(rule, wordpairs_rest, trh, rsp, matching)
+#		return optimize_rule(optimal_rule, wordpairs_new, trh, rsp, matching) + \
+#			optimize_rule(rule, wordpairs_rest, trh, rsp, matching) + \
+#			[(rule, applying[rule], matching[rule], wordpairs)]
 	else:
 		return [(rule, applying[rule], matching[rule], wordpairs)]
 
-def calculate_rule_params(wordlist_file, graph_file, key, rules):
-	word_freq = Counter.load_from_file(wordlist_file)
-	for r, rows in read_tsv_file_by_key(graph_file, key,\
-			print_progress=True, print_msg='Calculating rule parameters...'):
-		rule = Rule.from_string(r)
-		weight = sum([word_freq[row[1]]-word_freq[row[0]] for row in rows]) / len(rows)
-		domsize = sum([1 for word in word_freq.keys() if rule.lmatch(word)])
-		rules[r] = RuleData(r, float(len(rows)) / domsize, weight, domsize)
-
 def optimize_rules_in_graph(wordlist_file, input_file, output_file, rules):
-#	sort_file(input_file, key=3)
-	word_freq = Counter.load_from_file(wordlist_file)
-	max_freq = max(word_freq.values())
-	for w in word_freq.keys():
-		word_freq[w] = freqcl(word_freq[w], max_freq)
-#	wordlist = []
-#	for word, freq in read_tsv_file(wordlist_file):
-#		wordlist.append(word)
+	'''Optimize rules in a graph of patterns.'''
+	# load the wordlist into a trigram hash
+	trh = TrigramHash()
+	word_freqcl, max_freq = {}, None
+	for word, freq in read_tsv_file(wordlist_file, (str, int)):
+		trh.add(word)
+		if max_freq is None:
+			max_freq = freq
+		word_freqcl[word] = freqcl(freq, max_freq)
+	# optimize rules
 	with open_to_write(output_file) as outfp:
-		for rule, wordpairs in read_tsv_file_by_key(input_file, 3,\
+		for rule, wordpairs in read_tsv_file_by_key(input_file, 3,
 				print_progress=True, print_msg='Optimizing rules in the graph...'):
-			opt = optimize_rule(rule, wordpairs, word_freq.keys())
+			rule_freqcl = sum([word_freqcl[w2]-word_freqcl[w1] for w1, w2 in wordpairs]) //\
+				len(wordpairs)
+#			if rule_freqcl < 0:		# discard rules with frequency class < 0
+#				continue
+			opt = optimize_rule(rule, wordpairs, trh, rules.rsp)
 			for new_rule, freq, domsize, new_wordpairs in opt:
 				for nw1, nw2 in new_wordpairs:
 					write_line(outfp, (nw1, nw2, new_rule))
-				prod = float(freq) / domsize
-				if prod > 0.9:
-					prod = 0.9
-				weight = sum([word_freq[w2] - word_freq[w1]\
-					for w1, w2 in wordpairs]) / len(wordpairs)
-				rules[new_rule] = RuleData(new_rule, prod, weight, domsize)
+				prod = min(freq / domsize, 0.9)
+				nr_freqcl = sum([word_freqcl[w2]-word_freqcl[w1] for w1, w2 in new_wordpairs]) //\
+					len(new_wordpairs)
+				rules[new_rule] = RuleData(new_rule, prod, nr_freqcl, domsize)
 
 def optimize_rules_in_lexicon(input_file, output_file, rules_file):
-	lexicon = Lexicon.load_from_file(input_file)
-	wordlist = lexicon.keys()
+	ruleset = RuleSet.load_from_file(rules_file)
+	lexicon = Lexicon.load_from_file(input_file, ruleset)
+	trh = TrigramHash()
+	for word in lexicon.keys():
+		trh.add(word)
+
 	sort_file(input_file, key=3)
-	with open_to_write(rules_file) as rulesfp:
-		for rule, rest in read_tsv_file_by_key(input_file, 3,\
-				print_progress=True, print_msg='Optimizing rules in the lexicon...'):
-			if not rule:
-				continue
-			wordpairs = [(r[0], r[1]) for r in rest]
-			opt = optimize_rule(rule, wordpairs, wordlist)
-			for new_rule, freq, domsize, new_wordpairs in opt:
-				for nw1, nw2 in new_wordpairs:
-					del lexicon[nw1].next[rule]
-					lexicon[nw1].next[new_rule] = lexicon[nw2]
-				write_line(rulesfp, (new_rule, float(freq)/domsize, 1.0, domsize))
-	lexicon.save_to_file(output_file)
+	for rule, rest in read_tsv_file_by_key(input_file, 3,\
+			print_progress=True, print_msg='Optimizing rules in the lexicon...'):
+		if not rule:
+			continue
+		del lexicon.ruleset[rule]
+		wordpairs = [(r[0], r[1]) for r in rest]
+		opt = optimize_rule(rule, wordpairs, trh, ruleset.rsp)
+		for new_rule, freq, domsize, new_wordpairs in opt:
+			for nw1, nw2 in new_wordpairs:
+				del lexicon[nw1].next[rule]
+				lexicon[nw1].next[new_rule] = lexicon[nw2]
+			lexicon.ruleset[new_rule] = RuleData(new_rule, freq/domsize, 0, domsize)
+#				write_line(rulesfp, (new_rule, float(freq)/domsize, 0, domsize))
+	lexicon.save_model(rules_file, output_file)
 

@@ -28,7 +28,7 @@ def extract_rule(word_1, word_2, pattern):
 		word_1, word_2 = word_1[:p1], word_2[:p2]
 	m1 = pattern.search(word_1)
 	m2 = pattern.search(word_2)
-	z = zip(m1.groups(), m2.groups())
+	z = list(zip(m1.groups(), m2.groups()))
 	substr = re.sub('\(\.\*\??\)', '', pattern.pattern)
 	pref = z[0]
 	alt = []

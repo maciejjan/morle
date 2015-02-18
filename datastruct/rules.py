@@ -2,6 +2,7 @@ from utils.files import *
 import re
 from scipy.stats import norm
 from algorithms.ngrams import *
+import algorithms.align
 import math
 
 class Rule:
@@ -35,6 +36,8 @@ class Rule:
 			alt_pat = re.compile(u'(.*?)'.join([x for x, y in self.alternations]))
 			m = alt_pat.search(word, 1)
 			while m is not None:
+				if m.end() == len(word):
+					break
 				w = word[:m.start()] + self.alternations[0][1]
 				for i in range(1, len(self.alternations)):
 					w += m.group(i) + self.alternations[i][1]
@@ -54,6 +57,20 @@ class Rule:
 		affixes.append(self.suffix[0])
 		affixes.append(self.suffix[1])
 		return [x for x in affixes if x]
+
+	def get_trigrams(self):
+		trigrams = []
+		for tr in generate_n_grams('^'+self.prefix[0]+'*', 3):
+			if len(tr) == 3:
+				trigrams.append(tr)
+		for alt in self.alternations:
+			for tr in generate_n_grams('*'+alt[0]+'*', 3):
+				if len(tr) == 3:
+					trigrams.append(tr)
+		for tr in generate_n_grams('*'+self.suffix[0]+'$', 3):
+			if len(tr) == 3:
+				trigrams.append(tr)
+		return trigrams
 	
 	def make_left_pattern(self):
 		pref = re.escape(self.prefix[0])
@@ -128,17 +145,24 @@ class Rule:
 
 
 class RuleData:
-	def __init__(self, rule, prod, weight, domsize):
+	def __init__(self, rule, prod, freqcl, domsize):
 		self.rule = rule
+		self.rule_obj = Rule.from_string(rule)
 		self.prod = prod
-		self.weight = weight
+		self.freqcl = freqcl
 		self.domsize = domsize
 	
+	def __lt__(self, other):
+		return self.rule < other.rule
+	
 	def freqprob(self, f):
-		return norm.pdf(f, self.weight, 1)
-
+		p = 2 * norm.pdf(f-self.freqcl) * norm.cdf(f-self.freqcl)
+		return p if p > 0 else 1e-100
+#		return norm.pdf(f, self.freqcl, 1)
+	
 class RuleSet:
 	def __init__(self):
+		self.rsp = RuleSetPrior()
 		self.rules = {}
 	
 	def __len__(self):
@@ -153,6 +177,9 @@ class RuleSet:
 	def values(self):
 		return self.rules.values()
 	
+	def items(self):
+		return self.rules.items()
+	
 	def __contains__(self, key):
 		return self.rules.__contains__(key)
 	
@@ -162,30 +189,64 @@ class RuleSet:
 	def __setitem__(self, key, val):
 		self.rules[key] = val
 	
-	def logl(self):
-		return 0.0
+	def rule_cost(self, rule, freq):
+		result = math.log(self.rsp.rule_prob(rule))
+		r = self.rules[rule]
+		result += freq * math.log(r.prod)
+		result += (r.domsize-freq) * math.log(1-r.prod)
+		return result
+
+	def filter(self, condition):
+		keys_to_delete = []
+		for key, val in self.rules.items():
+			if not condition(val):
+				keys_to_delete.append(key)
+		for key in keys_to_delete:
+			del self.rules[key]
 	
 	def save_to_file(self, filename):
 		with open_to_write(filename) as fp:
 			for r_str, r in self.rules.items():
-				write_line(fp, (r_str, r.prod, r.weight, r.domsize))
+				write_line(fp, (r_str, r.prod, r.freqcl, r.domsize))
 	
 	@staticmethod
 	def load_from_file(filename):
 		rs = RuleSet()
-		for rule, prod, weight, domsize in read_tsv_file(filename,\
-				types=(str, float, float, int)):
-			rs[rule] = RuleData(rule, prod, weight, domsize)
+		for rule, prod, freqcl, domsize in read_tsv_file(filename,\
+				types=(str, float, int, int)):
+			rs[rule] = RuleData(rule, prod, freqcl, domsize)
 		return rs
 	
+
+def align_parts(left, right):
+	lcs = algorithms.align.lcs(left, right)
+	pattern = re.compile('(.*)' + '(.*?)'.join([\
+		letter for letter in lcs]) + '(.*)')
+	m1 = pattern.search(left)
+	m2 = pattern.search(right)
+	alignment = []
+	for i, (x, y) in enumerate(zip(m1.groups(), m2.groups())):
+		if x or y:
+			alignment.append((x, y))
+		if i < len(lcs):
+			alignment.append((lcs[i], lcs[i]))
+	return alignment
+
+
 class RuleSetPrior:
 	def __init__(self):
 		self.ngr_add = None
 		self.ngr_remove = None
+		self.unigrams = NGramModel(1)
+		if settings.USE_WORD_FREQ:
+			self.unigrams.train_from_file(settings.FILES['training.wordlist'])
+		else:
+			self.unigrams.train([(word, 1) for (word, ) in read_tsv_file(
+				settings.FILES['training.wordlist'], (str, ))])
 
 	def train(self, rules_c):
-		self.ngr_add = NGramModel(3)
-		self.ngr_remove = NGramModel(3)
+		self.ngr_add = NGramModel(1)
+		self.ngr_remove = NGramModel(1)
 		ngram_training_pairs_add = []
 		ngram_training_pairs_remove = []
 		for rule_str, count in rules_c.items():
@@ -210,6 +271,32 @@ class RuleSetPrior:
 		self.ngr_remove.train(ngram_training_pairs_remove)
 	
 	def rule_prob(self, rule_str):
+		rule = Rule.from_string(rule_str)
+		al = align_parts(rule.prefix[0], rule.prefix[1])
+		if rule.alternations:
+			al.append(('.', '.'))
+			for x, y in rule.alternations:
+				al.extend(align_parts(x, y) + [('.', '.')])
+		al.extend(align_parts(rule.suffix[0], rule.suffix[1]))
+		p = 1
+#		print(al)
+		for x, y in al:
+			if x == '.' and y == '.':	# PASS
+				p *= 0.5
+			elif x == y:	# CHECK
+				p *= 0.4**len(x) * self.unigrams.ngram_prob(x)
+			elif not x and y:	# INSERT
+				p *= 0.09999**len(y) * self.unigrams.ngram_prob(y)
+			elif x and not y:
+				p *= 0.00001**len(x) * self.unigrams.ngram_prob(x)
+			else:
+				p *= 0.00001**len(x) * self.unigrams.ngram_prob(x)
+				p *= 0.09999**len(y) * self.unigrams.ngram_prob(y)
+		# TODO parameters probability
+#		p *= 
+		return p
+	
+	def rule_prob_old(self, rule_str):
 		if rule_str == u':/:':
 			return 0.0
 		rule = Rule.from_string(rule_str)

@@ -3,6 +3,7 @@
 import algorithms.align
 import algorithms.fastss
 import algorithms.cooccurrences
+from algorithms.ngrams import NGramModel
 import algorithms.optrules
 from datastruct.counter import *
 from datastruct.rules import *
@@ -93,9 +94,39 @@ def extract_rules_from_substrings(input_file, output_file, wordset=None):
 				words = [(word, int(freq))]
 			else:
 				words.append((word, int(freq)))
-			pp.next()
+			next(pp)
 		if len(words) > 1:
 			extract_rules_from_words(words, cur_substr, outfp)
+
+def filter_rules(graph_file):
+	'''Filter rules according to frequency.'''
+	# Annotate graph with rule frequency
+	# format: w1 w2 rule -> w1 w2 rule freq
+	with open_to_write(graph_file + '.tmp') as graph_tmp_fp:
+		for rule, wordpairs in read_tsv_file_by_key(graph_file, 3, 
+				print_progress=True, print_msg='Counting rule frequency...'):
+			freq = len(wordpairs)
+			for w1, w2 in wordpairs:
+				write_line(graph_tmp_fp, (w1, w2, rule, freq))
+	# sort rules according to frequency
+	sort_file(graph_file + '.tmp', stable=True, numeric=True, reverse=True, key=4)
+	# truncate the graph file to most frequent rules
+	print('Filtering rules...')
+	pp = progress_printer(settings.MAX_NUM_RULES)
+	with open_to_write(graph_file + '.filtered') as graph_fil_fp:
+		num_rules = 0
+		for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file + '.tmp', (3, 4)):
+			try:
+				next(pp)
+			except StopIteration:
+				break
+			for w1, w2 in wordpairs:
+				write_line(graph_fil_fp, (w1, w2, rule))
+			num_rules += 1
+	# cleanup files
+	remove_file(graph_file + '.tmp')
+	rename_file(graph_file, graph_file + '.orig')
+	rename_file(graph_file + '.filtered', graph_file)
 
 def load_wordset(input_file):
 	wordset = set([])
@@ -114,21 +145,17 @@ def run():
 		settings.FILES['surface.graph'], wordset=wordset)
 	sort_file(settings.FILES['surface.graph'], key=(1,2), unique=True)
 	sort_file(settings.FILES['surface.graph'], key=3)
+#	----
 	update_file_size(settings.FILES['surface.graph'])
-##	sort_file(settings.FILES['surface.graph'] + '.comp', key=(1,3), unique=True)
-##	sort_file(settings.FILES['surface.graph'] + '.comp', key=4)
-##	update_file_size(settings.FILES['surface.graph'] + '.comp')
-	filter_new(settings.FILES['surface.graph'])
+	filter_rules(settings.FILES['surface.graph'])
+	update_file_size(settings.FILES['surface.graph'])
+	aggregate_file(settings.FILES['surface.graph'], settings.FILES['surface.rules'], 3)
 	rules = RuleSet()
 	algorithms.optrules.optimize_rules_in_graph(\
 		settings.FILES['training.wordlist'],\
 		settings.FILES['surface.graph'],\
 		settings.FILES['surface.graph'] + '.opt', rules)
 	rename_file(settings.FILES['surface.graph'] + '.opt', settings.FILES['surface.graph'])
-#	algorithms.optrules.calculate_rule_params(\
-#		settings.FILES['training.wordlist'],\
-#		settings.FILES['surface.graph'] + '.comp', 4, rules)
-#	join_compounds_to_graph(settings.FILES['surface.graph'], rules)
 	rules.save_to_file('rules.txt.0')
 
 def evaluate():

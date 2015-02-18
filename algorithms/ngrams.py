@@ -1,3 +1,4 @@
+from datastruct.counter import *
 from utils.files import *
 import settings
 import random
@@ -12,12 +13,16 @@ class NGramModel:
 		self.n = n
 		self.total = 0
 		self.trie = NGramTrie()
+		if settings.USE_TAGS:
+			self.tags = Counter()
 	
 	def train(self, words):
 		total = 0
 		for word, freq in words:
 			if settings.USE_TAGS:
-				word = word[:word.rfind(u'_')]
+				idx = word.rfind(u'_')
+				word, tag = word[:idx], word[idx+1:]
+				self.tags.inc(tag, freq)
 			for ngr in generate_n_grams(word + '#', self.n):
 				self.total += freq
 				self.trie.inc(ngr, freq)
@@ -27,25 +32,35 @@ class NGramModel:
 		self.train(read_tsv_file(filename, (str, int), print_progress=True,\
 			print_msg='Training %d-gram model...' % self.n))
 	
-	def word_prob(self, word):
+	def ngram_prob(self, string):
 		p = 1.0
-		if settings.USE_TAGS:
-			word = word[:word.rfind(u'_')]
-		for ngr in generate_n_grams(word + '#', self.n):
+		for ngr in generate_n_grams(string, self.n):
 			if ngr in self.trie:
 				p *= self.trie[ngr].value
 			else:
 				p *= 1.0 / self.total
 		return p
 	
-	def save_to_file(self, filename):
+	def word_prob(self, word):
+		result = 1.0
+		if settings.USE_TAGS:
+			idx = word.rfind(u'_')
+			word, tag = word[:idx], word[idx+1:]
+			if tag in self.tags:
+				result *= self.tags[tag] / self.tags.total
+			else:
+				result *= 1 / self.tags.total	# smoothing
+		result *= self.ngram_prob(word + '#')
+		return result
+	
+	def save_to_file(self, filename):	#TODO deprecated
 		with open_to_write(filename) as fp:
 			write_line(fp, (u'', self.total))
 			for ngr, p in self.ngrams.items():
 				write_line(fp, (ngr, p))
 	
 	@staticmethod
-	def load_from_file(filename):
+	def load_from_file(filename):	#TODO deprecated
 		model = NGramModel(None)
 		for ngr, p in read_tsv_file(filename, (unicode, float)):
 			if ngr == u'':
@@ -132,24 +147,37 @@ class TrigramHash:
     def __init__(self):
         self.entries = {}
         self.num_words = 0
+        if settings.USE_TAGS:
+            self.tag_entries = {}
     
     def add_to_key(self, word, key):
         if key not in self.entries:
-            self.entries[key] = set([])
+            self.entries[key] = set()
         self.entries[key].add(word)
         
     def add(self, word):
         self.num_words += 1
+        word_full = word
+        if settings.USE_TAGS:
+            idx = word.rfind('_')
+            word, tag = word[:idx], word[idx+1:]
+            if tag not in self.tag_entries:
+                self.tag_entries[tag] = set()
+            self.tag_entries[tag].add(word_full)
+
         for tr in generate_n_grams(''.join(['^', word, '$']), 3):
             if len(tr) == 3:
-                self.add_to_key(word, tr)
-                self.add_to_key(word, '*' + tr[1:])
-                self.add_to_key(word, tr[:-1] + '*')
-                self.add_to_key(word, '*' + tr[1:-1] + '*')
+                self.add_to_key(word_full, tr)
+                self.add_to_key(word_full, '*' + tr[1:])
+                self.add_to_key(word_full, tr[:-1] + '*')
+                self.add_to_key(word_full, '*' + tr[1:-1] + '*')
     
     def __len__(self):
         return self.num_words
                 
     def retrieve(self, trigram):
         return set(self.entries[trigram]) if trigram in self.entries else set([])
+	
+    def retrieve_tag(self, tag):
+        return set(self.tag_entries[tag])
 

@@ -40,8 +40,10 @@ def mask_correct(mask):
 
 # get all substrings of a given word matching the correctness conditions
 def substrings_for_word(word, wordset):
+	if settings.USE_TAGS:
+		word = word[:word.rfind('_')]
 	substrings = [[(word, '0' * len(word))]]
-	for i in range(0, min(len(word)/2, MAX_DIST, len(word)-MIN_LENGTH)):
+	for i in range(0, min(len(word)//2, MAX_DIST, len(word)-MIN_LENGTH)):
 		new_substrings = set([])
 		for s, mask in substrings[i]:
 			for j in range(0, len(s)):
@@ -77,7 +79,7 @@ def generate_substrings(input_file, output_file, wordset):
 				lines_written += 1
 			if bytes_written > MAX_OUTPUT_SIZE:
 				raise Exception("FastSS: maximum output size exceeded!")
-			pp.next()
+			next(pp)
 	set_file_size(output_file, lines_written)
 
 def create_substrings_file(input_file, substrings_file, wordset):

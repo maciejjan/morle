@@ -3,14 +3,16 @@ ENCODING = 'utf-8'
 WORKING_DIR = ''
 
 #MIN_BASE_FREQ = 167
-MIN_RULE_FREQ = 2
+#MIN_RULE_FREQ = 2
+MAX_NUM_RULES = 10000
 MAX_AFFIX_LENGTH = 5
+MAX_PROD = 0.999
 INDEPENDENCY_THRESHOLD = 0.001
 DERIVATION_THRESHOLD = 0.1
 
 SUPERVISED = False
 USE_WORD_FREQ = True
-USE_TAGS = False
+USE_TAGS = True
 DEBUG_MODE = False
 COMPOUNDING_RULES = True
 
@@ -38,7 +40,7 @@ FILES = {
 	'surface.graph' : 'graph.txt',
 	'surface.graph.partitioned' : 'graph_p.txt',
 	'surface.substrings' : 'substrings.txt',
-	'surface.rules'	: 's_rul.txt',
+	'surface.rules'	: 'rules_c.txt',
 	'surface.rules.cooc'	: 's_rul_co.txt',
 	'index' : 'index.txt',
 	'segmentation' : 'segmentation.txt',
@@ -64,7 +66,7 @@ FILES = {
 	'trained.rules.cooc' : 'tr_rules_cooc.txt',
 	'training.inflection' : 'tr_infl.txt',
 	'training.inflection.graph' : 'tr_infl_graph.txt',
-	'training.lexicon' : 'lexicon.training',
+	'training.lexicon' : 'input.training',
 	'training.wordlist' : 'input.training',
 	'training.substrings' : 'tr_substrings.txt',
 	'training.surface.graph' : 'tr_graph.txt',
@@ -210,7 +212,6 @@ def load_settings(filename):
 def save_settings(filename):
 	with open(WORKING_DIR+filename, 'w+') as fp:
 		fp.write('MAX_AFFIX_LENGTH = ' + str(MAX_AFFIX_LENGTH) + '\n')
-		fp.write('MIN_RULE_FREQ = ' + str(MIN_RULE_FREQ) + '\n')
 		fp.write('INDEPENDENCY_THRESHOLD = ' + str(INDEPENDENCY_THRESHOLD) + '\n')
 		fp.flush()
 
