@@ -48,55 +48,52 @@ def main(mode, modules):
 	MODE_RUN = 'run'
 
 	MODULE_SRULES = 'srules'
-	MODULE_LEXEMES = 'infl'
-	MODULE_MDL_TRAIN = 'mdl-train'
-	MODULE_MDL_ANALYZE = 'mdl-analyze'
-	MODULE_TAG = 'tag'
-	MODULE_DERIV = 'deriv'
+#	MODULE_LEXEMES = 'infl'
 	MODULE_TRAIN = 'train'
+	MODULE_ANALYZE = 'analyze'
+#	MODULE_TAG = 'tag'
+#	MODULE_DERIV = 'deriv'
 
 	if MODE_IMPORT in mode:
 		if MODULE_SRULES in modules:
 			surface_rules.import_from_db()
-		if MODULE_LEXEMES in modules:
-			lexemes.import_from_db()
-		if MODULE_DERIV in modules:
-			derivation.import_from_db()
+#		if MODULE_LEXEMES in modules:
+#			lexemes.import_from_db()
+#		if MODULE_DERIV in modules:
+#			derivation.import_from_db()
 		if MODULE_TRAIN in modules:
 			train.import_from_db()
 	if MODE_RUN in mode:
 		if MODULE_SRULES in modules:
 			surface_rules.run()
-		if MODULE_LEXEMES in modules:
-			lexemes.run()
-		if MODULE_DERIV in modules:
-			derivation.run()
+#		if MODULE_LEXEMES in modules:
+#			lexemes.run()
+#		if MODULE_DERIV in modules:
+#			derivation.run()
 		if MODULE_TRAIN in modules:
 			train.run()
-		if MODULE_MDL_TRAIN in modules:
-			mdltrain.run()
-		if MODULE_MDL_ANALYZE in modules:
-			mdlanalyze.run()
-		if MODULE_TAG in modules:
-			tag.run()
+		if MODULE_ANALYZE in modules:
+			analyze.run()
+#		if MODULE_TAG in modules:
+#			tag.run()
 	if MODE_EVAL in mode:
 		if MODULE_SRULES in modules:
 			surface_rules.evaluate()
-		if MODULE_LEXEMES in modules:
-			lexemes.evaluate()
-		if MODULE_DERIV in modules:
-			derivation.evaluate()
+#		if MODULE_LEXEMES in modules:
+#			lexemes.evaluate()
+#		if MODULE_DERIV in modules:
+#			derivation.evaluate()
 		if MODULE_TRAIN in modules:
 			train.evaluate()
-		if MODULE_MDL_ANALYZE in modules:
-			mdlanalyze.evaluate()
+		if MODULE_ANALYZE in modules:
+			analyze.evaluate()
 	if MODE_EXPORT in mode:
 		if MODULE_SRULES in modules:
 			surface_rules.export_to_db()
-		if MODULE_LEXEMES in modules:
-			lexemes.export_to_db()
-		if MODULE_DERIV in modules:
-			derivation.export_to_db()
+#		if MODULE_LEXEMES in modules:
+#			lexemes.export_to_db()
+#		if MODULE_DERIV in modules:
+#			derivation.export_to_db()
 		if MODULE_TRAIN in modules:
 			train.export_to_db()
 

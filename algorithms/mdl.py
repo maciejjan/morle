@@ -45,8 +45,8 @@ def check_rules(lexicon):
 			for rule, w2 in w.next.items():
 				if rule not in rules_gain:
 					rules_gain[rule] = 0.0
-				rules_gain[rule] += gain[w2.word]
-				write_line(fp, (w2.word, gain[w2.word], rule))
+				rules_gain[rule] += gain[w2.key()]
+				write_line(fp, (w2.key(), gain[w2.key()], rule))
 	# compute rule score and filter rules
 	rules_score = []
 	for rule, g in rules_gain.items():

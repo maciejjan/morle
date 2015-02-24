@@ -4,6 +4,7 @@ from algorithms.align import lcs
 import algorithms.ngrams
 from utils.files import *
 import settings
+import copy
 import heapq
 import math
 
@@ -30,18 +31,26 @@ def align_words(word_1, word_2):
 class LexiconNode:
 	def __init__(self, word, freq, root_prob):
 		self.word = word
+		self.tag = None
+		if settings.USE_TAGS:
+			idx = word.rfind('_')
+			self.word = word[:idx]
+			self.tag = word[idx+1:]
 		self.freq = freq
 		self.freqcl = None
 		self.root_prob = root_prob
 		self.log_root_prob = math.log(root_prob)
 		self.prev = None
 		self.next = {}
-		self.training = True
+#		self.training = True
 #		self.structure = None
 
-	def __lt__(self, other):
-		return self.word < other.word
+	def key(self):
+		return self.word + ('_'+self.tag if settings.USE_TAGS else '')
 
+	def __lt__(self, other):
+		return self.key() < other.key()
+	
 	def root(self):
 		root = self
 		while root.prev is not None:
@@ -52,7 +61,7 @@ class LexiconNode:
 		if self.prev is None:
 			return None
 		else:
-			return self.prev.edge_label(self.word)
+			return self.prev.edge_label(self.key())
 	
 	def depth(self):
 		if self.prev is None:
@@ -60,18 +69,18 @@ class LexiconNode:
 		else:
 			return 1 + self.prev.depth()
 
-	def edge_label(self, word):
+	def edge_label(self, key):
 		for r, w in self.next.items():
-			if w.word == word:
+			if w.key() == key:
 				return r
-		raise Exception('%s: no edge label for %s.' % (self.word, word))
+		raise Exception('%s: no edge label for %s.' % (self.key(), key))
 	
 	def analysis(self):
 		analysis = []
 		node = self
 		while node.prev is not None:
 			node = node.prev
-			analysis.append(node.word)
+			analysis.append(node.key())
 		return analysis
 	
 #	def analysis_stems(self):
@@ -139,7 +148,7 @@ class LexiconNode:
 		return analysis
 
 	def show_tree(self, space=''):
-		print(space + self.word, self.freq) #, self.sigma
+		print(space + self.key(), self.freq) #, self.sigma
 		for w in self.next.values():
 			w.show_tree(space=space+'\t')
 
@@ -149,7 +158,7 @@ class LexiconNode:
 			w.show_tree_with_prod(rules, space=space+'- ', prod=rules[r].prod, rule=r)
 	
 	def words_in_tree(self):
-		result = [self.word]
+		result = [self.key()]
 		for w in self.next.values():
 			result.extend(w.words_in_tree())
 		return result
@@ -200,20 +209,6 @@ class LexiconNode:
 			w.show_split_tree(space=space+'\t')
 
 class Lexicon:
-	# Lexicon properties:
-	# - rootdistr -- word (root) generator (n-gram based)
-	# - key -- which features from a feature vector to use as a key
-	#          (configurable)
-	# - rules -- RuleSet
-	# - rules_c
-	# - nodes
-	# - roots
-	#
-	# at construction/loading from file: 
-	# - rules present? -> use them
-	# - no rules? -> estimate from lexicon (same result, but long computation)
-	# - no rootdist? -> estimate from lexicon roots
-
 	def __init__(self, rootdist=None, ruleset=None):
 		self.nodes = {}
 		self.roots = set([])
@@ -298,13 +293,13 @@ class Lexicon:
 	
 	def draw_edge(self, word_1, word_2, rule):
 		w1, w2 = self.nodes[word_1], self.nodes[word_2]
-		if w1.prev is not None and w1.prev.word == word_2:
+		if w1.prev is not None and w1.prev.key() == word_2:
 			raise Exception('Cycle detected: %s, %s' % (word_1, word_2))
 		if w2.prev is not None:
 			raise Exception('draw_edge: %s has already got an ingoing edge.' % word_2)
 		if rule in w1.next:
 			raise Exception('draw_edge: %s has already got an outgoing edge %s: %s.' %\
-				(word_1, rule, w1.next[rule].word))
+				(word_1, rule, w1.next[rule].key()))
 		# draw the edge
 		w2.prev = w1
 		w1.next[rule] = w2
@@ -329,6 +324,9 @@ class Lexicon:
 			return math.log(r.prod)-math.log(1-r.prod)
 
 		def complete_tags(node):
+			if node.word.rfind('_') == -1:
+				tag = max(list(self.rootdist.tags.items()), key=lambda x:x[1])[0]
+				node.word += '_' + tag
 			for rule, n in node.next.items():
 				if n.word.rfind('_') == -1:
 					n.word += '_' + self.ruleset[rule].rule_obj.tag[1]
@@ -336,11 +334,21 @@ class Lexicon:
 
 		if word in self.nodes:
 			return None, None, self.nodes[word], 0.0
+		if settings.USE_TAGS and word.rfind('_') == -1:
+			for word2 in self.nodes.keys():
+				if word2.startswith(word+'_'):
+					return None, None, self.nodes[word2], 0.0
 		root_prob = self.rootdist.word_prob(word)
 		base, rule, subtree = None, None, LexiconNode(word, 0, root_prob)
 		cost = -math.log(root_prob)
 
-		queue = [(cost, subtree, word, None, 0)]
+		if settings.USE_TAGS and word.rfind('_') == -1:
+			tag = max(list(self.rootdist.tags.items()), key=lambda x:x[1])[0]
+			cost = -math.log(self.rootdist.word_prob(word+'_'+tag))
+#			print(cost, word+'_'+tag)
+			queue = [(cost, subtree, word+'_'+tag, None, 0)]
+		else:
+			queue = [(cost, subtree, word, None, 0)]
 		for r in self.ruleset.values():
 			if settings.USE_TAGS and word.rfind('_') == -1:
 				queue.append((-cost_with_rule(r), subtree, word+'_'+r.rule_obj.tag[1], r, 1))
@@ -372,16 +380,20 @@ class Lexicon:
 				break
 			# else: look further for the analysis of the base word
 			else:
+				n_subtree = copy.deepcopy(n_subtree)
 				new_node = LexiconNode(n_base, 0, self.rootdist.word_prob(n_base))
 				new_node.next[n_r.rule] = n_subtree
 				n_subtree.prev = new_node
-				for r in self.ruleset.values():
-					if r.rule_obj.rmatch(n_base):
-						if max_depth is not None and n_depth == max_depth:
-							base_cost = math.log(self.rootdist.word_prob(n_base))
-							heapq.heappush(queue, (n_cost - cost_with_rule(r) - base_cost,\
-												   new_node, n_base, r, n_depth+1))
-						else:
+				base_cost = math.log(self.rootdist.word_prob(n_base))
+				heapq.heappush(queue, (n_cost - base_cost,\
+									   new_node, n_base, None, n_depth))
+				if max_depth is None or n_depth < max_depth:
+					for r in self.ruleset.values():
+						if r.rule_obj.rmatch(n_base):
+#						if max_depth is not None and n_depth == max_depth:
+#							base_cost = math.log(self.rootdist.word_prob(n_base))
+#							heapq.heappush(queue, (n_cost - cost_with_rule(r) - base_cost,\
+#												   new_node, n_base, r, n_depth+1))
 							heapq.heappush(queue, (n_cost - cost_with_rule(r),\
 												   new_node, n_base, r, n_depth+1))
 
@@ -429,7 +441,7 @@ class Lexicon:
 		for n in self.nodes.values():
 			n.prev = None
 			n.next = {}
-			self.roots.add(n.word)
+			self.roots.add(n.key())
 	
 	def recalculate_freqcl(self):
 		for w in self.values():
@@ -440,15 +452,15 @@ class Lexicon:
 			w2 = self.nodes[word_2]
 			write_line(fp, (word_1, word_2, rule, w2.freq, w2.root_prob))
 			for next_rule, next_word in w2.next.items():
-				write_subtree(fp, word_2, next_word.word, next_rule)
+				write_subtree(fp, word_2, next_word.key(), next_rule)
 		with open_to_write(filename) as fp:
 			for rt in self.roots:
 				write_subtree(fp, '', rt, '')
 	
 	def analyses_morphochal(self, filename):
 		with open_to_write(filename) as fp:
-			for w in sorted(self.values(), key=lambda x: x.word):
-				write_line(fp, (w.word, ' '.join(w.analysis_morphochal())))
+			for w in sorted(self.values(), key=lambda x: x.key()):
+				write_line(fp, (w.key(), ' '.join(w.analysis_morphochal())))
 
 	def save_splits(self, filename):
 		for r in self.roots:
@@ -490,12 +502,10 @@ class Lexicon:
 				lexicon.max_freq = freq
 			if word_1 and rule and rule in ruleset:
 				lexicon.draw_edge(word_1, word_2, rule)
-			else:
-				lexicon.roots.add(word_2)
 		lexicon.recalculate_freqcl()
 		# train roots distribution #TODO what about tags?
 		lexicon.rootdist = NGramModel(1)
-		lexicon.rootdist.train([(lexicon[rt].word, lexicon[rt].freq)\
+		lexicon.rootdist.train([(lexicon[rt].key(), lexicon[rt].freq)\
 			for rt in lexicon.roots])
 		return lexicon
 
@@ -508,6 +518,6 @@ class Lexicon:
 	def load_model(rules_file, lexicon_file):
 		'''Load rules and lexicon.'''
 		ruleset = RuleSet.load_from_file(rules_file)
-		lexicon = load_from_file(lexicon_file, ruleset)
+		lexicon = Lexicon.load_from_file(lexicon_file, ruleset)
 		return lexicon
 	
