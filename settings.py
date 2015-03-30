@@ -4,26 +4,30 @@ WORKING_DIR = ''
 
 #MIN_BASE_FREQ = 167
 #MIN_RULE_FREQ = 2
+ROOTDIST_N = 1
 MAX_NUM_RULES = 10000
 MAX_AFFIX_LENGTH = 5
 MAX_PROD = 0.999
-INDEPENDENCY_THRESHOLD = 0.001
-DERIVATION_THRESHOLD = 0.1
+#INDEPENDENCY_THRESHOLD = 0.001
+#DERIVATION_THRESHOLD = 0.1
 
 SUPERVISED = False
-USE_WORD_FREQ = True
-USE_TAGS = True
-DEBUG_MODE = False
+USE_WORD_FREQ = False
+USE_TAGS = False
+#DEBUG_MODE = False
 COMPOUNDING_RULES = True
+LEMMAS_KNOWN = True
 
 # load settings from file or create a settings file
 def process_settings_file():
 	import os.path
 	global FILES
-	if os.path.isfile(FILES['settings']):
-		load_settings(FILES['settings'])
+	if os.path.isfile(WORKING_DIR+FILES['settings']):
+		print('Loading settings...')
+		load_settings(WORKING_DIR+FILES['settings'])
 	else:
-		save_settings(FILES['settings'])
+		print('Saving settings...')
+		save_settings(WORKING_DIR+FILES['settings'])
 
 ## filenames
 FILES = {
@@ -66,7 +70,7 @@ FILES = {
 	'trained.rules.cooc' : 'tr_rules_cooc.txt',
 	'training.inflection' : 'tr_infl.txt',
 	'training.inflection.graph' : 'tr_infl_graph.txt',
-	'training.lexicon' : 'input.training',
+	'training.lexicon' : 'lexicon.training',
 	'training.wordlist' : 'input.training',
 	'training.substrings' : 'tr_substrings.txt',
 	'training.surface.graph' : 'tr_graph.txt',
@@ -76,7 +80,10 @@ FILES = {
 	'model.rules' : 'rules.txt',
 	'model.ngrams' : 'unigrams.txt',
 	'testing.wordlist' : 'input.testing',
-	'analyses' : 'analyses.txt'
+	'analyses' : 'analyses.txt',
+
+	'wordgen.output' : 'wordgen.txt',
+	'full.wordlist' : 'wordlist-full.txt'
 }
 
 # DB access data
@@ -194,24 +201,48 @@ WORDS_TABLE = ('words', '''CREATE TABLE `words`(
 ''')
 
 def load_settings(filename):
-	with open(WORKING_DIR+filename) as fp:
+	with open(filename) as fp:
 		for line in fp:
-			if line.strip().startswith(';'):
+			if line.strip().startswith(';'):	# comments
 				continue
 			content = [c.strip() for c in line.strip().split('=')]
 			if content[0] == 'MAX_AFFIX_LENGTH':
 				global MAX_AFFIX_LENGTH
 				MAX_AFFIX_LENGTH = int(content[1])
-			elif content[0] == 'MIN_RULE_FREQ':
-				global MIN_RULE_FREQ
-				MIN_RULE_FREQ = int(content[1])
-			elif content[0] == 'INDEPENDENCY_THRESHOLD':
-				global INDEPENDENCY_THRESHOLD
-				INDEPENDENCY_THRESHOLD = float(content[1])
+#			elif content[0] == 'MIN_RULE_FREQ':
+#				global MIN_RULE_FREQ
+#				MIN_RULE_FREQ = int(content[1])
+#			elif content[0] == 'INDEPENDENCY_THRESHOLD':
+#				global INDEPENDENCY_THRESHOLD
+#				INDEPENDENCY_THRESHOLD = float(content[1])
+			elif content[0] == 'MAX_NUM_RULES':
+				global MAX_NUM_RULES
+				MAX_NUM_RULES = int(content[1])
+			elif content[0] == 'ROOTDIST_N':
+				global ROOTDIST_N
+				ROOTDIST_N = int(content[1])
+			elif content[0] == 'SUPERVISED':
+				global SUPERVISED
+				SUPERVISED = True if content[1] == 'True' else False
+			elif content[0] == 'USE_WORD_FREQ':
+				global USE_WORD_FREQ
+				USE_WORD_FREQ = True if content[1] == 'True' else False
+			elif content[0] == 'USE_TAGS':
+				global USE_TAGS
+				USE_TAGS = True if content[1] == 'True' else False
+			elif content[0] == 'LEMMAS_KNOWN':
+				global LEMMAS_KNOWN
+				LEMMAS_KNOWN = True if content[1] == 'True' else False
 
 def save_settings(filename):
-	with open(WORKING_DIR+filename, 'w+') as fp:
+	with open(filename, 'w+') as fp:
 		fp.write('MAX_AFFIX_LENGTH = ' + str(MAX_AFFIX_LENGTH) + '\n')
-		fp.write('INDEPENDENCY_THRESHOLD = ' + str(INDEPENDENCY_THRESHOLD) + '\n')
+		fp.write('ROOTDIST_N = ' + str(ROOTDIST_N) + '\n')
+#		fp.write('INDEPENDENCY_THRESHOLD = ' + str(INDEPENDENCY_THRESHOLD) + '\n')
+		fp.write('MAX_NUM_RULES = ' + str(MAX_NUM_RULES) + '\n')
+		fp.write('SUPERVISED = ' + str(SUPERVISED) + '\n')
+		fp.write('USE_WORD_FREQ = ' + str(USE_WORD_FREQ) + '\n')
+		fp.write('USE_TAGS = ' + str(USE_TAGS) + '\n')
+		fp.write('LEMMAS_KNOWN = ' + str(LEMMAS_KNOWN) + '\n')
 		fp.flush()
 

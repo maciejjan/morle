@@ -95,7 +95,7 @@ def update_index_file():
 			write_line(fp, (filename, size))
 
 def file_exists(filename):
-	return os.path.isfile(filename)
+	return os.path.isfile(settings.WORKING_DIR + filename)
 
 def rename_file(old, new):
 	os.rename(settings.WORKING_DIR + old, settings.WORKING_DIR + new)

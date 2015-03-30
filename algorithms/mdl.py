@@ -19,7 +19,7 @@ def check_rules(lexicon):
 	edges = []
 	for word_1, freq_1, word_2, freq_2, rule, weight, delta_logl, d1, d2 in\
 			read_tsv_file('edges.txt',\
-			(str, int, str, int, str, int, float, float, float),\
+			(str, str, str, str, str, str, float, float, float),\
 			print_progress=True, print_msg='Checking rules...'):
 		edges.append((word_1, word_2, rule, delta_logl))
 	edges.sort(reverse=True, key=lambda x: x[3])
@@ -80,7 +80,9 @@ def optimize_lexicon(lexicon):
 				print_progress=True, print_msg='Computing edge scores...'):
 			if rule in lexicon.ruleset:
 				delta_logl = lexicon.try_edge(word_1, word_2, rule)
-				delta_cor_logl = math.log(lexicon.ruleset[rule].freqprob(lexicon[word_2].freqcl - lexicon[word_1].freqcl))
+				delta_cor_logl = 0.0
+				if settings.USE_WORD_FREQ:
+					delta_cor_logl = math.log(lexicon.ruleset[rule].freqprob(lexicon[word_2].freqcl - lexicon[word_1].freqcl))
 				write_line(outfp, (word_1, lexicon[word_1].freqcl, word_2, lexicon[word_2].freqcl,\
 					rule, int(lexicon.ruleset[rule].freqcl), 
 					'{:.4}'.format(delta_logl), 
@@ -209,7 +211,7 @@ def optimize_rule_params(lexicon):
 
 def load_training_file_with_freq(filename):
 	ruleset = RuleSet()
-	rootdist = algorithms.ngrams.NGramModel(1)
+	rootdist = algorithms.ngrams.NGramModel(settings.ROOTDIST_N)
 	rootdist.train_from_file(filename)
 	lexicon = Lexicon(rootdist=rootdist, ruleset=ruleset)
 
@@ -229,7 +231,7 @@ def load_training_file_with_freq(filename):
 
 def load_training_file_without_freq(filename):
 	ruleset = RuleSet()
-	rootdist = algorithms.ngrams.NGramModel(1)
+	rootdist = algorithms.ngrams.NGramModel(settings.ROOTDIST_N)
 	rootdist.train([(word, 1) for (word,) in read_tsv_file(filename, (str,))])
 	lexicon = Lexicon(rootdist=rootdist, ruleset=ruleset)
 

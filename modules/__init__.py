@@ -1,1 +1,1 @@
-__all__ = ['surface_rules', 'train', 'analyze']
+__all__ = ['surface_rules', 'train', 'analyze', 'wordgen', 'inflect', 'recognize']

@@ -84,19 +84,36 @@ def extract_rules_from_words(words, substring, outfp, wordset):
 def extract_rules_from_substrings(input_file, output_file, wordset=None):
 	cur_substr, words = '', []
 	pp = progress_printer(get_file_size(input_file))
-	print('Extracting rules from substrings...')
 	with open_to_write(output_file) as outfp:
-		for s_len, substr, word, freq in read_tsv_file(input_file):	# TODO _by_key
-			if substr != cur_substr:
-				if len(words) > 1:
-					extract_rules_from_words(words, cur_substr, outfp, wordset)
-				cur_substr = substr
-				words = [(word, int(freq))]
-			else:
-				words.append((word, int(freq)))
-			next(pp)
-		if len(words) > 1:
-			extract_rules_from_words(words, cur_substr, outfp)
+		for substr, rest in read_tsv_file_by_key(input_file, 2, print_progress=True,\
+				print_msg='Extracting rules from substrings...'):
+			words = [(word, freq) for (s_len, word, freq) in rest]
+			extract_rules_from_words(words, substr, outfp, wordset)
+#		for s_len, substr, word, freq in read_tsv_file(input_file):	# TODO _by_key
+#			if substr != cur_substr:
+#				if len(words) > 1:
+#					extract_rules_from_words(words, cur_substr, outfp, wordset)
+#				cur_substr = substr
+#				words = [(word, int(freq))]
+#			else:
+#				words.append((word, int(freq)))
+#			next(pp)
+#		if len(words) > 1:
+#			extract_rules_from_words(words, cur_substr, outfp, wordset)
+
+def filter_lemmas(graph_file):
+	lemmas = set()
+	for word, freq, base in read_tsv_file('lexicon.full', (str, int, str),\
+			print_progress=True, print_msg='Loading lemmas...'):
+		lemmas.add(base)
+	rename_file('graph.txt', 'graph.txt.unfil')
+	update_file_size('graph.txt.unfil')
+	with open_to_write('graph.txt') as outfp:
+		for word_1, word_2, rule in read_tsv_file('graph.txt.unfil', (str, str, str),\
+				print_progress=True, print_msg='Filtering...'):
+			if word_1 in lemmas and word_2 not in lemmas:	# TODO analiza -> analizy not in graph!
+				write_line(outfp, (word_1, word_2, rule))
+	update_file_size('graph.txt')
 
 def filter_rules(graph_file):
 	'''Filter rules according to frequency.'''
@@ -147,6 +164,8 @@ def run():
 	sort_file(settings.FILES['surface.graph'], key=3)
 #	----
 	update_file_size(settings.FILES['surface.graph'])
+	if settings.LEMMAS_KNOWN:
+		filter_lemmas(settings.FILES['surface.graph'])
 	filter_rules(settings.FILES['surface.graph'])
 	update_file_size(settings.FILES['surface.graph'])
 	aggregate_file(settings.FILES['surface.graph'], settings.FILES['surface.rules'], 3)

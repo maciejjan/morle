@@ -34,8 +34,9 @@ class LexiconNode:
 		self.tag = None
 		if settings.USE_TAGS:
 			idx = word.rfind('_')
-			self.word = word[:idx]
-			self.tag = word[idx+1:]
+			if idx > -1:
+				self.word = word[:idx]
+				self.tag = word[idx+1:]
 		self.freq = freq
 		self.freqcl = None
 		self.root_prob = root_prob
@@ -163,6 +164,13 @@ class LexiconNode:
 			result.extend(w.words_in_tree())
 		return result
 	
+	def search(self):
+		'''Depth-first search.'''
+		yield self
+		for n in self.next.values():
+			for x in n.search():
+				yield x
+	
 	def annotate_word_structure(self, depth=0):
 		self.structure = [depth] * len(self.word)
 		node = self
@@ -256,11 +264,12 @@ class Lexicon:
 #		self.total += freq
 		self.roots.add(word)
 		# frequency class
-		if freq > self.max_freq:
-			self.max_freq = freq
-			self.recalculate_freqcl()
-		else:
-			self.nodes[word].freqcl = freqcl(freq, self.max_freq)
+		if settings.USE_WORD_FREQ:
+			if freq > self.max_freq:
+				self.max_freq = freq
+				self.recalculate_freqcl()
+			else:
+				self.nodes[word].freqcl = freqcl(freq, self.max_freq)
 	
 	def logl(self):
 		result = 0
@@ -315,92 +324,109 @@ class Lexicon:
 		del w1.next[rule]
 		w2.prev = None
 	
-	def try_word(self, word, max_depth=None):
+	def try_word(self, word, max_depth=None, max_results=1, ignore_lex_depth=False):
 		'''Compute the minimum cost of adding a new word.'''
-		# if tags used -> return also tag
 		# TODO frequency class
 
 		def cost_with_rule(r):
 			return math.log(r.prod)-math.log(1-r.prod)
 
-		def complete_tags(node):
-			if node.word.rfind('_') == -1:
-				tag = max(list(self.rootdist.tags.items()), key=lambda x:x[1])[0]
-				node.word += '_' + tag
-			for rule, n in node.next.items():
-				if n.word.rfind('_') == -1:
-					n.word += '_' + self.ruleset[rule].rule_obj.tag[1]
-				complete_tags(n)
+		def expand_queue(queue, cost, subtree, base, r, depth):
+			# add as a root
+			base_prob = self.rootdist.word_prob(base)
+			new_node = LexiconNode(base, 0, base_prob)
+			#   link the new node into the subtree
+			if subtree is not None and r is not None:
+				subtree = copy.deepcopy(subtree)
+				new_node.next[r.rule] = subtree
+				subtree.prev = new_node
+			#   fill in the missing tag with the most common one
+			if settings.USE_TAGS and new_node.tag is None:
+				new_node_t = copy.copy(new_node)
+				new_node_t.tag = max(list(self.rootdist.tags.items()),\
+				                     key=lambda x:x[1])[0]
+				base_prob_t = self.rootdist.word_prob(new_node_t.key())
+				new_node_t.root_prob = base_prob_t
+				base_cost_t = math.log(base_prob_t)
+				heapq.heappush(queue, (cost - base_cost_t,\
+									   new_node_t, new_node_t.key(), None, depth))
+			else:	# tag already provided
+				base_cost = math.log(base_prob)
+				heapq.heappush(queue, (cost - base_cost,\
+									   new_node, base, None, depth))
+			# add all possible derivations
+			if max_depth is None or depth < max_depth:
+				for r2 in self.ruleset.values():
+					base_t = base + ('_' + r2.rule_obj.tag[1]\
+							if settings.USE_TAGS and new_node.tag is None\
+							else '')
+					if r2.rule_obj.rmatch(base_t):
+						if settings.USE_TAGS and new_node.tag is None:
+							# fill in the missing tag
+							new_node_t = copy.copy(new_node)
+							new_node_t.tag = r2.rule_obj.tag[1]
+							base_t = base + '_' + new_node_t.tag
+							heapq.heappush(queue, (cost - cost_with_rule(r2),\
+												   new_node_t, base_t, r2, depth+1))
+						else:		# tag already provided
+							heapq.heappush(queue, (cost - cost_with_rule(r2),\
+												   new_node, base, r2, depth+1))
 
+		results, queue, max_cost = [], [], 0.0
+
+		# if the word is contained in lexicon, add it to results
 		if word in self.nodes:
-			return None, None, self.nodes[word], 0.0
+			results.append((None, None, self.nodes[word], 0.0))
 		if settings.USE_TAGS and word.rfind('_') == -1:
 			for word2 in self.nodes.keys():
 				if word2.startswith(word+'_'):
-					return None, None, self.nodes[word2], 0.0
-		root_prob = self.rootdist.word_prob(word)
-		base, rule, subtree = None, None, LexiconNode(word, 0, root_prob)
-		cost = -math.log(root_prob)
+					results.append((None, None, self.nodes[word2], 0.0))
 
-		if settings.USE_TAGS and word.rfind('_') == -1:
-			tag = max(list(self.rootdist.tags.items()), key=lambda x:x[1])[0]
-			cost = -math.log(self.rootdist.word_prob(word+'_'+tag))
-#			print(cost, word+'_'+tag)
-			queue = [(cost, subtree, word+'_'+tag, None, 0)]
-		else:
-			queue = [(cost, subtree, word, None, 0)]
-		for r in self.ruleset.values():
-			if settings.USE_TAGS and word.rfind('_') == -1:
-				queue.append((-cost_with_rule(r), subtree, word+'_'+r.rule_obj.tag[1], r, 1))
-			else:
-				queue.append((-cost_with_rule(r), subtree, word, r, 1))
-		heapq.heapify(queue)
-		while True:
+		# initialize the queue
+		expand_queue(queue, 0.0, None, word, None, 0)
+
+		# main loop: process the queue entries
+		while queue:
 			n_cost, n_subtree, n_word, n_r, n_depth = heapq.heappop(queue)
-			if max_depth is not None and n_depth > max_depth:
-				base, rule, subtree, cost = None, None, n_subtree, n_cost
+			
+			# if results full and next cost bigger -> break and return
+			if len(results) >= max_results and n_cost > max_cost:
 				break
-			if n_cost > cost: break		# the current analysis is the best one
-			# if the current word is a root -> break
-			if n_r is None:
-				base, rule, subtree, cost = None, None, n_subtree, n_cost
-				break
-			# else: find out the base word for the current word
-			n_base = None
-			for n_base in n_r.rule_obj.reverse().apply(n_word):
-				if n_base in self.nodes:
-					break
-			if n_base is None:		# TODO it shouldn't happen (but: pfarrbüros)
-				continue
-			# if the base word is in lexicon -> break
-			if n_base in self.nodes:
-				if settings.USE_TAGS and n_subtree.word.rfind('_') == -1:
-					n_subtree.word += '_' + n_r.rule_obj.tag[1]
-				base, rule, subtree, cost = n_base, n_r.rule, n_subtree, n_cost
-				break
-			# else: look further for the analysis of the base word
-			else:
-				n_subtree = copy.deepcopy(n_subtree)
-				new_node = LexiconNode(n_base, 0, self.rootdist.word_prob(n_base))
-				new_node.next[n_r.rule] = n_subtree
-				n_subtree.prev = new_node
-				base_cost = math.log(self.rootdist.word_prob(n_base))
-				heapq.heappush(queue, (n_cost - base_cost,\
-									   new_node, n_base, None, n_depth))
-				if max_depth is None or n_depth < max_depth:
-					for r in self.ruleset.values():
-						if r.rule_obj.rmatch(n_base):
-#						if max_depth is not None and n_depth == max_depth:
-#							base_cost = math.log(self.rootdist.word_prob(n_base))
-#							heapq.heappush(queue, (n_cost - cost_with_rule(r) - base_cost,\
-#												   new_node, n_base, r, n_depth+1))
-							heapq.heappush(queue, (n_cost - cost_with_rule(r),\
-												   new_node, n_base, r, n_depth+1))
 
-		# complete tags in the subtree
-		if settings.USE_TAGS:
-			complete_tags(subtree)
-		return base, rule, subtree, -cost
+			# if the current node is a root -> append to results
+			if n_r is None:
+				results.append((None, None, n_subtree, n_cost))
+				max_cost = max(max_cost, n_cost)
+			# else: generate possible bases and analyze them further
+			else:
+				for n_base in n_r.rule_obj.reverse().apply(n_word):
+					if n_base in self.nodes and\
+							((ignore_lex_depth and n_depth <= max_depth) or\
+							(self.nodes[n_base].depth() + n_depth <= max_depth)):
+						results.append((n_base, n_r.rule, n_subtree, n_cost))
+						max_cost = max(max_cost, n_cost)
+					else:
+						expand_queue(queue, n_cost, n_subtree, n_base, n_r, n_depth)
+
+		results.sort(key=lambda x: x[3])		# sort results according to cost
+		return results[:max_results]
+	
+	def generate(self, base, tag):
+		'''Generate an inflected form for a given base and tag.'''
+
+		def cost_with_rule(r):
+			return math.log(r.prod)-math.log(1-r.prod)
+
+		if base in self.nodes:
+			for n in self.nodes[base].next.values():
+				if n.tag == tag:
+					return n.key(), 0.0
+		results = []
+		for r in self.ruleset.values():
+			if r.rule_obj.tag[1] == tag and r.rule_obj.lmatch(base):
+				results.extend([(word, -cost_with_rule(r))\
+					for word in r.rule_obj.apply(base)])
+		return min(results, key=lambda x: x[1]) if results else None
 
 	def expand(self, max_words=None, max_cost=0.0):
 		'''Generate new words with low cost.'''
@@ -408,6 +434,8 @@ class Lexicon:
 		def cost_with_rule(r):
 			return math.log(r.prod)-math.log(1-r.prod)
 
+		max_freqcl = max([w.freqcl for w in self.values()])\
+			if settings.USE_WORD_FREQ else None
 		trh = TrigramHash()
 		for word in self.nodes.keys():
 			trh.add(word)
@@ -429,10 +457,15 @@ class Lexicon:
 				w = self.nodes[word]
 				if r.rule not in w.next:
 					cost = cost_with_rule(r)
+					if settings.USE_WORD_FREQ:
+						freqcl = max_freqcl + 1 - w.freqcl
+						cost += r.freqprob(freqcl)
 					results.extend([(word2, cost) \
 						for word2 in r.rule_obj.apply(word)\
-							if word2 not in self.nodes])
+							if word2 not in self.nodes and cost > max_cost])
 
+		if settings.USE_WORD_FREQ:
+			results.sort(reverse=True, key=lambda x: x[1])
 		return results
 
 	def reset(self):
@@ -473,7 +506,7 @@ class Lexicon:
 	def init_from_file(filename, rootdist=None, ruleset=None):	# TODO
 		'''Create a lexicon with no edges from a wordlist.'''
 		if rootdist is None:
-			rootdist = algorithms.ngrams.NGramModel(1)	# TODO what about tags?
+			rootdist = algorithms.ngrams.NGramModel(settings.ROOTDIST_N)	# TODO what about tags?
 			rootdist.train_from_file(filename)
 		lexicon = Lexicon(rootdist, ruleset)
 		if settings.USE_WORD_FREQ:
@@ -483,7 +516,7 @@ class Lexicon:
 				if freq > lexicon.max_freq:
 					lexicon.max_freq = freq
 		else:
-			for word in read_tsv_file(filename, (str, )):
+			for (word, ) in read_tsv_file(filename, (str, )):
 				lexicon[word] = LexiconNode(word, 0, rootdist.word_prob(word))
 				lexicon.roots.add(word)
 		if settings.USE_WORD_FREQ:
@@ -502,9 +535,10 @@ class Lexicon:
 				lexicon.max_freq = freq
 			if word_1 and rule and rule in ruleset:
 				lexicon.draw_edge(word_1, word_2, rule)
-		lexicon.recalculate_freqcl()
-		# train roots distribution #TODO what about tags?
-		lexicon.rootdist = NGramModel(1)
+		if settings.USE_WORD_FREQ:
+			lexicon.recalculate_freqcl()
+		# train roots distribution
+		lexicon.rootdist = NGramModel(settings.ROOTDIST_N)
 		lexicon.rootdist.train([(lexicon[rt].key(), lexicon[rt].freq)\
 			for rt in lexicon.roots])
 		return lexicon

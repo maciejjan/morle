@@ -238,11 +238,13 @@ class RuleSetPrior:
 		self.ngr_add = None
 		self.ngr_remove = None
 		self.unigrams = NGramModel(1)
+		filename = settings.FILES['training.lexicon'] if settings.SUPERVISED \
+			else settings.FILES['training.wordlist']
 		if settings.USE_WORD_FREQ:
-			self.unigrams.train_from_file(settings.FILES['training.wordlist'])
+			self.unigrams.train_from_file(filename)
 		else:
 			self.unigrams.train([(word, 1) for (word, ) in read_tsv_file(
-				settings.FILES['training.wordlist'], (str, ))])
+				filename, (str, ))])
 
 	def train(self, rules_c):
 		self.ngr_add = NGramModel(1)

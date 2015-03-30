@@ -12,6 +12,7 @@ def setup():
 	# optional arguments
 	ap.add_argument('-d', action='store', dest='workdir', help='working directory')
 	ap.add_argument('-s', action='store_true', dest='supervised', help='supervised learning')
+	ap.add_argument('-t', action='store_true', dest='use_tags', help='use POS-tags')
 #	ap.add_argument('-f', '--force', action='store_true', help='force')
 	ap.add_argument('--db-host', type=str, action='store', dest='db_host',\
 		help='database host (default: localhost) (import/export mode)')
@@ -25,9 +26,13 @@ def setup():
 #	ap.add_argument('-p', '--progress', action='store_true', help='print progress of performed operations')
 	args = ap.parse_args()
 	if args.workdir is not None:
+		if not args.workdir.endswith('/'):
+			args.workdir += '/'
 		settings.WORKING_DIR = args.workdir
 	if args.supervised:
 		settings.SUPERVISED = True
+	if args.use_tags:
+		settings.USE_TAGS = True
 	if args.db_host is not None:
 		settings.DB_HOST = args.db_host
 	if args.db_user is not None:
@@ -74,6 +79,12 @@ def main(mode, modules):
 			train.run()
 		if MODULE_ANALYZE in modules:
 			analyze.run()
+		if 'infl' in modules:
+			inflect.run()
+		if 'recognize' in modules:
+			recognize.run()
+		if 'wordgen' in modules:
+			wordgen.run()
 #		if MODULE_TAG in modules:
 #			tag.run()
 	if MODE_EVAL in mode:

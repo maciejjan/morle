@@ -137,15 +137,19 @@ def optimize_rule(rule, wordpairs, trh, rsp, matching=None):
 
 	optimal_rule, improvement = max(rule_counts, key = lambda x: x[1])
 	optimal_rule_obj = Rule.from_string(optimal_rule)
-	if improvement + math.log(rsp.rule_prob(rule)) > 20.0:
+#	if improvement + math.log(rsp.rule_prob(rule)) > 20.0:
+	if improvement + math.log(rsp.rule_prob(rule)) > 0.0:
 		wordpairs_new, wordpairs_rest = [], []
 		for w1, w2 in wordpairs:
 			if optimal_rule_obj.lmatch(w1):
 				wordpairs_new.append((w1, w2))
 			else:
 				wordpairs_rest.append((w1, w2))
-		return optimize_rule(optimal_rule, wordpairs_new, trh, rsp, matching) + \
-			optimize_rule(rule, wordpairs_rest, trh, rsp, matching)
+		if wordpairs_rest:
+			return optimize_rule(optimal_rule, wordpairs_new, trh, rsp, matching) + \
+				optimize_rule(rule, wordpairs_rest, trh, rsp, matching)
+		else:
+			return [(optimal_rule, applying[optimal_rule], matching[optimal_rule], wordpairs)]
 #		return optimize_rule(optimal_rule, wordpairs_new, trh, rsp, matching) + \
 #			optimize_rule(rule, wordpairs_rest, trh, rsp, matching) + \
 #			[(rule, applying[rule], matching[rule], wordpairs)]

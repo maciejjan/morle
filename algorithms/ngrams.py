@@ -22,7 +22,9 @@ class NGramModel:
 			if settings.USE_TAGS:
 				idx = word.rfind(u'_')
 				word, tag = word[:idx], word[idx+1:]
-				self.tags.inc(tag, freq)
+#				tag_key = tag
+				tag_key = word[-self.n:] + '_' + tag
+				self.tags.inc(tag_key, freq)
 			for ngr in generate_n_grams(word + '#', self.n):
 				self.total += freq
 				self.trie.inc(ngr, freq)
@@ -35,7 +37,7 @@ class NGramModel:
 	def ngram_prob(self, string):
 		p = 1.0
 		for ngr in generate_n_grams(string, self.n):
-			if ngr in self.trie:
+			if ngr in self.trie and self.trie[ngr].value > 0:
 				p *= self.trie[ngr].value
 			else:
 				p *= 1.0 / self.total
@@ -46,8 +48,10 @@ class NGramModel:
 		if settings.USE_TAGS:
 			idx = word.rfind(u'_')
 			word, tag = word[:idx], word[idx+1:]
-			if tag in self.tags:
-				result *= self.tags[tag] / self.tags.total
+#			tag_key = tag
+			tag_key = word[-self.n:] + '_' + tag
+			if tag_key in self.tags and self.tags[tag_key] > 0:
+				result *= self.tags[tag_key] / self.tags.total
 			else:
 				result *= 1 / self.tags.total	# smoothing
 		result *= self.ngram_prob(word + '#')
@@ -114,7 +118,7 @@ class NGramTrie:
 			self.children[key[0]].inc(key[1:], count)
 
 	def __len__(self):
-		raise Exception('Not implemented yet.')
+		return 1 + sum([len(c) for c in self.children.values()])
 	
 	def normalize(self, parent_count=None):
 		my_count = sum([c.value for c in self.children.values()])
