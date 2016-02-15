@@ -21,6 +21,20 @@ def lcs(word_1, word_2):
 
 # TODO change to use make_rule (currently in algorithms.mdl)
 def extract_rule(word_1, word_2, pattern):
+	# handle capitalization at the beginning (TODO code refactoring!)
+	if word_1.startswith('"') and word_2.startswith('"'):
+		if pattern.pattern.startswith('(.*)"'):
+			pattern = re.compile(pattern.pattern[5:])
+		rule = extract_rule(word_1[1:], word_2[1:], pattern)
+		if rule is None:
+			return None
+		if rule.prefix[0] or rule.prefix[1]:
+			rule.prefix = ('"'+rule.prefix[0], '"'+rule.prefix[1])
+#		if word_1 == '"republik' and word_2 == '"bundesrepublik':
+#			print(word_1, word_2, pattern, rule.to_string())
+		return rule
+
+	# "normal" case (no capitalization)
 	tag = None
 	if settings.USE_TAGS:
 		p1, p2 = word_1.rfind(u'_'), word_2.rfind(u'_')

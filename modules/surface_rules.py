@@ -18,7 +18,6 @@ import random
 ### LOCAL FILTERS ###
 
 # form: filter(rule, (wordpair))
-
 def _lfil_affix_length(rule, wordpair):
 	affixes = rule.get_affixes()
 	if not affixes:
@@ -66,20 +65,20 @@ def extract_rules_from_words(words, substring, outfp, wordset):
 	pattern = re.compile('(.*)' + '(.*?)'.join([letter for letter in substring]) + '(.*)')
 	for w1, w1_freq in words:
 		for w2, w2_freq in words:
-			if w1 < w2:
-				rule = algorithms.align.extract_rule(w1, w2, pattern)
-				if rule is not None:
-					if apply_local_filters(rule, ((w1, w1_freq), (w2, w2_freq))):
-						write_line(outfp, (w1, w2, rule.to_string()))
-						write_line(outfp, (w2, w1, rule.reverse().to_string()))
-					elif settings.COMPOUNDING_RULES:
-						for i in range(3, min(len(w1), len(w2))):
-							if i <= len(rule.prefix[1]) and rule.prefix[1][:i] in wordset:
-								write_line(outfp, (w1, w2, rule.to_string()))
-								break
-							if i <= len(rule.suffix[1]) and rule.suffix[1][-i:] in wordset:
-								write_line(outfp, (w1, w2, rule.to_string()))
-								break
+#			if w1 < w2:
+			rule = algorithms.align.extract_rule(w1, w2, pattern)
+			if rule is not None:
+				if apply_local_filters(rule, ((w1, w1_freq), (w2, w2_freq))):
+					write_line(outfp, (w1, w2, rule.to_string()))
+#					write_line(outfp, (w2, w1, rule.reverse().to_string()))
+				elif settings.COMPOUNDING_RULES:
+					for i in range(3, min(len(w1), len(w2))):
+						if i <= len(rule.prefix[1]) and rule.prefix[1][:i] in wordset:
+							write_line(outfp, (w1, w2, rule.to_string()))
+							break
+						if i <= len(rule.suffix[1]) and rule.suffix[1][-i:] in wordset:
+							write_line(outfp, (w1, w2, rule.to_string()))
+							break
 
 def extract_rules_from_substrings(input_file, output_file, wordset=None):
 	cur_substr, words = '', []
@@ -89,17 +88,6 @@ def extract_rules_from_substrings(input_file, output_file, wordset=None):
 				print_msg='Extracting rules from substrings...'):
 			words = [(word, freq) for (s_len, word, freq) in rest]
 			extract_rules_from_words(words, substr, outfp, wordset)
-#		for s_len, substr, word, freq in read_tsv_file(input_file):	# TODO _by_key
-#			if substr != cur_substr:
-#				if len(words) > 1:
-#					extract_rules_from_words(words, cur_substr, outfp, wordset)
-#				cur_substr = substr
-#				words = [(word, int(freq))]
-#			else:
-#				words.append((word, int(freq)))
-#			next(pp)
-#		if len(words) > 1:
-#			extract_rules_from_words(words, cur_substr, outfp, wordset)
 
 def filter_lemmas(graph_file):
 	lemmas = set()

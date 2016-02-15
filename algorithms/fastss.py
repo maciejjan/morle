@@ -62,6 +62,11 @@ def substrings_for_word(word, wordset):
 				result.append(word[i:])
 			if word[:-i] in wordset and len(word[i:]) >= MIN_COMP_LEN:
 				result.append(word[:-i])
+			# for words starting with capitalization mark
+			if '"' + word[i:] in wordset and len(word[i:]) >= MIN_COMP_LEN:
+				result.append(word[i:])
+			if '"' + word[:-i] in wordset and len(word[i:]) >= MIN_COMP_LEN:
+				result.append(word[:-i])
 	# remove duplicates -- same substrings generated with different masks
 	return list(set(result))
 
