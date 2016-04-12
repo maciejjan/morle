@@ -1,3 +1,7 @@
+import numpy as np
+import libhfst
+import re
+
 ENCODING = 'utf-8'
 #SETTINGS_FILE = 'settings.ini'
 WORKING_DIR = ''
@@ -13,10 +17,65 @@ MAX_PROD = 0.999
 
 SUPERVISED = False
 USE_WORD_FREQ = False
-USE_TAGS = False
+WORD_FREQ_WEIGHT = 1.0
+WORD_VEC_WEIGHT = 1.0
+WORD_VEC_DIM = 300
+USE_TAGS = True
 #DEBUG_MODE = False
 COMPOUNDING_RULES = True
-LEMMAS_KNOWN = True
+LEMMAS_KNOWN = False
+
+VECTOR_SEP	= ' '
+#TAG_SEP 	= '_'
+SYMBOL_PATTERN 			= '(?:\w|\{[A-Z0-9]+\})'
+SYMBOL_PATTERN_CMP		= re.compile(SYMBOL_PATTERN)
+TAG_PATTERN 			= '(?:<[A-Z0-9]+>)'
+TAG_PATTERN_CMP			= re.compile(TAG_PATTERN)
+WORD_PATTERN			= '^(?P<word>%s+)(?P<tag>%s*)$' %\
+						  (SYMBOL_PATTERN, TAG_PATTERN)
+WORD_PATTERN_CMP		= re.compile(WORD_PATTERN)
+
+RULE_SUBST_SEP				= ':'
+RULE_PART_SEP				= '/'
+RULE_TAG_SEP				= '___'
+RULE_SUBST_PATTERN			= '%s*%s%s*' %\
+							  (SYMBOL_PATTERN, RULE_SUBST_SEP, SYMBOL_PATTERN)
+RULE_NAMED_SUBST_PATTERN	= '(?P<x>%s*)%s(?P<y>%s*)' %\
+							  (SYMBOL_PATTERN, RULE_SUBST_SEP, SYMBOL_PATTERN)
+RULE_NAMED_SUBST_PATTERN_CMP= re.compile(RULE_NAMED_SUBST_PATTERN)
+RULE_TAG_SUBST_PATTERN		= '%s*%s%s*' %\
+							  (TAG_PATTERN, RULE_SUBST_SEP, TAG_PATTERN)
+RULE_TAG_SUBST_PATTERN_CMP	= re.compile(RULE_SUBST_PATTERN)
+RULE_PATTERN				= '^(?P<subst>%s(%s)*)(?:%s(?P<tag_subst>%s))?$' %\
+							  (RULE_SUBST_PATTERN,
+							   RULE_PART_SEP+RULE_SUBST_PATTERN,
+							   RULE_TAG_SEP,
+							   RULE_TAG_SUBST_PATTERN)
+print(RULE_PATTERN)
+RULE_PATTERN_CMP		= re.compile(RULE_PATTERN)
+
+RULE_NAMED_TAG_SUBST_PATTERN = '(?P<x>%s*)%s(?P<y>%s*)' %\
+							   (TAG_PATTERN, RULE_SUBST_SEP, TAG_PATTERN)
+RULE_NAMED_TAG_SUBST_PATTERN_CMP =\
+	re.compile(RULE_NAMED_TAG_SUBST_PATTERN)
+
+TRANSDUCER_TYPE	= libhfst.SFST_TYPE
+
+WORDLIST_FORMAT = (\
+	str,\
+	int if WORD_FREQ_WEIGHT > 0.0 else None,\
+	(lambda x: np.array(list(map(float, x.split(VECTOR_SEP)))))\
+	          if WORD_VEC_WEIGHT > 0.0 else None\
+)
+
+LEXICON_FORMAT = (\
+	str,\
+	str,
+	str,
+	int if WORD_FREQ_WEIGHT > 0.0 else None,\
+	(lambda x: np.array(list(map(float, x.split(VECTOR_SEP)))))\
+	          if WORD_VEC_WEIGHT > 0.0 else None\
+)
 
 # load settings from file or create a settings file
 def process_settings_file():

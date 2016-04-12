@@ -52,16 +52,17 @@ def main(mode, modules):
 	MODE_EVAL = 'eval'
 	MODE_RUN = 'run'
 
-	MODULE_SRULES = 'srules'
+	MODULE_PRE = 'pre'
 #	MODULE_LEXEMES = 'infl'
 	MODULE_TRAIN = 'train'
+	MODULE_MCMC = 'mcmc'
 	MODULE_ANALYZE = 'analyze'
 #	MODULE_TAG = 'tag'
 #	MODULE_DERIV = 'deriv'
 
 	if MODE_IMPORT in mode:
-		if MODULE_SRULES in modules:
-			surface_rules.import_from_db()
+		if MODULE_PRE in modules:
+			preprocess.import_from_db()
 #		if MODULE_LEXEMES in modules:
 #			lexemes.import_from_db()
 #		if MODULE_DERIV in modules:
@@ -69,14 +70,16 @@ def main(mode, modules):
 		if MODULE_TRAIN in modules:
 			train.import_from_db()
 	if MODE_RUN in mode:
-		if MODULE_SRULES in modules:
-			surface_rules.run()
+		if MODULE_PRE in modules:
+			preprocess.run()
 #		if MODULE_LEXEMES in modules:
 #			lexemes.run()
 #		if MODULE_DERIV in modules:
 #			derivation.run()
 		if MODULE_TRAIN in modules:
 			train.run()
+		if MODULE_MCMC in modules:
+			mcmc.run()
 		if MODULE_ANALYZE in modules:
 			analyze.run()
 		if 'infl' in modules:
@@ -88,8 +91,8 @@ def main(mode, modules):
 #		if MODULE_TAG in modules:
 #			tag.run()
 	if MODE_EVAL in mode:
-		if MODULE_SRULES in modules:
-			surface_rules.evaluate()
+		if MODULE_PRE in modules:
+			preprocess.evaluate()
 #		if MODULE_LEXEMES in modules:
 #			lexemes.evaluate()
 #		if MODULE_DERIV in modules:
@@ -99,8 +102,8 @@ def main(mode, modules):
 		if MODULE_ANALYZE in modules:
 			analyze.evaluate()
 	if MODE_EXPORT in mode:
-		if MODULE_SRULES in modules:
-			surface_rules.export_to_db()
+		if MODULE_PRE in modules:
+			preprocess.export_to_db()
 #		if MODULE_LEXEMES in modules:
 #			lexemes.export_to_db()
 #		if MODULE_DERIV in modules:

@@ -42,7 +42,10 @@ class Counter:
 		key = obj
 		if self.convert:
 			key = obj.to_string()
-		return self.entries[key]
+		if key in self.entries:
+			return self.entries[key]
+		else:
+			return 0
 	
 	def __setitem__(self, key, val):
 		self.entries[key] = val

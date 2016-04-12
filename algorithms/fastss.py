@@ -77,9 +77,9 @@ def generate_substrings(input_file, output_file, wordset):
 		lines_written = 0
 		print('Generating substrings...')
 		pp = progress_printer(get_file_size(input_file))
-		for word, freq in read_tsv_file(input_file):
+		for (word,) in read_tsv_file(input_file, (str,)):
 			for s in substrings_for_word(word, wordset):
-				bytes_written += write_line(fp, (len(s), s, word, freq),
+				bytes_written += write_line(fp, (len(s), s, word),
 					count_bytes=True)
 				lines_written += 1
 			if bytes_written > MAX_OUTPUT_SIZE:

@@ -63,22 +63,22 @@ def load_training_infl_rules(filename):
 
 def extract_rules_from_words(words, substring, outfp, wordset):
 	pattern = re.compile('(.*)' + '(.*?)'.join([letter for letter in substring]) + '(.*)')
-	for w1, w1_freq in words:
-		for w2, w2_freq in words:
-#			if w1 < w2:
-			rule = algorithms.align.extract_rule(w1, w2, pattern)
-			if rule is not None:
-				if apply_local_filters(rule, ((w1, w1_freq), (w2, w2_freq))):
-					write_line(outfp, (w1, w2, rule.to_string()))
+	for w1 in words:
+		for w2 in words:
+			if w1 < w2:
+				rule = algorithms.align.extract_rule(w1, w2, pattern)
+				if rule is not None:
+					if apply_local_filters(rule, (w1, w2)):
+						write_line(outfp, (w1, w2, rule.to_string()))
 #					write_line(outfp, (w2, w1, rule.reverse().to_string()))
-				elif settings.COMPOUNDING_RULES:
-					for i in range(3, min(len(w1), len(w2))):
-						if i <= len(rule.prefix[1]) and rule.prefix[1][:i] in wordset:
-							write_line(outfp, (w1, w2, rule.to_string()))
-							break
-						if i <= len(rule.suffix[1]) and rule.suffix[1][-i:] in wordset:
-							write_line(outfp, (w1, w2, rule.to_string()))
-							break
+					elif settings.COMPOUNDING_RULES:
+						for i in range(3, min(len(w1), len(w2))):
+							if i <= len(rule.prefix[1]) and rule.prefix[1][:i] in wordset:
+								write_line(outfp, (w1, w2, rule.to_string()))
+								break
+							if i <= len(rule.suffix[1]) and rule.suffix[1][-i:] in wordset:
+								write_line(outfp, (w1, w2, rule.to_string()))
+								break
 
 def extract_rules_from_substrings(input_file, output_file, wordset=None):
 	cur_substr, words = '', []
@@ -86,7 +86,8 @@ def extract_rules_from_substrings(input_file, output_file, wordset=None):
 	with open_to_write(output_file) as outfp:
 		for substr, rest in read_tsv_file_by_key(input_file, 2, print_progress=True,\
 				print_msg='Extracting rules from substrings...'):
-			words = [(word, freq) for (s_len, word, freq) in rest]
+#			words = [(word, freq) for (s_len, word, freq) in rest]
+			words = [word for (s_len, word) in rest]
 			extract_rules_from_words(words, substr, outfp, wordset)
 
 def filter_lemmas(graph_file):
@@ -135,7 +136,7 @@ def filter_rules(graph_file):
 
 def load_wordset(input_file):
 	wordset = set([])
-	for word, freq in read_tsv_file(input_file):
+	for word in read_tsv_file(input_file, (str,)):
 		wordset.add(word)
 	return wordset
 
