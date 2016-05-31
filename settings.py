@@ -15,15 +15,26 @@ MAX_PROD = 0.999
 #INDEPENDENCY_THRESHOLD = 0.001
 #DERIVATION_THRESHOLD = 0.1
 
+TRAINING_ALGORITHM = 'softem'
 SUPERVISED = False
 USE_WORD_FREQ = False
-WORD_FREQ_WEIGHT = 1.0
-WORD_VEC_WEIGHT = 1.0
+WORD_FREQ_WEIGHT = 0.0
+WORD_VEC_WEIGHT = 0.0
 WORD_VEC_DIM = 300
 USE_TAGS = True
 #DEBUG_MODE = False
 COMPOUNDING_RULES = True
 LEMMAS_KNOWN = False
+
+# MCMC SAMPLING
+SAMPLING_WARMUP_ITERATIONS = 1000000
+SAMPLING_ITERATIONS = 10000000
+
+EM_MAX_ITERATIONS = 20
+
+#TRANSDUCER_TYPE	= libhfst.HFST_OL_TYPE
+#TRANSDUCER_TYPE	= libhfst.FOMA_TYPE
+TRANSDUCER_TYPE	= libhfst.SFST_TYPE
 
 VECTOR_SEP	= ' '
 #TAG_SEP 	= '_'
@@ -51,15 +62,12 @@ RULE_PATTERN				= '^(?P<subst>%s(%s)*)(?:%s(?P<tag_subst>%s))?$' %\
 							   RULE_PART_SEP+RULE_SUBST_PATTERN,
 							   RULE_TAG_SEP,
 							   RULE_TAG_SUBST_PATTERN)
-print(RULE_PATTERN)
 RULE_PATTERN_CMP		= re.compile(RULE_PATTERN)
 
 RULE_NAMED_TAG_SUBST_PATTERN = '(?P<x>%s*)%s(?P<y>%s*)' %\
 							   (TAG_PATTERN, RULE_SUBST_SEP, TAG_PATTERN)
 RULE_NAMED_TAG_SUBST_PATTERN_CMP =\
 	re.compile(RULE_NAMED_TAG_SUBST_PATTERN)
-
-TRANSDUCER_TYPE	= libhfst.SFST_TYPE
 
 WORDLIST_FORMAT = (\
 	str,\
@@ -142,7 +150,8 @@ FILES = {
 	'analyses' : 'analyses.txt',
 
 	'wordgen.output' : 'wordgen.txt',
-	'full.wordlist' : 'wordlist-full.txt'
+	'full.wordlist' : 'wordlist-full.txt',
+	'model' : 'model.dat'
 }
 
 # DB access data

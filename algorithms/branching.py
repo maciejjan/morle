@@ -1,16 +1,38 @@
 # find maximum branching
 from utils.files import open_to_write, write_line
+#import heapq
+import random
 
 def branching(vertices, edges):
-
-	def add_weight(queue, value):
-		new_queue = [(v1, v2, rule, weight + value) for (v1, v2, rule, weight) in queue]
-		return new_queue
-
-#	val = min([e[3] for e in edges])
-#	edges = add_weight(edges, -val + 0.1)
 	roots = list(vertices)
-	entering_edges, enter, strong, strong_sets, weak, weak_sets, root = {}, {}, {}, {}, {}, {}, {}
+	random.shuffle(roots)
+	entering_edges, enter, min = {}, {}, {}
+	strong, strong_sets = {}, {}
+	weak, weak_sets = {}, {}
+	edge_weights = {}
+
+	def add_weight_to_queue(queue, value):
+		for e in queue:
+			edge_weights[e] += value
+	
+	def merge_weak_sets(weak_set_1, weak_set_2):
+#		print('merging weak sets:', weak_set_1.key, weak_set_2.key)
+		weak_sets[weak_set_1].extend(weak_sets[weak_set_2])
+#		to_delete = weak_set_2
+		for v in weak_sets[weak_set_2]:
+			weak[v] = weak_set_1
+#		del weak_sets[to_delete]
+		del weak_sets[weak_set_2]
+	
+	def merge_strong_sets(strong_set_1, strong_set_2):
+#		print('merging strong sets:', strong_set_1.key, strong_set_2.key)
+		strong_sets[strong_set_1].extend(strong_sets[strong_set_2])
+#		to_delete = strong[key_2]
+		for v in strong_sets[strong_set_2]:
+			strong[v] = strong_set_1
+#		del strong_sets[to_delete]
+		del strong_sets[strong_set_2]
+	
 	for v in vertices:
 		entering_edges[v] = []
 		strong[v] = v
@@ -18,90 +40,99 @@ def branching(vertices, edges):
 		weak[v] = v
 		weak_sets[v] = [v]
 		enter[v] = None
-		root[v] = v
-	for (v1, v2, rule, weight) in edges:
-		entering_edges[v2].append((v1, v2, rule, weight))
-	for v in vertices:
-		entering_edges[v].sort(key=lambda x: x[3])
-#		print v, entering_edges[v]
+		min[v] = v
+	for e in edges:
+		edge_weights[e] = e.target.cost - e.cost
+		entering_edges[e.target].append(e)
+	for queue in entering_edges.values():
+		queue.sort(key=lambda e: edge_weights[e])
 	result = []
-	final = []
+	rset = []
 
 	while roots:
 		k = roots.pop()
-#		print k
-		if not entering_edges[k]:
-			final.append(k)
+#		print('k =', k.key)
+		if not entering_edges[k] or edge_weights[entering_edges[k][-1]] <= 0.0:
+			rset.append(k)
 			continue
-		v1, v2, rule, weight = entering_edges[k].pop()
-#		print v1, v2, strong[v1], strong[v2], rule, weight
-		if strong[v1] == k:
+		e = entering_edges[k].pop()
+#		if edge_weights[e] <= 0.0:
+#			print([edge_weights[x] for x in entering_edges[k]])
+#			raise Exception('!')
+#		print(e.source.key, e.target.key, strong[e.source].key, strong[e.target].key, str(e.rule), edge_weights[e])
+		if strong[e.source] == k:
 			roots.append(k)
+#			print('strong sets equal')
 		else:
-			result.append((v1, v2, rule))
-			if weak[v1] != weak[v2]:
-#				w[v1].extend(w[v2])
-#				print '  merging weak sets:', v1, v2
-				weak_sets[weak[v1]].extend(weak_sets[weak[v2]])
-				to_delete = weak[v2]
-				for v in weak_sets[to_delete]:
-					weak[v] = weak[v1]
-				del weak_sets[to_delete]
-				enter[k] = (v1, v2, rule, weight)
+			result.append(e)
+			if weak[e.source] != weak[e.target]:
+#				print('weak sets different -> merging')
+				merge_weak_sets(weak[e.source], weak[e.target])
+				enter[k] = e
 			else:
-				x, y, r, w = v1, v2, rule, weight
+#				print('merging to one strong set')
+				e2 = e
 				val, vertex = None, None
 				while True:
-					if val is None or w < val:
-						val = w
-						vertex = strong[y]
-					if enter[strong[x]]:
-						x, y, r, w = enter[strong[x]]
+					if val is None or edge_weights[e2] < val:
+						val = edge_weights[e2]
+						vertex = strong[e2.target]
+					if enter[strong[e2.source]]:
+						e2 = enter[strong[e2.source]]
 					else:
 						break
-				entering_edges[k] = add_weight(entering_edges[k], val - weight)
-				root[k] = root[vertex]
-				x, y, r, w = enter[strong[v1]]
+				add_weight_to_queue(entering_edges[k], val-edge_weights[e])
+				min[k] = min[vertex]
+				e2 = enter[strong[e.source]]
 				while True:
-					entering_edges[strong[y]] = add_weight(entering_edges[strong[y]], val - w)
-					entering_edges[k].extend(entering_edges[strong[y]])
-					entering_edges[k].sort(key=lambda x: x[3])
-					del entering_edges[strong[y]]
-					try:
-						roots.remove(y)
-					except Exception:
-						pass
-					strong_sets[k].extend(strong_sets[strong[y]])
-#					k.extend(s[y])
-#					print '  merging strong sets:', k, strong[y]
-					to_delete = strong[y]
-					for yy in strong_sets[to_delete]:
-						strong[yy] = k
-					del strong_sets[to_delete]
-#					strong[y] = k
-					if enter[strong[x]]:
-						x, y, r, w = enter[strong[x]]
+					add_weight_to_queue(\
+						entering_edges[strong[e2.target]],\
+						val-edge_weights[e2])
+					# qunion(k, sfind(y))
+					entering_edges[k].extend(\
+						entering_edges[strong[e2.target]])
+					entering_edges[k].sort(key=lambda x: edge_weights[x])
+					del entering_edges[strong[e2.target]]
+					# sunion(k, sfind(y))
+#					try:
+#						roots.remove(e2.target)
+#					except Exception:
+#						pass
+					merge_strong_sets(k, strong[e2.target])
+					if enter[strong[e2.source]]:
+						e2 = enter[strong[e2.source]]
 					else:
 						break
 				roots.append(k)
 	
+	print('result cost = %f' % sum(e.cost for e in result))
+	with open_to_write('result.txt') as fp:
+		for e in result:
+			write_line(fp, (e.source.key, e.target.key))
+
 	with open_to_write('strong.txt') as fp:
 		for ss in strong_sets.values():
-			write_line(fp, (', '.join(ss), ))
+			write_line(fp, (', '.join(sorted([n.key for n in ss])), ))
+#	for ss in strong_sets.values():
+#		print(', '.join(sorted([n.key for n in ss])))
 
 	edges_final = []
-	root_vertices = set([root[x] for x in final])
+	root_vertices = set([min[x] for x in rset])
 #	print 'ROOT' in root_vertices
-	while result:
-		v1, v2, rule = result.pop(0)
-		if v1 in root_vertices:
-			if not v2 in root_vertices:
-				edges_final.append((v1, v2, rule))
-				root_vertices.add(v2)
-		else:
-			result.append((v1, v2, rule))
+	with open_to_write('extract.txt') as fp:
+		while result:
+			e = result.pop(0)
+			if e.source in root_vertices:
+				if not e.target in root_vertices:
+					edges_final.append(e)
+					root_vertices.add(e.target)
+					fp.write('adding edge: %s -> %s\n' % (e.source.key, e.target.key))
+				else:
+					fp.write('discarding edge: %s -> %s\n' % (e.source.key, e.target.key))
+			else:
+				result.append(e)
 
 	return edges_final
 	
-	return result, root, final
+#	return result, root, final
 

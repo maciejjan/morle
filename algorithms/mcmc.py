@@ -49,10 +49,10 @@ class ScalarStatistic(MCMCStatistic):
 	def update(self, sampler):
 		raise Exception('Not implemented!')
 
-	def edge_added(self, sampler, idx, word_1, word_2, rule):
+	def edge_added(self, sampler, idx, edge):
 		raise Exception('Not implemented!')
 
-	def edge_removed(self, sampler, idx, word_1, word_2, rule):
+	def edge_removed(self, sampler, idx, edge):
 		raise Exception('Not implemented!')
 
 	def next_iter(self, sampler):
@@ -65,14 +65,14 @@ class ExpectedLogLikelihoodStatistic(ScalarStatistic):
 	def update(self, sampler):
 		pass
 	
-	def edge_added(self, sampler, idx, word_1, word_2, rule):
+	def edge_added(self, sampler, idx, edge):
 		pass
 
-	def edge_removed(self, sampler, idx, word_1, word_2, rule):
+	def edge_removed(self, sampler, idx, edge):
 		pass
 	
 	def next_iter(self, sampler):
-		self.val = (self.val * (sampler.num-1) + sampler.logl) / sampler.num
+		self.val = (self.val * (sampler.num-1) + sampler.lexicon.cost) / sampler.num
 
 class TimeStatistic(ScalarStatistic):
 	def reset(self, sampler):
@@ -82,20 +82,20 @@ class TimeStatistic(ScalarStatistic):
 	def update(self, sampler):
 		self.val = time.time() - self.started
 	
-	def edge_added(self, sampler, idx, word_1, word_2, rule):
+	def edge_added(self, sampler, idx, edge):
 		pass
 
-	def edge_removed(self, sampler, idx, word_1, word_2, rule):
+	def edge_removed(self, sampler, idx, edge):
 		pass
 
 class AcceptanceRateStatistic(ScalarStatistic):
 	def update(self, sampler):
 		pass
 	
-	def edge_added(self, sampler, idx, word_1, word_2, rule):
+	def edge_added(self, sampler, idx, edge):
 		self.acceptance(sampler)
 
-	def edge_removed(self, sampler, idx, word_1, word_2, rule):
+	def edge_removed(self, sampler, idx, edge):
 		self.acceptance(sampler)
 
 	def acceptance(self, sampler):
@@ -114,10 +114,10 @@ class EdgeStatistic(MCMCStatistic):
 	def update(self, sampler):
 		raise Exception('Not implemented!')
 
-	def edge_added(self, sampler, idx, word_1, word_2, rule):
+	def edge_added(self, sampler, idx, edge):
 		raise Exception('Not implemented!')
 
-	def edge_removed(self, sampler, idx, word_1, word_2, rule):
+	def edge_removed(self, sampler, idx, edge):
 		raise Exception('Not implemented!')
 
 	def next_iter(self, sampler):
@@ -128,20 +128,20 @@ class EdgeStatistic(MCMCStatistic):
 
 class EdgeFrequencyStatistic(EdgeStatistic):
 	def update(self, sampler):
-		for i, (word_1, word_2, rule) in enumerate(sampler.edges):
-			if sampler.lexicon[word_2].prev == sampler.lexicon[word_1]:
+		for i, edge in enumerate(sampler.edges):
+			if edge in edge.source.edges:
 				# the edge was present in the last graphs
-				self.edge_removed(sampler, i, word_1, word_2, rule)
+				self.edge_removed(sampler, i, edge)
 			else:
 				# the edge was absent in the last graphs
-				self.edge_added(sampler, i, word_1, word_2, rule)
+				self.edge_added(sampler, i, edge)
 
-	def edge_added(self, sampler, idx, word_1, word_2, rule):
+	def edge_added(self, sampler, idx, edge):
 		self.values[idx] =\
 			self.values[idx] * self.last_modified[idx] / sampler.num
 		self.last_modified[idx] = sampler.num
 
-	def edge_removed(self, sampler, idx, word_1, word_2, rule):
+	def edge_removed(self, sampler, idx, edge):
 		self.values[idx] =\
 			(self.values[idx] * self.last_modified[idx] +\
 			 (sampler.num - self.last_modified[idx])) /\
@@ -155,21 +155,21 @@ class RuleStatistic(MCMCStatistic):
 		self.reset(sampler)
 
 	def reset(self, sampler):
-		for rule in sampler.lexicon.ruleset.keys():
+		for rule in sampler.model.rules:
 			self.values[rule] = 0.0
 			self.last_modified[rule] = 0
 	
 	def update(self, sampler):
-		for rule in sampler.lexicon.ruleset.keys():
+		for rule in sampler.model.rules:
 			self.update_rule(rule, sampler)
 	
 	def update_rule(self, rule, sampler):
 		raise Exception('Not implemented!')
 	
-	def edge_added(self, sampler, idx, word_1, word_2, rule):
+	def edge_added(self, sampler, idx, edge):
 		raise Exception('Not implemented!')
 
-	def edge_removed(self, sampler, idx, word_1, word_2, rule):
+	def edge_removed(self, sampler, idx, edge):
 		raise Exception('Not implemented!')
 
 	def next_iter(self, sampler):
@@ -186,12 +186,13 @@ class RuleFrequencyStatistic(RuleStatistic):
 			sampler.num
 		self.last_modified[rule] = sampler.num
 	
-	def edge_added(self, sampler, idx, word_1, word_2, rule):
-		self.update_rule(rule, sampler)
+	def edge_added(self, sampler, idx, edge):
+		self.update_rule(edge.rule, sampler)
 
-	def edge_removed(self, sampler, idx, word_1, word_2, rule):
-		self.update_rule(rule, sampler)
+	def edge_removed(self, sampler, idx, edge):
+		self.update_rule(edge.rule, sampler)
 
+# TODO
 class RuleChangeCountStatistic(RuleStatistic):
 	def reset(self, sampler):
 		for rule in sampler.lexicon.ruleset.keys():
@@ -209,6 +210,7 @@ class RuleChangeCountStatistic(RuleStatistic):
 		if sampler.lexicon.rules_c[rule] == 0:
 			self.values[rule] += 1
 
+# TODO
 class RuleGraphsWithoutStatistic(RuleStatistic):
 	def update_rule(self, rule, sampler):
 		if sampler.lexicon.rules_c[rule] > 0:
@@ -233,6 +235,7 @@ class RuleGraphsWithoutStatistic(RuleStatistic):
 				self.values[rule] * self.last_modified[rule] / sampler.num
 			self.last_modified[rule] = sampler.num
 
+# TODO
 class RuleIntervalsWithoutStatistic(MCMCStatistic):
 	def __init__(self, sampler):
 		self.intervals = {}
@@ -269,123 +272,118 @@ class RuleIntervalsWithoutStatistic(MCMCStatistic):
 
 ### SAMPLERS ###
 
+# TODO monitor the number of moves from each variant and their acceptance rates!
 class MCMCGraphSampler:
-	def __init__(self, lexicon, edges):
+	def __init__(self, model, lexicon, edges):
+		self.model = model
 		self.lexicon = lexicon
 		self.edges = edges
 		self.edges_hash = {}
-		for idx, (w1, w2, r) in enumerate(edges):
-			self.edges_hash[(w1, w2)] = (idx, r)
+		for idx, e in enumerate(edges):
+			self.edges_hash[(e.source, e.target)] = (idx, e)
 		self.len_edges = len(edges)
 		self.num = 0		# iteration number
 		self.stats = {}
-		# precompute some values to speed up simulation
-		self.word_prob = {}
-		for word in lexicon.keys():
-			self.word_prob[word] = lexicon.rootdist.word_prob(word)
-		self.logl = sum([math.log(v) for v in self.word_prob.values()]) +\
-			sum([math.log(self.lexicon.ruleset.rsp.rule_prob(r.rule)) +\
-			     betaln(ALPHA, r.domsize + BETA) - betaln(ALPHA, BETA) \
-				for r in self.lexicon.ruleset.values()])
 	
 	def add_stat(self, name, stat):
 		if name in self.stats:
 			raise Exception('Duplicate statistic name: %s' % name)
 		self.stats[name] = stat
 
-	# TODO check whether the rule is in the current rule set
 	def next(self):
-		def consider_adding_edge(word_1, word_2, rule):
-			return (self.lexicon.rules_c[rule] + ALPHA) /\
-			       (self.word_prob[word_2] *\
-			        (self.lexicon.ruleset[rule].domsize - self.lexicon.rules_c[rule] - 1 + BETA))
+		def consider_adding_edge(edge):
+#			return math.exp(-self.model.edge_cost(edge) + edge.target.cost)
+			return math.exp(-edge.cost + edge.target.cost)
 
-		def consider_removing_edge(word_1, word_2):
-			rule = self.edges_hash[(word_1, word_2)][1]
-			return self.word_prob[word_2] *\
-			       (self.lexicon.ruleset[rule].domsize - self.lexicon.rules_c[rule] + BETA) /\
-				   (self.lexicon.rules_c[rule] - 1 + ALPHA)
+		def consider_removing_edge(edge):
+#			return math.exp(-edge.target.cost + self.model.edge_cost(edge))
+			return math.exp(-edge.target.cost + edge.cost)
 
+		# increase the number of iterations
 		self.num += 1
 
 		# select an edge randomly
 		edge_idx = random.randrange(self.len_edges)			
-		word_1, word_2, rule = self.edges[edge_idx]
+		edge = self.edges[edge_idx]
 
 		# determine the changes to the lexicon
-		edges_to_add, edges_to_remove, prob_ratio = [], [], 1.0
-		if self.lexicon[word_2].prev == self.lexicon[word_1]:
+		edges_to_add, edges_to_remove = [], []
+		if edge.target.parent == edge.source:
 			# delete the selected edge
-			edges_to_remove.append((word_1, word_2))
-			prob_ratio *= consider_removing_edge(word_1, word_2)
+			edges_to_remove.append(edge)
 		else:
 			# add the selected edge
-			edges_to_add.append((word_1, word_2, rule))
-			prob_ratio *= consider_adding_edge(word_1, word_2, rule)
-			if self.lexicon[word_1].has_ancestor(word_2):
+			edges_to_add.append(edge)
+			if edge.source.has_ancestor(edge.target):	# cycle
 				# swap parents
-				# determine word_3 and word_4
-				word_3 = self.lexicon[word_2].prev.word\
-				         if self.lexicon[word_2].prev is not None else None
-				w = self.lexicon[word_1]
-				word_4 = w.prev.word
-				while w.prev != self.lexicon[word_2]: w = w.prev
-				word_5 = w.word
+				# determine the nodes relevant for swap operation
+				node_1, node_2 = edge.source, edge.target
+				node_3 = node_2.parent\
+				         if node_2.parent is not None\
+						 else None
+				node_4 = node_1.parent
+				node_5 = node_4
+				if node_5 != node_2:
+					while node_5.parent != node_2: 
+						node_5 = node_5.parent
+				# check whether all the relevant edges exist
+				edge_2_5, edge_3_1, edge_3_2, edge_3_5, edge_4_1 =\
+					None, None, None, None, None
+				try:
+					edge_2_5 = self.edges_hash[(node_2, node_5)][1]
+					edge_3_1 = self.edges_hash[(node_3, node_1)][1]
+					edge_3_2 = self.edges_hash[(node_3, node_2)][1]
+					edge_3_5 = self.edges_hash[(node_3, node_5)][1]
+					edge_4_1 = self.edges_hash[(node_4, node_1)][1]
+				except KeyError:
+					self.num -= 1
+					return
 				# choose the variant of the swap move and perform it
 				if random.random() < 0.5:
-					edges_to_remove.append((word_4, word_1))
-					prob_ratio *= consider_removing_edge(word_4, word_1)
-					if word_3 is not None and (word_3, word_1) in self.edges_hash:
-						rule_3_1 = self.edges_hash[(word_3, word_1)][1]
-						edges_to_add.append((word_3, word_1, rule_3_1))
-						prob_ratio *= consider_adding_edge(word_3, word_1, rule_3_1)
-						edges_to_remove.append((word_3, word_2))
-						prob_ratio *= consider_removing_edge(word_3, word_2)
-					elif word_3 is not None:
-						self.num -= 1
-						return
+					edges_to_remove.append(edge_3_2)
+					edges_to_remove.append(edge_4_1)
+					edges_to_add.append(edge_3_1)
 				else:
-					edges_to_remove.append((word_2, word_5))
-					prob_ratio *= consider_removing_edge(word_2, word_5)
-					if word_3 is not None and (word_3, word_5) in self.edges_hash:
-						rule_3_5 = self.edges_hash[(word_3, word_5)][1]
-						edges_to_add.append((word_3, word_5, rule_3_5))
-						prob_ratio *= consider_adding_edge(word_3, word_5, rule_3_5)
-						edges_to_remove.append((word_3, word_2))
-						prob_ratio *= consider_removing_edge(word_3, word_2)
-					elif word_3 is not None:
-						self.num -= 1
-						return
-				# check if all necessary edges exist and determine the rules for them
-#				edges_to_add.append((word_1, word_2, rule))
-			elif self.lexicon[word_2].prev is not None:
+					edges_to_remove.append(edge_2_5)
+					edges_to_remove.append(edge_3_2)
+					edges_to_add.append(edge_3_5)
+			elif edge.target.parent is not None:		# word_2 already has a parent
 				# delete the current parent of word_2
-				word_3 = self.lexicon[word_2].prev.word
-				edges_to_remove.append((word_3, word_2))
-				prob_ratio *= consider_removing_edge(word_3, word_2)
+				node_2, node_3 = edge.target, edge.target.parent
+				edge_3_2 = self.edges_hash[(node_3, node_2)][1]
+				edges_to_remove.append(edge_3_2)
+
+		# compute the probability ratio of the proposed graph
+		# related to the current one
+		prob_ratio = 1.0
+#		print()
+		for e in edges_to_add:
+			prob_ratio *= consider_adding_edge(e)
+#			print('Consider adding edge: %s %f' % (\
+#				' '.join((e.source.key, e.target.key, str(e.rule))),
+#				consider_adding_edge(e)))
+		for e in edges_to_remove:
+#			print('Consider removing edge: %s %f' % (\
+#				' '.join((e.source.key, e.target.key, str(e.rule))),
+#				consider_removing_edge(e)))
+			prob_ratio *= consider_removing_edge(e)
 
 		# accept/reject
 		if prob_ratio >= 1 or prob_ratio >= random.random():
-			# check whether all edges to add are possible
-			for (w_1, w_2, r) in edges_to_add:
-				if r in self.lexicon[w_1].next:
-					self.num -= 1
-					return
-			# update log-likelihood
-			self.logl += math.log(prob_ratio)
+#			print('Accepted')
 			# remove edges and update stats
-			for (w_1, w_2) in edges_to_remove:
+			for e in edges_to_remove:
 #				r = self.lexicon[w_2].deriving_rule()
-				idx, r = self.edges_hash[(w_1, w_2)]
-				self.lexicon.remove_edge(w_1, w_2)
+				idx = self.edges_hash[(e.source, e.target)][0]
+				self.lexicon.remove_edge(e)
 				for stat in self.stats.values():
-					stat.edge_removed(self, idx, w_1, w_2, r)
+					stat.edge_removed(self, idx, e)
 			# add edges and update stats
-			for (w_1, w_2, r) in edges_to_add:
-				idx, r = self.edges_hash[(w_1, w_2)]
-				self.lexicon.draw_edge(w_1, w_2, r)
+			for e in edges_to_add:
+				idx = self.edges_hash[(e.source, e.target)][0]
+				self.lexicon.add_edge(e)
 				for stat in self.stats.values():
-					stat.edge_added(self, idx, w_1, w_2, r)
+					stat.edge_added(self, idx, e)
 
 		# update the remaining stats
 		for stat in self.stats.values():
@@ -582,8 +580,8 @@ def save_edges(sampler, filename):
 			stats.append(stat)
 	with open_to_write(filename) as fp:
 		write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
-		for i, (word_1, word_2, rule) in enumerate(sampler.edges):
-			write_line(fp, (word_1, word_2, rule) + tuple([stat.value(i) for stat in stats]))
+		for i, edge in enumerate(sampler.edges):
+			write_line(fp, (str(edge.source), str(edge.target), str(edge.rule)) + tuple([stat.value(i) for stat in stats]))
 
 def save_rules(sampler, filename):
 	stats, stat_names = [], []
@@ -593,9 +591,8 @@ def save_rules(sampler, filename):
 			stats.append(stat)
 	with open_to_write(filename) as fp:
 		write_line(fp, ('rule', 'domsize') + tuple(stat_names))
-		for rule in sampler.lexicon.ruleset.keys():
-			r = sampler.lexicon.ruleset[rule]
-			write_line(fp, (rule, r.domsize) +\
+		for rule in sampler.model.rules:
+			write_line(fp, (str(rule), sampler.model.rule_features[rule][0].trials) +\
 			               tuple([stat.value(rule) for stat in stats]))
 
 def print_scalar_stats(sampler):

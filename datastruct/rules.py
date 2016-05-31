@@ -1,21 +1,93 @@
-import algorithms.align
+#import algorithms.align
+import algorithms.fst
 from utils.files import *
 import libhfst
 import re
 #from scipy.stats import norm
-#from algorithms.ngrams import *
+from algorithms.ngrams import *
+from operator import itemgetter
 #import math
 
 class Rule:
-	def __init__(self, subst, tag_subst=None):
+	def __init__(self, subst, tag_subst=None, string=None):
 		self.subst = subst
 		self.tag_subst = tag_subst
+		self.transducer = None
+		if string is None:
+			self.string = self.to_string()
+		else:
+			self.string = string
+		self.left_pattern = None
+		
+	def __le__(self, other):
+#		if self.transducer is None:
+#			self.build_transducer()
+#		if other.transducer is None:
+#			other.build_transducer()
+#		isec = libhfst.HfstTransducer(self.transducer)
+#		isec.intersect(other.transducer)
+		pattern = 'X'.join(''.join(s[0]) for s in self.subst) +\
+			(''.join(self.tag_subst[0]) if self.tag_subst else '')
+		return other.lmatch_string(pattern)
 	
 	def __eq__(self, other):
 		return self.subst == other.subst and self.tag_subst == other.tag_subst
+#		return self.__str__() == other.__str__()
+	
+	def __str__(self):
+		return self.string
+	
+	def __hash__(self):
+		return self.string.__hash__()
 	
 	def copy(self):
 		return Rule(self.subst, self.tag_subst)
+	
+	def apply(self, node):
+		if self.transducer is None:
+			self.build_transducer()
+		t = algorithms.fst.seq_to_transducer(node.seq())
+		t.compose(self.transducer)
+		t.determinize()
+		t.minimize()
+		return list(map(itemgetter(0), sum(t.extract_paths().values(), [])))
+	
+	# TODO more meaningful name
+	def check(self, max_affix_length, max_infix_length, infix_slots):
+		if len(self.subst) > infix_slots+2:
+			return False
+		if max(len(self.subst[0][0]), len(self.subst[0][1]),\
+				len(self.subst[-1][0]), len(self.subst[-1][1])) >\
+				max_affix_length:
+			return False
+		if max((max(len(s[0]), len(s[1])) for s in self.subst[1:-1]),\
+				default=0) > max_infix_length:
+			return False
+		if len(self.subst) > 2 and any(len(s[0]) == 0 for s in self.subst[1:-1]):
+			return False
+		return True
+	
+	def compute_domsize(self, lexicon):
+		if lexicon.transducer is None:
+			lexicon.build_transducer()
+		self.build_transducer(alphabet=lexicon.alphabet)
+		t = libhfst.HfstTransducer(lexicon.transducer)
+		t.compose(self.transducer)
+		t.determinize()
+		t.minimize()
+		return len(list(map(itemgetter(0), sum(t.extract_paths(max_cycles=1).values(), []))))
+
+#	def compute_domsize(self, trh):
+#		trigrams = self.get_trigrams()
+#		if not trigrams:
+#			return len(trh)	#TODO incorrect for insertion rules
+#		nodes = trh.retrieve(trigrams[0])
+#		for tr in trigrams[1:]:
+#			nodes &= trh.retrieve(tr)
+#		if self.tag_subst and self.tag_subst[0]:
+#			nodes &= trh.retrieve_tag(self.tag_subst[0])
+##		return sum(1 for n in nodes if self.lmatch_node(n))
+#		return sum(len(self.apply(n)) for n in nodes if self.lmatch_node(n))
 	
 #	def apply(self, word):
 #		if not self.lmatch(word):
@@ -99,26 +171,69 @@ class Rule:
 #			self.make_right_pattern()
 #		return True if word and self.right_pattern.match(word) else False
 
-	def seq(self):	# TODO no identity symbols between subst and tag_subst!
+	def get_trigrams(self):
+		trigrams = []
+		for tr in generate_n_grams(('^',)+self.subst[0][0]+(libhfst.IDENTITY,), 3):
+			if len(tr) == 3:
+				trigrams.append(tr)
+		for alt in self.subst[1:-1]:
+			for tr in generate_n_grams((libhfst.IDENTITY,)+alt[0]+(libhfst.IDENTITY,), 3):
+				if len(tr) == 3:
+					trigrams.append(tr)
+		for tr in generate_n_grams((libhfst.IDENTITY,)+self.subst[-1][0]+('$',), 3):
+			if len(tr) == 3:
+				trigrams.append(tr)
+		return trigrams
+
+	def seq(self):
 		x_seq, y_seq = [], []
-		subst_seq = self.subst +\
-			(self.tag_subst,) if self.tag_subst is not None else ()
-		for x, y in subst_seq:
+		x_tseq, y_tseq = [], []
+		for x, y in self.subst:
 			x_seq.extend(x + (libhfst.EPSILON,)*(len(y)-len(x)))
 			x_seq.append(libhfst.IDENTITY)
 			y_seq.extend((libhfst.EPSILON,)*(len(x)-len(y)) + y)
 			y_seq.append(libhfst.IDENTITY)
+		x_seq.pop()		# remove the last identity symbol
+		y_seq.pop()
+		if self.tag_subst:
+			xt, yt = self.tag_subst
+			x_seq.extend(xt + (libhfst.EPSILON,)*(len(yt)-len(xt)))
+			y_seq.extend((libhfst.EPSILON,)*(len(xt)-len(yt)) + yt)
 		return tuple(zip(x_seq, y_seq))
 	
-	# TODO
+	def input_seq(self):
+		seq = []
+		for x, y in self.subst[:-1]:
+			seq.extend(x)
+			if not seq or seq[-1] != libhfst.IDENTITY:
+				seq.append(libhfst.IDENTITY)
+		seq.extend(self.subst[-1][0])
+		if self.tag_subst:
+			seq.extend(self.tag_subst[0])
+		return tuple(seq)
+	
+	def ngrams(self):
+		pass
+	
+	@staticmethod
+	def from_seq(seq, tag_subst):
+		subst, tag_subst = [], ()
+		x_seq, y_seq = (), ()
+		for x, y in seq:
+			if x == y == libhfst.IDENTITY:
+				subst.append((x_seq, y_seq))
+				x_seq, y_seq = (), ()
+			else:
+				x_seq += (x,) if x != libhfst.EPSILON else ()
+				y_seq += (y,) if y != libhfst.EPSILON else ()
+		subst.append((x_seq, y_seq))
+		return Rule(tuple(subst), tag_subst)
+	
 	def reverse(self):
-		prefix_r = (self.prefix[1], self.prefix[0])
-		alternations_r = [(y, x) for (x, y) in self.alternations]
-		suffix_r = (self.suffix[1], self.suffix[0])
-		tag_r = None
-		if self.tag:
-			tag_r = (self.tag[1], self.tag[0])
-		return Rule(prefix_r, alternations_r, suffix_r, tag_r)
+		subst = tuple((y, x) for x, y in self.subst)
+		tag_subst = self.tag_subst if not self.tag_subst \
+			else (self.tag_subst[1], self.tag_subst[0])
+		return Rule(subst, tag_subst)
 
 	def to_string(self):
 		return settings.RULE_PART_SEP.join(
@@ -130,10 +245,11 @@ class Rule:
 			 settings.RULE_SUBST_SEP +\
 			 ''.join(self.tag_subst[1]) if self.tag_subst else '')
 	
-	def build_transducer(self):
-		pass
+	def build_transducer(self, alphabet=None):
+		self.transducer =\
+			algorithms.fst.seq_to_transducer(self.seq(), alphabet=alphabet)
 	
-	def compute_domsize(self, lexicon):
+	def lmatch(self, lexicon):
 		if lexicon.transducer is None:
 			lexicon.build_transducer()
 		if self.transducer is None:
@@ -141,8 +257,39 @@ class Rule:
 		t = libhfst.HfstTransducer(lexicon.transducer)
 		t.compose(self.transducer)
 		t.input_project()
-		return sum(1 for p in t.extract_paths())
+		t.determinize()
+		t.minimize()
+		return tuple(t.extract_paths().keys())
 	
+	def rmatch(self, lexicon):
+		if lexicon.transducer is None:
+			lexicon.build_transducer()
+		if self.transducer is None:
+			self.build_transducer()
+		t = libhfst.HfstTransducer(self.transducer)
+		t.compose(lexicon.transducer)
+		t.output_project()
+		t.determinize()
+		t.minimize()
+		return tuple(t.extract_paths().keys())
+	
+	def lmatch_node(self, node):
+		return self.lmatch_string(node.key())
+
+	def lmatch_string(self, string):
+		if not self.left_pattern:
+			pattern = '.+'.join(''.join(s[0]) for s in self.subst)
+			if self.tag_subst and self.tag_subst[0]:
+				pattern += ''.join(self.tag_subst[0])
+#			print(pattern)
+			self.left_pattern = re.compile(pattern)
+		return True if self.left_pattern.match(string) else False
+
+#		if self.transducer is None:
+#			self.build_transducer()
+#		t = algorithms.fst.seq_to_transducer(node.seq())
+#		t.compose(self.transducer)
+#		return True if t.extract_paths() else False
 
 #def tokenize_word(string):
 #	'''Separate a string into a word and a POS-tag,
@@ -171,7 +318,7 @@ class Rule:
 				x = tuple(re.findall(settings.TAG_PATTERN_CMP, mt.group('x')))
 				y = tuple(re.findall(settings.TAG_PATTERN_CMP, mt.group('y')))
 				r_tag_subst = (x, y)
-		return Rule(tuple(r_subst), r_tag_subst)
+		return Rule(tuple(r_subst), r_tag_subst, string=string)
 #		mt = re.match(settings.
 
 #		p = string.find('___')

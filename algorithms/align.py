@@ -1,64 +1,90 @@
 from datastruct.rules import *
-import re
+import libhfst
+from operator import itemgetter
 
-# compute the longest common substring of two words
-def lcs(word_1, word_2):
-	if settings.USE_TAGS:
-		word_1 = word_1[:word_1.rfind(u'_')]
-		word_2 = word_2[:word_2.rfind(u'_')]
-	previous_row = ['']
-	for i in range(0, len(word_1)):
-		previous_row.append('')
-	for j in range(0, len(word_2)):
-		current_row = ['']
-		for i in range(0, len(word_1)):
-			up = previous_row[i+1]
-			diag = previous_row[i] + word_1[i] if word_1[i] == word_2[j] else ''
-			left = current_row[-1]
-			current_row.append(max([up, diag, left], key = lambda x: len(x)))
+MAX_INFIX_LENGTH = 3
+MAX_AFFIX_LENGTH = 5
+INFIX_SLOTS = 1
+
+def align_words(word_1, word_2):
+	previous_row = [(0, ())]
+	for i in range(len(word_1)):
+		left_dist, left_seq = previous_row[-1]
+		previous_row.append((left_dist + 1,\
+		                     left_seq + ((word_1[i], libhfst.EPSILON),)))
+	for j in range(len(word_2)):
+		up_dist, up_seq = previous_row[0]
+		current_row = [(up_dist + 1, up_seq + ((libhfst.EPSILON, word_2[j]),))]
+		for i in range(len(word_1)):
+			up_dist, up_seq = previous_row[i+1]
+			diag_dist, diag_seq = previous_row[i]
+			left_dist, left_seq = current_row[-1]
+			# in case of ties, prefer the diagonal
+			current_row.append(min((
+				(diag_dist + int(word_1[i]!=word_2[j]),
+					diag_seq + ((word_1[i], word_2[j]),)),
+				(up_dist + 1, up_seq + ((libhfst.EPSILON, word_2[j]),)),
+				(left_dist + 1, left_seq + ((word_1[i], libhfst.EPSILON),))),
+				key = itemgetter(0)))
 		previous_row = current_row
-	return previous_row[-1]
+	return previous_row[-1][1]
 
-# TODO change to use make_rule (currently in algorithms.mdl)
-def extract_rule(word_1, word_2, pattern):
-	# handle capitalization at the beginning (TODO code refactoring!)
-	if word_1.startswith('"') and word_2.startswith('"'):
-		if pattern.pattern.startswith('(.*)"'):
-			pattern = re.compile(pattern.pattern[5:])
-		rule = extract_rule(word_1[1:], word_2[1:], pattern)
-		if rule is None:
-			return None
-		if rule.prefix[0] or rule.prefix[1]:
-			rule.prefix = ('"'+rule.prefix[0], '"'+rule.prefix[1])
-#		if word_1 == '"republik' and word_2 == '"bundesrepublik':
-#			print(word_1, word_2, pattern, rule.to_string())
+def extract_rule(node_1, node_2):
+	'''Extract the most general rule.'''
+	alignment = align_words(node_1.word, node_2.word)
+	seq = []
+	for x, y in alignment:
+		if x == y:
+			if not seq or seq[-1] != (libhfst.IDENTITY, libhfst.IDENTITY):
+				seq.append((libhfst.IDENTITY, libhfst.IDENTITY))
+		else:
+			seq.append((x, y))
+	rule = Rule.from_seq(seq, (node_1.tag, node_2.tag))
+	# check whether the rule conforms to the criteria
+	if rule.check(MAX_AFFIX_LENGTH, MAX_INFIX_LENGTH, INFIX_SLOTS) and\
+			rule.reverse().check(MAX_AFFIX_LENGTH, MAX_INFIX_LENGTH, INFIX_SLOTS):
 		return rule
-
-	# "normal" case (no capitalization)
-	tag = None
-	if settings.USE_TAGS:
-		p1, p2 = word_1.rfind(u'_'), word_2.rfind(u'_')
-		tag = (word_1[p1+1:], word_2[p2+1:])
-		word_1, word_2 = word_1[:p1], word_2[:p2]
-	m1 = pattern.search(word_1)
-	m2 = pattern.search(word_2)
-	z = list(zip(m1.groups(), m2.groups()))
-	substr = re.sub('\(\.\*\??\)', '', pattern.pattern)
-	pref = z[0]
-	alt = []
-	for i, (x, y) in enumerate(z[1:-1], 1):
-		if x or y:
-			if x == y:
-				return None
-			alt.append((x, y))
-	suf = z[-1]
-	if pref[0] == pref[1] != u'' or suf[0] == suf[1] != u'':
+	else:
 		return None
-	return Rule(pref, alt, suf, tag)
 
-# extracts the morphological operation needed to turn word_1 into word_2
-def align(word_1, word_2):
-#	words_lcs = re.sub('([\\.])', '\\\\\\1', lcs(word_1, word_2))		# allow dot in words
-	pattern = re.compile('(.*)' + '(.*?)'.join([letter for letter in lcs(word_1, word_2)]) + '(.*)')
-	return extract_rule(word_1, word_2, pattern)
+def extract_all_rules(node_1, node_2):
+	'''Extract all rules fitting the pair of words.'''
+	# queue: rule seq, remaining alignment, num_segments, length of the last segment, is_last_segment
+	alignment = align_words(node_1.word, node_2.word)
+#	print(alignment)
+	queue = [((), alignment, 1, 0, False)]
+	results = []
+	while queue:
+		seq, alignment, num_seg, len_seg, last_seg = queue.pop()
+		if not alignment:
+			results.append(Rule.from_seq(seq, (node_1.tag, node_2.tag)))
+			continue
+		x, y = alignment[0]
+		if x == y:
+			# prolong the prefix
+			if num_seg == 1 and len_seg < MAX_AFFIX_LENGTH:
+				queue.append((seq + ((x, y),),
+				              alignment[1:], num_seg, len_seg+1, last_seg))
+			# prolong the suffix
+			if num_seg > 1 and len_seg < MAX_AFFIX_LENGTH:
+				queue.append((seq + ((x, y),),
+				              alignment[1:], num_seg, len_seg+1, True))
+			if not last_seg:
+				# prolong the current alternation
+				if num_seg > 1 and not last_seg and len_seg < MAX_INFIX_LENGTH:
+					if seq[-1] != (libhfst.IDENTITY, libhfst.IDENTITY):
+						queue.append((seq + ((x, y),),
+									  alignment[1:], num_seg, len_seg+1, last_seg))
+				# insert or continue an identity symbol
+				if not seq or seq[-1] != (libhfst.IDENTITY, libhfst.IDENTITY):
+					if num_seg < INFIX_SLOTS+2:
+						queue.append((seq + ((libhfst.IDENTITY, libhfst.IDENTITY),),
+									  alignment[1:], num_seg+1, 0, last_seg))
+				else:
+					queue.append((seq, alignment[1:],\
+								  num_seg, len_seg, last_seg))
+		else:
+			queue.append((seq + ((x, y),), alignment[1:],\
+			              num_seg, len_seg+1, last_seg))
+	return list(set(results))
 

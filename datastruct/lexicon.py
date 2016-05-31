@@ -1,7 +1,7 @@
 #from datastruct.rules import *
 #from algorithms.align import lcs
-#import algorithms.ngrams
 import algorithms.fst
+from algorithms.ngrams import TrigramHash
 from utils.files import *
 import settings
 from collections import defaultdict
@@ -9,7 +9,8 @@ import itertools
 import re
 #import copy
 #import heapq
-#import math
+import math
+#import numpy as np
 
 #def freqcl(freq, maxfreq):
 #	try:
@@ -41,34 +42,48 @@ def tokenize_word(string):
 		   tuple(re.findall(settings.TAG_PATTERN_CMP, m.group('tag')))
 
 class LexiconEdge:
-	def __init__(self, word_1, word_2, rule, weight=0.0):
-		self.word_1 = word_1
-		self.word_2 = word_2
+	def __init__(self, source, target, rule, cost=0.0):
+		self.source = source
+		self.target = target
 		self.rule = rule
-		self.weight = weight
+		self.cost = cost
+	
+	def __lt__(self, other):
+		return self.cost < other.cost
+	
+	def __hash__(self):
+		return self.source.__hash__() + self.target.__hash__()
 
 class LexiconNode:
 	def __init__(self, word, freq=None, vec=None):
 		self.word, self.tag = tokenize_word(word)
+		self.key = ''.join(self.word + self.tag)
 		if settings.WORD_FREQ_WEIGHT > 0:
 			self.freq = freq
+			self.logfreq = math.log(self.freq)
 		if settings.WORD_VEC_WEIGHT > 0:
 			self.vec = vec
 		self.parent = None
+		self.alphabet = None
 		self.edges = []
-		self.transducer = None
+		self.cost = 0.0
 #		self.training = True
 #		self.structure = None
 
-	def key(self):
-		return ''.join(self.word + self.tag)
-#		result = self.word
-#		if settings.USE_TAGS and self.tag is not None:
-#			result += ''.join(self.tag)
-#		return result
+#	def key(self):
+#		return ''.join(self.word + self.tag)
 	
 	def __lt__(self, other):
-		return self.key() < other.key()
+		return self.key < other.key
+	
+	def __eq__(self, other):
+		return isinstance(other, LexiconNode) and self.key == other.key
+	
+	def __str__(self):
+		return self.key
+
+	def __hash__(self):
+		return self.key.__hash__()
 	
 	def root(self):
 		root = self
@@ -76,14 +91,14 @@ class LexiconNode:
 			root = root.prev
 		return root
 	
-	def has_ancestor(self, word):
-		if self.prev is None:
+	def has_ancestor(self, node):
+		if self.parent is None:
 			return False
 		else:
-			if self.prev.word == word:
+			if self.parent == node:
 				return True
 			else:
-				return self.prev.has_ancestor(word)
+				return self.parent.has_ancestor(node)
 	
 	def deriving_rule(self):
 		if self.prev is None:
@@ -91,10 +106,14 @@ class LexiconNode:
 		else:
 			return self.prev.edge_label(self.key())
 	
-	def build_transducer(self, alphabet=None):
-		seq = self.word + self.tag
-		self.transducer =\
-			algorithms.fst.seq_to_transducer(zip(seq, seq), alphabet=alphabet)
+	def seq(self):
+		return tuple(zip(self.word + self.tag, self.word + self.tag))
+#		self.transducer =\
+#			algorithms.fst.seq_to_transducer(zip(seq, seq), alphabet=alphabet)
+	
+	def ngrams(self, n):
+		# return the n-gram representation
+		raise Exception('Not implemented!')
 	
 #	def depth(self):
 #		if self.prev is None:
@@ -253,15 +272,10 @@ class Lexicon:
 	def __init__(self, rootdist=None, ruleset=None):
 		self.nodes = {}
 		self.roots = set()
-#		self.roots = set([])
-#		self.rootdist = rootdist
+		self.edges_by_rule = defaultdict(lambda: list())
+		self.cost = 0.0
 		self.rules_c = defaultdict(lambda: 0)
-		self.transducer = None		# TODO
-#		if ruleset is not None:
-#			self.ruleset = ruleset
-#		else:
-#			self.ruleset = RuleSet()
-#		self.max_freq = 0				# the largest word freqency
+		self.transducer = None
 	
 	def __len__(self):
 		return len(self.nodes)
@@ -283,6 +297,14 @@ class Lexicon:
 	
 	def __delitem__(self, key):
 		del self.nodes[key]
+	
+	def iter_nodes(self):
+		return self.nodes.values()
+	
+	def iter_edges(self):
+		for node in self.iter_nodes():
+			for edge in node.edges:
+				yield edge
 
 #	def get_edges_for_rule(self, rule):
 #		result = []
@@ -290,12 +312,32 @@ class Lexicon:
 #			if rule in w.next:
 #				result.append((w, w.next[rule]))
 #		return result
+
+	def recompute_cost(self, model):
+		self.cost = sum(rt.cost for rt in self.roots) +\
+			sum(edge.cost for edge in self.iter_edges()) +\
+			model.null_cost()
 	
-	# TODO adding words: only with add_node!
+	def recompute_all_costs(self, model):
+		self.cost = 0
+		for node in self.iter_nodes():
+			node.cost = model.word_cost(node)
+			self.cost += node.cost
+		for edge in self.iter_edges():
+			edge.cost = model.edge_cost(edge)
+			self.cost += edge.cost - edge.target.cost
+	
 	def add_node(self, node):
-		key = node.key()
+		key = node.key
 		self.nodes[key] = node
-		self.roots.add(key)
+		self.roots.add(node)
+		self.cost += node.cost
+	
+	def trigram_hash(self):
+		trh = TrigramHash()
+		for node in self.nodes.values():
+			trh.add(node)
+		return trh
 #		if root_prob is None:
 #			root_prob = self.rootdist.word_prob(word)
 #		self.nodes[word] = LexiconNode(word, freq, root_prob)
@@ -357,19 +399,24 @@ class Lexicon:
 
 	# TODO full cycle detection
 	def check_if_edge_possible(self, edge):
-		w1, w2 = self.nodes[edge.word_1], self.nodes[edge.word_2]
-		if w1.parent is not None and w1.parent.key() == edge.word_2:
-			raise Exception('Cycle detected: %s, %s' % (edge.word_1, edge.word_2))
-		if w2.parent is not None:
-			raise Exception('draw_edge: %s has already got an ingoing edge.' % edge.word_2)
+#		n1, n2 = self.nodes[edge.source], self.nodes[edge.target]
+		if edge.source.parent is not None and edge.source.parent == edge.target:
+			raise Exception('Cycle detected: %s, %s' % (edge.source.key(), edge.target.key()))
+		if edge.target.parent is not None:
+			raise Exception('%s has already got an ingoing edge.' % edge.target.key())
+	
+	def has_edge(self, edge):
+		return edge in edge.source.edges
 
 	def add_edge(self, edge):
 		self.check_if_edge_possible(edge)
-		w1, w2 = self.nodes[edge.word_1], self.nodes[edge.word_2]
-		w1.edges.append(edge)
-		w2.parent = w1
-		self.roots.remove(edge.word_2)
+#		w1, w2 = self.nodes[edge.source], self.nodes[edge.target]
+		edge.source.edges.append(edge)
+		edge.target.parent = edge.source
+		self.roots.remove(edge.target)
+		self.edges_by_rule[edge.rule].append(edge)
 		self.rules_c[edge.rule] += 1
+		self.cost += edge.cost - edge.target.cost
 	
 #	def draw_edge(self, word_1, word_2, rule):
 #		w1, w2 = self.nodes[word_1], self.nodes[word_2]
@@ -387,62 +434,66 @@ class Lexicon:
 #		self.roots.remove(word_2)
 #		self.rules_c.inc(rule)
 
-#	def remove_edge(self, word_1, word_2):
-#		self.roots.add(word_2)
-#		w1, w2 = self.nodes[word_1], self.nodes[word_2]
-#		rule = w1.edge_label(word_2)
-#		self.rules_c[rule] -= 1
-#		del w1.next[rule]
-#		w2.prev = None
+	def remove_edge(self, edge):
+		edge.target.parent = None
+		self.roots.add(edge.target)
+		edge.source.edges.remove(edge)
+		self.edges_by_rule[edge.rule].remove(edge)
+		self.rules_c[edge.rule] -= 1
+		self.cost -= edge.cost - edge.target.cost
 	
-#	def reset(self):
-#		'''Remove all edges.'''
-#		self.rules_c = Counter()
-#		for n in self.nodes.values():
-#			n.prev = None
-#			n.next = {}
-#			self.roots.add(n.key())
-#	
+	def reset(self):
+		self.cost = sum(node.cost for node in self.iter_nodes())
+		self.edges_by_rule = defaultdict(lambda: list())
+		for node in self.iter_nodes():
+			node.parent = None
+			node.edges = []
+			self.roots.add(node)
+	
 #	def recalculate_freqcl(self):
 #		for w in self.values():
 #			w.freqcl = freqcl(w.freq, self.max_freq)
 
 	def build_transducer(self):
-		alphabet =\
+		self.alphabet =\
 			tuple(sorted(set(
 				itertools.chain(*(n.word+n.tag for n in self.nodes.values()))
 			)))
-		print(alphabet)
-		for n in self.nodes.values():
-			n.build_transducer(alphabet=alphabet)
+#		print(alphabet)
+#		for n in self.nodes.values():
+#			n.build_transducer(alphabet=alphabet)
 		self.transducer =\
 			algorithms.fst.binary_disjunct(
-				n.transducer for n in self.nodes.values()
+				algorithms.fst.seq_to_transducer(\
+						n.seq(), alphabet=self.alphabet)\
+					for n in self.nodes.values()
 			)
 	
 	def save_to_file(self, filename):
-		def write_subtree(fp, word_1, word_2, rule):
-			w2 = self.nodes[word_2]
-			write_line(fp, (word_1, word_2, rule, w2.freq,\
-			                settings.VECTOR_SEP.join(map(str, w2.vec))))
-			for edge in w2.edges:
-				write_subtree(fp, word_2, edge.word_2, edge.rule)
+		def write_subtree(fp, source, target, rule):
+#			n2 = self.nodes[target]
+			line = (source.key, target.key, str(rule)) if source is not None\
+				else ('', target.key, '')
+			if settings.WORD_FREQ_WEIGHT > 0.0:
+				line = line + (target.freq,)
+			if settings.WORD_VEC_WEIGHT > 0.0:
+				line = line + (settings.VECTOR_SEP.join(map(str, n2.vec)),)
+			write_line(fp, line)
+			for edge in target.edges:
+				write_subtree(fp, target, edge.target, edge.rule)
 		with open_to_write(filename) as fp:
 			for rt in self.roots:
-				write_subtree(fp, '', rt, '')
+				write_subtree(fp, None, rt, None)
 	
 	@staticmethod
 	def init_from_file(filename):
 		'''Create a lexicon with no edges from a wordlist.'''
-		# TODO rootdist
-
-#		if rootdist is None:
-#			rootdist = algorithms.ngrams.NGramModel(settings.ROOTDIST_N)
-#			rootdist.train_from_file(filename)
 		lexicon = Lexicon()
-		# read the input file and create nodes
 		for node_data in read_tsv_file(filename, settings.WORDLIST_FORMAT):
-			lexicon.add_node(LexiconNode(*node_data))
+			try:
+				lexicon.add_node(LexiconNode(*node_data))
+			except Exception:
+				print('Warning: ignoring %s' % node_data[0])
 		return lexicon
 
 	@staticmethod
