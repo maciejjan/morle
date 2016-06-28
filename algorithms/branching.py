@@ -106,31 +106,31 @@ def branching(vertices, edges):
 				roots.append(k)
 	
 	print('result cost = %f' % sum(e.cost for e in result))
-	with open_to_write('result.txt') as fp:
-		for e in result:
-			write_line(fp, (e.source.key, e.target.key))
+#	with open_to_write('result.txt') as fp:
+#		for e in result:
+#			write_line(fp, (e.source.key, e.target.key))
 
-	with open_to_write('strong.txt') as fp:
-		for ss in strong_sets.values():
-			write_line(fp, (', '.join(sorted([n.key for n in ss])), ))
+#	with open_to_write('strong.txt') as fp:
+#		for ss in strong_sets.values():
+#			write_line(fp, (', '.join(sorted([n.key for n in ss])), ))
 #	for ss in strong_sets.values():
 #		print(', '.join(sorted([n.key for n in ss])))
 
 	edges_final = []
 	root_vertices = set([min[x] for x in rset])
 #	print 'ROOT' in root_vertices
-	with open_to_write('extract.txt') as fp:
-		while result:
-			e = result.pop(0)
-			if e.source in root_vertices:
-				if not e.target in root_vertices:
-					edges_final.append(e)
-					root_vertices.add(e.target)
-					fp.write('adding edge: %s -> %s\n' % (e.source.key, e.target.key))
-				else:
-					fp.write('discarding edge: %s -> %s\n' % (e.source.key, e.target.key))
-			else:
-				result.append(e)
+#	with open_to_write('extract.txt') as fp:
+	while result:
+		e = result.pop(0)
+		if e.source in root_vertices:
+			if not e.target in root_vertices:
+				edges_final.append(e)
+				root_vertices.add(e.target)
+#				fp.write('adding edge: %s -> %s\n' % (e.source.key, e.target.key))
+#			else:
+#				fp.write('discarding edge: %s -> %s\n' % (e.source.key, e.target.key))
+		else:
+			result.append(e)
 
 	return edges_final
 	

@@ -17,6 +17,11 @@ def save_analyses(lexicon, filename):
 		for node in sorted(lexicon.values(), key=str):
 			write_line(fp, (' <- '.join(map(str, analysis(node))),))
 
+def save_rules(model, filename):
+	with open_to_write(filename) as fp:
+		for rule, features in model.rule_features.items():
+			write_line(fp, (str(rule), features[0].prob, features[0].trials))
+
 #def expectation_maximization(lexicon):
 ##	algorithms.mdl.optimize_lexicon(lexicon)
 ##	algorithms.mdl.optimize_rule_params(lexicon)
@@ -34,6 +39,7 @@ def train_unsupervised():
 		print('Fitting the initial model...')
 		model = fit_model_to_graph(lexicon, settings.FILES['surface.graph'])
 		model.save_to_file(model_filename)
+	print('Loading edges...')
 	edges = [LexiconEdge(lexicon[w1], lexicon[w2], Rule.from_string(r))\
 		for w1, w2, r in read_tsv_file(settings.FILES['surface.graph'])]
 
@@ -45,9 +51,10 @@ def train_unsupervised():
 			edge.cost = model.edge_cost(edge)
 	lexicon.recompute_cost(model)
 
-	with open_to_write('vertices.txt') as fp:
-		for n in lexicon.iter_nodes():
-			write_line(fp, tuple(map(str, (n, n.cost))))
+#	with open_to_write('vertices.txt') as fp:
+#		for n in lexicon.iter_nodes():
+#			write_line(fp, tuple(map(str, (n, n.cost))))
+	print('Saving edges...')
 	with open_to_write('edges.txt') as fp:
 		for e in edges:
 			write_line(fp, tuple(map(str, (e.source, e.target, e.rule, e.cost, e.target.cost, e.target.cost-e.cost))))
@@ -60,6 +67,8 @@ def train_unsupervised():
 	
 	print('Saving model...')
 	model.save_to_file(settings.FILES['model'])
+	save_analyses(lexicon, settings.FILES['analyses'])
+	save_rules(model, settings.FILES['model.rules'])
 
 def train_hardem():
 	lexicon = Lexicon.init_from_file(settings.FILES['training.wordlist'])
