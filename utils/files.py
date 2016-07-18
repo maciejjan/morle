@@ -7,7 +7,8 @@ import utils.printer
 def read_tsv_file(filename, types=None, print_progress=False, print_msg=None):
 	pp = None
 	if print_progress:
-		print(print_msg)
+		if print_msg:
+			print(print_msg)
 		pp = utils.printer.progress_printer(get_file_size(filename))
 	with codecs.open(settings.WORKING_DIR+filename, 'r', settings.ENCODING) as fp:
 		for line in fp:

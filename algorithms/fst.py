@@ -55,11 +55,11 @@ def binary_disjunct(transducers):
                 stack.append(next(transducers))
                 sizes.append(1)
                 count += 1
-                sys.stdout.write('\r'+str(count))
+#                sys.stdout.write('\r'+str(count))
 #                sys.stdout.flush()
             except StopIteration:
                 break
-    print()
+#    print()
 #    print('final disjunction')
     t = stack.pop()
     while stack:

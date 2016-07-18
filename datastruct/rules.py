@@ -20,19 +20,12 @@ class Rule:
 		self.left_pattern = None
 		
 	def __le__(self, other):
-#		if self.transducer is None:
-#			self.build_transducer()
-#		if other.transducer is None:
-#			other.build_transducer()
-#		isec = libhfst.HfstTransducer(self.transducer)
-#		isec.intersect(other.transducer)
 		pattern = 'X'.join(''.join(s[0]) for s in self.subst) +\
 			(''.join(self.tag_subst[0]) if self.tag_subst else '')
 		return other.lmatch_string(pattern)
 	
 	def __eq__(self, other):
 		return self.subst == other.subst and self.tag_subst == other.tag_subst
-#		return self.__str__() == other.__str__()
 	
 	def __str__(self):
 		return self.string
@@ -76,100 +69,6 @@ class Rule:
 		t.determinize()
 		t.minimize()
 		return len(list(map(itemgetter(0), sum(t.extract_paths(max_cycles=1).values(), []))))
-
-#	def compute_domsize(self, trh):
-#		trigrams = self.get_trigrams()
-#		if not trigrams:
-#			return len(trh)	#TODO incorrect for insertion rules
-#		nodes = trh.retrieve(trigrams[0])
-#		for tr in trigrams[1:]:
-#			nodes &= trh.retrieve(tr)
-#		if self.tag_subst and self.tag_subst[0]:
-#			nodes &= trh.retrieve_tag(self.tag_subst[0])
-##		return sum(1 for n in nodes if self.lmatch_node(n))
-#		return sum(len(self.apply(n)) for n in nodes if self.lmatch_node(n))
-	
-#	def apply(self, word):
-#		if not self.lmatch(word):
-#			return []
-#		if self.tag:
-#			word = word[:-len(self.tag[0])-1]
-#		i, j = len(self.prefix[0]), len(self.suffix[0])
-#		word = word[i:-j] if j > 0 else word[i:]
-#		if self.alternations:
-#			results = []
-#			alt_pat = re.compile(u'(.*?)'.join([x for x, y in self.alternations]))
-#			m = alt_pat.search(word, 1)
-#			while m is not None:
-#				if m.end() == len(word):
-#					break
-#				w = word[:m.start()] + self.alternations[0][1]
-#				for i in range(1, len(self.alternations)):
-#					w += m.group(i) + self.alternations[i][1]
-#				w += word[m.end():]
-#				results.append(self.prefix[1] + w + self.suffix[1] +\
-#					(u'_' + self.tag[1] if self.tag else u''))
-#				m = alt_pat.search(word, m.start()+1) if m.start()+1 < len(word) else None
-#			return results
-#		else:
-#			return [self.prefix[1] + word + self.suffix[1] +\
-#				(u'_' + self.tag[1] if self.tag else u'')]
-#	
-#	def get_affixes(self):
-#		affixes = []
-#		affixes.append(self.prefix[0])
-#		affixes.append(self.prefix[1])
-#		affixes.append(self.suffix[0])
-#		affixes.append(self.suffix[1])
-#		return [x for x in affixes if x]
-#
-#	def get_trigrams(self):
-#		trigrams = []
-#		for tr in generate_n_grams('^'+self.prefix[0]+'*', 3):
-#			if len(tr) == 3:
-#				trigrams.append(tr)
-#		for alt in self.alternations:
-#			for tr in generate_n_grams('*'+alt[0]+'*', 3):
-#				if len(tr) == 3:
-#					trigrams.append(tr)
-#		for tr in generate_n_grams('*'+self.suffix[0]+'$', 3):
-#			if len(tr) == 3:
-#				trigrams.append(tr)
-#		return trigrams
-#	
-#	def make_left_pattern(self):
-#		pref = re.escape(self.prefix[0])
-#		alt = [re.escape(x) for x, y in self.alternations]
-#		suf = re.escape(self.suffix[0])
-#		pattern = '^' +\
-#			pref +\
-#			('(.*)' if alt else '') + \
-#			'(.*)'.join(alt) +\
-#			'(.*)' + suf +\
-#			('_' + self.tag[0] if self.tag else '') + '$'
-#		self.left_pattern = re.compile(pattern)
-#	
-#	def make_right_pattern(self):
-#		pref = re.escape(self.prefix[1])
-#		alt = [re.escape(y) for x, y in self.alternations]
-#		suf = re.escape(self.suffix[1])
-#		pattern = '^' +\
-#			pref +\
-#			('(.*)' if alt else '') + \
-#			'(.*)'.join(alt) +\
-#			'(.*)' + suf +\
-#			('_' + self.tag[1] if self.tag else '') + '$'
-#		self.right_pattern = re.compile(pattern)
-#	
-#	def lmatch(self, word):
-#		if self.left_pattern is None:
-#			self.make_left_pattern()
-#		return True if word and self.left_pattern.match(word) else False
-#	
-#	def rmatch(self, word):
-#		if self.right_pattern is None:
-#			self.make_right_pattern()
-#		return True if word and self.right_pattern.match(word) else False
 
 	def get_trigrams(self):
 		trigrams = []

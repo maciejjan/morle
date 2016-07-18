@@ -119,13 +119,17 @@ def softem(lexicon, model, edges):
 #			with open_to_write('costs_sample.txt.%d' % iter_num) as fp:
 #				for cost, acc in sample_stats:
 #					write_line(fp, (cost, acc))
-		with open_to_write('edges_sample.txt.%d' % iter_num) as fp:
-			for rule, edges_list in edges_by_rule.items():
-				for edge, weight in edges_list:
-					write_line(fp, (edge.source.key, edge.target.key, str(edge.rule), str(weight)))
+		if iter_num % 5 == 0:
+			with open_to_write('edges_sample.txt.%d' % iter_num) as fp:
+				for rule, edges_list in edges_by_rule.items():
+					for edge, weight in edges_list:
+						write_line(fp, (edge.source.key, edge.target.key, str(edge.rule), str(weight)))
+			model.save_rule_stats('rule_stats.txt.%d' % iter_num)
 
 		# fit the model
+		print('null cost before fitting = %f' % model.null_cost())
 		model.fit_to_sample(edges_by_rule)
+		print('null cost after fitting = %f' % model.null_cost())
 		print('model cost = %f' % model.cost)
 		num_rules = model.num_rules()
 		cost = lexicon_cost + model.cost
@@ -137,6 +141,12 @@ def softem(lexicon, model, edges):
 		for e in edges:
 			e.cost = model.edge_cost(e)
 #		lexicon.recompute_cost(model)
+
+		if iter_num % 5 == 0:
+			print('Saving edges...')
+			with open_to_write('edges.txt.%d' % iter_num) as fp:
+				for e in edges:
+					write_line(fp, tuple(map(str, (e.source, e.target, e.rule, e.cost, e.target.cost, e.target.cost-e.cost))))
 
 #		cost = 0.0
 #		for i, edge in enumerate(edges):

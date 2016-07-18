@@ -5,7 +5,7 @@ import algorithms.fastss
 import algorithms.splrules
 from datastruct.lexicon import *
 from datastruct.rules import *
-from models.models import *
+from models.point import *
 #import algorithms.cooccurrences
 #from algorithms.ngrams import NGramModel
 #from datastruct.counter import *
