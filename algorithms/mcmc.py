@@ -7,6 +7,8 @@ import numpy as np
 from scipy.special import beta, betaln
 from datastruct.lexicon import *
 from datastruct.rules import *
+from models.point import PointModel
+from models.marginal import MarginalModel
 from utils.files import *
 from utils.printer import *
 import settings
@@ -72,7 +74,7 @@ class ExpectedLogLikelihoodStatistic(ScalarStatistic):
         pass
     
     def next_iter(self, sampler):
-        self.val = (self.val * (sampler.num-1) + sampler.lexicon.cost) / sampler.num
+        self.val = (self.val * (sampler.num-1) + sampler.logl()) / sampler.num
 
 class TimeStatistic(ScalarStatistic):
     def reset(self, sampler):
@@ -86,6 +88,42 @@ class TimeStatistic(ScalarStatistic):
         pass
 
     def edge_removed(self, sampler, idx, edge):
+        pass
+
+# TODO
+class GraphsWithoutRuleSetStatistic(ScalarStatistic):
+    def __init__(self, sampler, forbidden_rules):
+        self.forbidden_rules = forbidden_rules
+        self.reset(sampler)
+
+    def reset(self, sampler):
+        self.val = 0
+        self.last_modified = 0
+        self.forbidden_edges =\
+            sum(count for rule, count in sampler.lexicon.rules_c.items()\
+                if rule in self.forbidden_rules)
+
+    def update(self, sampler):
+        self.val =\
+            (self.val * self.last_modified +\
+             int(self.forbidden_edges == 0) *\
+                (sampler.num - self.last_modified)) /\
+            sampler.num
+        self.last_modified = sampler.num
+
+    def edge_added(self, sampler, idx, edge):
+        if edge.rule in self.forbidden_rules:
+            if self.forbidden_edges == 0:
+                self.update(sampler)
+            self.forbidden_edges += 1
+
+    def edge_removed(self, sampler, idx, edge):
+        if edge.rule in self.forbidden_rules:
+            if self.forbidden_edges == 1:
+                self.update(sampler)
+            self.forbidden_edges -= 1
+
+    def next_iter(self, sampler):
         pass
 
 class AcceptanceRateStatistic(ScalarStatistic):
@@ -155,12 +193,14 @@ class RuleStatistic(MCMCStatistic):
         self.reset(sampler)
 
     def reset(self, sampler):
-        for rule in sampler.model.rules:
+#        for rule in sampler.model.rules:
+        for rule in sampler.model.rule_features:
             self.values[rule] = 0.0
             self.last_modified[rule] = 0
     
     def update(self, sampler):
-        for rule in sampler.model.rules:
+#        for rule in sampler.model.rules:
+        for rule in sampler.model.rule_features:
             self.update_rule(rule, sampler)
     
     def update_rule(self, rule, sampler):
@@ -185,6 +225,24 @@ class RuleFrequencyStatistic(RuleStatistic):
              sampler.lexicon.rules_c[rule] * (sampler.num - self.last_modified[rule])) /\
             sampler.num
         self.last_modified[rule] = sampler.num
+    
+    def edge_added(self, sampler, idx, edge):
+        self.update_rule(edge.rule, sampler)
+
+    def edge_removed(self, sampler, idx, edge):
+        self.update_rule(edge.rule, sampler)
+
+# TODO
+class RuleExpectedContributionStatistic(RuleStatistic):
+    def update_rule(self, rule, sampler):
+        if self.last_modified[rule] < sampler.num:
+            edges = sampler.lexicon.edges_by_rule[rule]
+            new_value = sampler.model.cost_of_change([], edges)
+            self.values[rule] = \
+                (self.values[rule] * self.last_modified[rule] +\
+                 new_value * (sampler.num - self.last_modified[rule])) /\
+                sampler.num
+            self.last_modified[rule] = sampler.num
     
     def edge_added(self, sampler, idx, edge):
         self.update_rule(edge.rule, sampler)
@@ -235,6 +293,7 @@ class RuleGraphsWithoutStatistic(RuleStatistic):
                 self.values[rule] * self.last_modified[rule] / sampler.num
             self.last_modified[rule] = sampler.num
 
+
 # TODO
 class RuleIntervalsWithoutStatistic(MCMCStatistic):
     def __init__(self, sampler):
@@ -273,6 +332,7 @@ class RuleIntervalsWithoutStatistic(MCMCStatistic):
 ### SAMPLERS ###
 
 # TODO monitor the number of moves from each variant and their acceptance rates!
+# TODO refactor
 class MCMCGraphSampler:
     def __init__(self, model, lexicon, edges):
         self.model = model
@@ -284,11 +344,20 @@ class MCMCGraphSampler:
         self.len_edges = len(edges)
         self.num = 0        # iteration number
         self.stats = {}
+#        self.accept_all = False
     
     def add_stat(self, name, stat):
         if name in self.stats:
             raise Exception('Duplicate statistic name: %s' % name)
         self.stats[name] = stat
+
+    def logl(self):
+        if isinstance(self.model, PointModel):
+            return self.lexicon.cost
+        elif isinstance(self.model, MarginalModel):
+            return self.model.cost()
+        else:
+            raise Exception('Unknown model type.')
 
     def next(self):
         def consider_adding_edge(edge):
@@ -356,14 +425,24 @@ class MCMCGraphSampler:
         # compute the probability ratio of the proposed graph
         # related to the current one
         prob_ratio = None
-        if isinstance(model, PointModel):
+#        if self.accept_all:
+#            prob_ratio = 1.0
+        if isinstance(self.model, PointModel):
             prob_ratio = 1.0
             for e in edges_to_add:
                 prob_ratio *= consider_adding_edge(e)
             for e in edges_to_remove:
                 prob_ratio *= consider_removing_edge(e)
-        elif isinstance(model, MarginalModel):
-            prob_ratio = math.exp(model.change_cost(edges_to_add, edges_to_remove)
+        elif isinstance(self.model, MarginalModel):
+            prob_ratio = math.exp(\
+                -self.model.cost_of_change(edges_to_add, edges_to_remove))
+#            print()
+#            for e in edges_to_add:
+#                print('Adding: %s -> %s via %s' % (e.source.key, e.target.key, str(e.rule)))
+#            for e in edges_to_remove:
+#                print('Removing: %s -> %s via %s' % (e.source.key, e.target.key, str(e.rule)))
+#            print('cost_of_change = %f' % self.model.cost_of_change(edges_to_add, edges_to_remove))
+#            print('acc_prob = %f' % prob_ratio)
         else:
             raise Exception('Unknown model type.')
 
@@ -384,8 +463,8 @@ class MCMCGraphSampler:
                 for stat in self.stats.values():
                     stat.edge_added(self, idx, e)
             # update the model
-            if isinstance(model, MarginalModel):
-                model.apply_change(edges_to_add, edges_to_remove)
+            if isinstance(self.model, MarginalModel):
+                self.model.apply_change(edges_to_add, edges_to_remove)
 
         # update the remaining stats
         for stat in self.stats.values():
@@ -399,6 +478,19 @@ class MCMCGraphSampler:
     def update_stats(self):
         for stat in self.stats.values():
             stat.update(self)
+
+
+class MCMCRuleSampler:
+    def __init__(self, ruleset):
+        self.full_ruleset = ruleset
+        self.current_ruleset = ruleset
+
+    def next(self):
+        # for each rule: determine the expected contribution
+        # propose the next rule set according to the contribution
+        # sample the probability ratio for the computation of acc. prob.
+        # accept/reject
+        pass
 
 
 #class MCMCRuleSetSampler:
@@ -594,7 +686,7 @@ def save_rules(sampler, filename):
             stats.append(stat)
     with open_to_write(filename) as fp:
         write_line(fp, ('rule', 'domsize') + tuple(stat_names))
-        for rule in sampler.model.rules:
+        for rule in sampler.model.rule_features:
             write_line(fp, (str(rule), sampler.model.rule_features[rule][0].trials) +\
                            tuple([stat.value(rule) for stat in stats]))
 
@@ -617,4 +709,45 @@ def save_intervals(intervals, filename):
     with open_to_write(filename) as fp:
         for rule, ints in intervals.items():
             write_line(fp, (rule, len(ints), ' '.join([str(i) for i in ints])))
+
+def mcmc_inference(lexicon, model, edges):
+    iter_num = 0
+    while iter_num < settings.EM_MAX_ITERATIONS:
+        iter_num += 1
+        # init sampler
+        sampler = MCMCGraphSampler(model, lexicon, edges)
+        sampler.add_stat('acc_rate', AcceptanceRateStatistic(sampler))
+        sampler.add_stat('exp_edge_freq', EdgeFrequencyStatistic(sampler))
+        sampler.add_stat('graphs_without_1', GraphsWithoutRuleSetStatistic(sampler,\
+            set(map(Rule.from_string, [':/:lage']))))
+        sampler.add_stat('graphs_without_2', GraphsWithoutRuleSetStatistic(sampler,\
+            set(map(Rule.from_string, [':/:lage', '{CAP}:/a:ü/:t']))))
+        sampler.add_stat('graphs_without_3', GraphsWithoutRuleSetStatistic(sampler,\
+            set(map(Rule.from_string, [':/:lage', '{CAP}:/a:ü/:t', '{CAP}se:/:']))))
+        sampler.add_stat('graphs_without_4', GraphsWithoutRuleSetStatistic(sampler,\
+            set(map(Rule.from_string, [':/:lage', '{CAP}:/a:ü/:t', '{CAP}se:/:', '{CAP}:/a:e']))))
+        sampler.add_stat('graphs_without_5', GraphsWithoutRuleSetStatistic(sampler,\
+            set(map(Rule.from_string, [':/:lage', '{CAP}:/a:ü/:t', '{CAP}se:/:', '{CAP}:/a:e', ':/:ge']))))
+        sampler.add_stat('exp_logl', ExpectedLogLikelihoodStatistic(sampler))
+        sampler.add_stat('exp_contrib', RuleExpectedContributionStatistic(sampler))
+
+        print('Warming up the sampler...')
+        pp = progress_printer(settings.SAMPLING_WARMUP_ITERATIONS)
+#        sampler.accept_all = True
+        for i in pp:
+            sampler.next()
+#        sampler.accept_all = False
+
+        # sample the graphs
+        print('Sampling...')
+        sampler.reset()
+        pp = progress_printer(settings.SAMPLING_ITERATIONS)
+        for i in pp:
+            sampler.next()
+        sampler.update_stats()
+
+        print_scalar_stats(sampler)
+        save_edges(sampler, 'edges_sample.txt.%d' % iter_num)
+        save_rules(sampler, 'rule_stats.txt.%d' % iter_num)
+        break
 

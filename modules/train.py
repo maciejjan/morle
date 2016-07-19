@@ -3,6 +3,7 @@ import algorithms.em
 from datastruct.lexicon import *
 from datastruct.rules import *
 from models.point import PointModel, fit_model_to_graph
+from models.marginal import MarginalModel
 from utils.files import *
 #from utils.printer import *
 import settings
@@ -22,8 +23,7 @@ def save_rules(model, filename):
         for rule, features in model.rule_features.items():
             write_line(fp, (str(rule), features[0].prob, features[0].trials))
 
-
-def train_unsupervised():
+def prepare_point_model():
     lexicon = Lexicon.init_from_file(settings.FILES['training.wordlist'])
     model_filename, model = settings.FILES['model'] + '.0', None
     if file_exists(model_filename):
@@ -52,20 +52,42 @@ def train_unsupervised():
         for e in edges:
             write_line(fp, tuple(map(str, (e.source, e.target, e.rule, e.cost, e.target.cost, e.target.cost-e.cost))))
 
+    return model, lexicon, edges
+
+def prepare_marginal_model():
+    lexicon = Lexicon.init_from_file(settings.FILES['training.wordlist'])
+    print('Loading edges...')
+    edges, ruleset = [], set()
+    for w1, w2, r in read_tsv_file(settings.FILES['surface.graph']):
+        rule = Rule.from_string(r)
+        ruleset.add(rule)
+        edges.append(LexiconEdge(lexicon[w1], lexicon[w2], rule))
+    model_filename, model = settings.FILES['model'] + '.0', None
+    if file_exists(model_filename):
+        model = MarginalModel.load_from_file(model_filename)
+    else:
+        print('Fitting the initial model...')
+        model = MarginalModel(lexicon, ruleset)
+        model.save_to_file(model_filename)
+    return model, lexicon, edges
+
+def train_unsupervised():
     if settings.TRAINING_ALGORITHM == 'hardem':
+        model, lexicon, edges = prepare_point_model()
         algorithms.em.hardem(lexicon, model, edges)
 
     elif settings.TRAINING_ALGORITHM == 'softem':
+        model, lexicon, edges = prepare_point_model()
         algorithms.em.softem(lexicon, model, edges)
 
-    # TODO misleading! 'mcmc' algorithm not in 'mcmc' module
     elif settings.TRAINING_ALGORITHM == 'mcmc':
+        model, lexicon, edges = prepare_marginal_model()
         algorithms.mcmc.mcmc_inference(lexicon, model, edges)
 
     print('Saving model...')
     model.save_to_file(settings.FILES['model'])
-    save_analyses(lexicon, settings.FILES['analyses'])
-    save_rules(model, settings.FILES['model.rules'])
+#    save_analyses(lexicon, settings.FILES['analyses'])
+#    save_rules(model, settings.FILES['model.rules'])
 
 def train_hardem():
     lexicon = Lexicon.init_from_file(settings.FILES['training.wordlist'])

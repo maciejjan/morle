@@ -55,13 +55,15 @@ class MarginalModel(Model):
         return len(self.rule_features)
     
     def cost(self):
-        return self.rootdist.cost() + self.ruledist.cost() +\
-            sum(f.cost() for f in self.rule_features.values())
+        return self.roots_cost + self.rules_cost + self.edges_cost
     
     def add_rule(self, rule, domsize):
         self.rule_features[rule] =\
             MarginalFeatureSet.new_edge_feature_set(domsize)
-    
+        self.rules_cost += self.ruledist.cost_of_change(\
+            self.extractor.extract_feature_values_from_rules((rule,)), None)
+        self.edges_cost += self.rule_features[rule].cost()
+
     def cost_of_change(self, edges_to_add, edges_to_remove):
         result = 0.0
         root_changes, changes_by_rule =\
@@ -88,6 +90,8 @@ class MarginalModel(Model):
         for rule, (values_to_add, values_to_remove) in changes_by_rule.items():
             self.rule_features[rule].apply_change(
                 values_to_add, values_to_remove)
+            self.edges_cost += self.rule_features[rule].cost_of_change(
+                values_to_add, values_to_remove)
 
     def extract_feature_values_for_change(self, edges_to_add, edges_to_remove):
         # changes to roots
@@ -95,7 +99,7 @@ class MarginalModel(Model):
             [e.target for e in edges_to_remove])
         roots_to_remove = self.extractor.extract_feature_values_from_nodes(
             [e.target for e in edges_to_add])
-        self.rootdist.apply_change(roots_to_add, roots_to_remove)
+#        self.rootdist.apply_change(roots_to_add, roots_to_remove)
         # changes to rule features
         changes_by_rule = defaultdict(lambda: (list(), list()))
         for e in edges_to_add:
@@ -104,9 +108,15 @@ class MarginalModel(Model):
         for e in edges_to_remove:
             changes_by_rule[e.rule][1].append(
                 self.extractor.extract_feature_values_from_edges([e]))
-        for rule, (edges_to_add_for_rule, edges_to_remove_for_rule) in\
-                changes_by_rule.items():
-            self.rule_features[rule].apply_change(
-                edges_to_add_for_rule, edges_to_remove_for_rule)
+#        for rule, (edges_to_add_for_rule, edges_to_remove_for_rule) in\
+#                changes_by_rule.items():
+#            self.rule_features[rule].apply_change(
+#                edges_to_add_for_rule, edges_to_remove_for_rule)
         return (roots_to_add, roots_to_remove), changes_by_rule
+
+    def save_to_file(self, filename):
+        # forget the transducers, because they are not serializable
+        for rule in self.rule_features:
+            rule.transducer = None
+        Model.save_to_file(self, filename)
 

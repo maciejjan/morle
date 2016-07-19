@@ -88,6 +88,8 @@ def main(mode, modules):
 			recognize.run()
 		if 'wordgen' in modules:
 			wordgen.run()
+		if 'cluster' in modules:
+			cluster.run()
 #		if MODULE_TAG in modules:
 #			tag.run()
 	if MODE_EVAL in mode:

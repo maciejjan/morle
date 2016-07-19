@@ -19,17 +19,21 @@ class MarginalStringFeature(MarginalFeature, StringFeature):
     def apply_change(self, values_to_add, values_to_remove):
         for val in values_to_add:
             for ngr in val:
+                if ngr not in self.counts:
+                    self.counts[ngr] = 0
                 self.counts[ngr] += 1
         for val in values_to_remove:
             for ngr in val:
                 self.counts[ngr] -= 1
+                if self.counts[ngr] == 0:
+                    del self.counts[ngr]
 
     def cost(self):
         return sum(count*self.log_probs[ngr]\
              for ngr, count in self.counts.items())
     
     def reset(self):
-        self.counts = defaultdict(lambda: 0)
+        self.counts = {}
 
 class MarginalBinomialFeature(MarginalFeature):
     def __init__(self, trials, alpha=1, beta=1):
@@ -124,8 +128,8 @@ class MarginalFeatureSet(FeatureSet):
         return result
     
     def cost(self):
-        return sum(w*f.cost(val) for f, w, val in\
-            zip(self.features, self.weights, values))
+        return sum(w*f.cost() for f, w in\
+            zip(self.features, self.weights))
 
     def cost_of_change(self, values_to_add, values_to_delete):
         # ensure the right size for empty feature vectors
