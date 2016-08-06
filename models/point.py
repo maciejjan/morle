@@ -172,7 +172,6 @@ class PointModel(Model):    # TODO parallelize
                     (rule,) + sum(map(feature_stats, features), ())
                 )
 
-
 #def fit_model_to_graph(lexicon, trh, graph_file):
 def fit_model_to_graph(lexicon, graph_file):
     model = PointModel()

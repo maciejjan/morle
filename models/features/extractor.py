@@ -7,9 +7,9 @@ class FeatureValueExtractor:
 
 	def extract_feature_values_from_nodes(self, nodes):
 		features = []
-		features.append(algorithms.ngrams.generate_n_grams(\
+		features.append(list(algorithms.ngrams.generate_n_grams(\
 			node.word + node.tag + ('#',), settings.ROOTDIST_N)\
-				for node in nodes)
+				for node in nodes))
 		if settings.WORD_FREQ_WEIGHT > 0.0:
 			features.append(list(node.logfreq for node in nodes))
 		if settings.WORD_VEC_WEIGHT > 0.0:
@@ -44,7 +44,7 @@ class FeatureValueExtractor:
 	def extract_feature_values_from_rules(self, rules):
 		ngrams = []
 		for rule in rules:
-			ngrams.append(algorithms.ngrams.generate_n_grams(\
-				rule.seq() + ('#',), 1))
+			ngrams.append(list(algorithms.ngrams.generate_n_grams(\
+				rule.seq() + ('#',), 1)))
 		return (tuple(ngrams),)
 

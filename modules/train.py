@@ -164,30 +164,31 @@ def train_softem():
             old_num_rules = model.num_rules()
 
 def train_supervised():
-    lexicon = algorithms.mdl.load_training_file(settings.FILES['training.lexicon'])
+    lexicon = Lexicon.init_from_training_file(settings.FILES['training.lexicon'])
+    lexicon.save_to_file(settings.FILES['model.lexicon'])
 #    unigrams.save_to_file(settings.FILES['model.ngrams'])
     # compute rules domain size -- TODO
-    trh = TrigramHash()
-    for word in lexicon.keys():
-        trh.add(word)
-    print('Calculating rule domain sizes...')
-    pp = progress_printer(len(lexicon.ruleset))
-    for r in lexicon.ruleset.values():
-        r.domsize = algorithms.optrules.rule_domsize(r.rule, trh)
-        next(pp)
-    algorithms.mdl.optimize_rule_params(lexicon)
-    lexicon.save_model(settings.FILES['model.rules'], settings.FILES['model.lexicon'])
-    # optimize rules
-    algorithms.optrules.optimize_rules_in_lexicon(\
-        settings.FILES['model.lexicon'],
-        settings.FILES['model.lexicon'] + '.opt',
-        settings.FILES['model.rules'])
-    rename_file(settings.FILES['model.lexicon'] + '.opt',\
-        settings.FILES['model.lexicon'])
-    ruleset = RuleSet.load_from_file(settings.FILES['model.rules'])
-    lexicon = Lexicon.load_from_file(settings.FILES['model.lexicon'], ruleset)
-    algorithms.mdl.optimize_rule_params(lexicon)
-    lexicon.save_model(settings.FILES['model.rules'], settings.FILES['model.lexicon'])
+#    trh = TrigramHash()
+#    for word in lexicon.keys():
+#        trh.add(word)
+#    print('Calculating rule domain sizes...')
+#    pp = progress_printer(len(lexicon.ruleset))
+#    for r in lexicon.ruleset.values():
+#        r.domsize = algorithms.optrules.rule_domsize(r.rule, trh)
+#        next(pp)
+#    algorithms.mdl.optimize_rule_params(lexicon)
+#    lexicon.save_model(settings.FILES['model.rules'], settings.FILES['model.lexicon'])
+#    # optimize rules
+#    algorithms.optrules.optimize_rules_in_lexicon(\
+#        settings.FILES['model.lexicon'],
+#        settings.FILES['model.lexicon'] + '.opt',
+#        settings.FILES['model.rules'])
+#    rename_file(settings.FILES['model.lexicon'] + '.opt',\
+#        settings.FILES['model.lexicon'])
+#    ruleset = RuleSet.load_from_file(settings.FILES['model.rules'])
+#    lexicon = Lexicon.load_from_file(settings.FILES['model.lexicon'], ruleset)
+#    algorithms.mdl.optimize_rule_params(lexicon)
+#    lexicon.save_model(settings.FILES['model.rules'], settings.FILES['model.lexicon'])
 
 def run():
     if settings.SUPERVISED:

@@ -6,7 +6,7 @@ from models.generic import Model
 from operator import itemgetter
 
 class MarginalModel(Model):
-
+    
     def __init__(self, lexicon, ruleset):
         self.extractor = FeatureValueExtractor()
         self.rootdist = None
@@ -17,11 +17,14 @@ class MarginalModel(Model):
         self.edges_cost = 0.0
         self.rules_cost = 0.0
 
-        self.fit_rootdist(lexicon)
-        self.fit_ruledist(ruleset)
-        for rule in ruleset:
-            self.add_rule(rule, rule.compute_domsize(lexicon))
-        self.fit_to_lexicon(lexicon)
+        if lexicon:
+            self.fit_rootdist(lexicon)
+        if ruleset:
+            self.fit_ruledist(ruleset)
+            for rule in ruleset:
+                self.add_rule(rule, rule.compute_domsize(lexicon))
+        if lexicon:
+            self.fit_to_lexicon(lexicon)
     
     def fit_rootdist(self, lexicon):
         self.rootdist = MarginalFeatureSet.new_root_feature_set()
@@ -39,13 +42,16 @@ class MarginalModel(Model):
     def fit_to_lexicon(self, lexicon):
         roots_to_add = self.extractor.extract_feature_values_from_nodes(
             lexicon.roots)
+        self.roots_cost += self.rootdist.cost_of_change(roots_to_add, [])
         self.rootdist.apply_change(roots_to_add, [])
         for rule, edges in lexicon.edges_by_rule.items():
             edges_to_add = self.extractor.extract_feature_values_from_edges(
                 edges)
+            self.edges_cost += self.rule_features[rule].cost_of_change(edges_to_add, [])
             self.rule_features[rule].apply_change(edges_to_add, [])
 
     def reset(self):
+#        raise RuntimeError('reset!')
         self.rootdist.reset()
         self.ruledist.reset()
         for features in self.rule_features.values():
@@ -56,13 +62,29 @@ class MarginalModel(Model):
     
     def cost(self):
         return self.roots_cost + self.rules_cost + self.edges_cost
+
+    def has_rule(self, rule):
+        return rule in self.rule_features
     
     def add_rule(self, rule, domsize):
         self.rule_features[rule] =\
             MarginalFeatureSet.new_edge_feature_set(domsize)
         self.rules_cost += self.ruledist.cost_of_change(\
-            self.extractor.extract_feature_values_from_rules((rule,)), None)
+            self.extractor.extract_feature_values_from_rules((rule,)), [])
         self.edges_cost += self.rule_features[rule].cost()
+
+    def remove_rule(self, rule):
+        self.rules_cost += self.ruledist.cost_of_change([],\
+            self.extractor.extract_feature_values_from_rules((rule,)))
+        self.edges_cost -= self.rule_features[rule].cost()
+        del self.rule_features[rule]
+
+    def rule_cost(self, rule, domsize):
+        features = \
+            MarginalFeatureSet.new_edge_feature_set(domsize)
+        return self.ruledist.cost_of_change(\
+            self.extractor.extract_feature_values_from_rules((rule,)), []) +\
+            features.cost()
 
     def cost_of_change(self, edges_to_add, edges_to_remove):
         result = 0.0
@@ -71,10 +93,12 @@ class MarginalModel(Model):
                 edges_to_add, edges_to_remove)
         # apply the changes to roots
         roots_to_add, roots_to_remove = root_changes
+#        print('rootdist', len(roots_to_add[0]), len(roots_to_remove[0]))
         result += self.rootdist.cost_of_change(
             roots_to_add, roots_to_remove)
         # apply the changes to rule features
         for rule, (values_to_add, values_to_remove) in changes_by_rule.items():
+#            print(rule, len(values_to_add[0]), len(values_to_remove[0]))
             result += self.rule_features[rule].cost_of_change(
                 values_to_add, values_to_remove)
         return result
@@ -85,12 +109,14 @@ class MarginalModel(Model):
                 edges_to_add, edges_to_remove)
         # apply the changes to roots
         roots_to_add, roots_to_remove = root_changes
+        self.roots_cost += \
+            self.rootdist.cost_of_change(roots_to_add, roots_to_remove)
         self.rootdist.apply_change(roots_to_add, roots_to_remove)
         # apply the changes to rule features
         for rule, (values_to_add, values_to_remove) in changes_by_rule.items():
-            self.rule_features[rule].apply_change(
-                values_to_add, values_to_remove)
             self.edges_cost += self.rule_features[rule].cost_of_change(
+                values_to_add, values_to_remove)
+            self.rule_features[rule].apply_change(
                 values_to_add, values_to_remove)
 
     def extract_feature_values_for_change(self, edges_to_add, edges_to_remove):
@@ -99,19 +125,23 @@ class MarginalModel(Model):
             [e.target for e in edges_to_remove])
         roots_to_remove = self.extractor.extract_feature_values_from_nodes(
             [e.target for e in edges_to_add])
-#        self.rootdist.apply_change(roots_to_add, roots_to_remove)
         # changes to rule features
-        changes_by_rule = defaultdict(lambda: (list(), list()))
+        edges_to_add_by_rule = defaultdict(lambda: list())
+        edges_to_remove_by_rule = defaultdict(lambda: list())
+        rules = set()
         for e in edges_to_add:
-            changes_by_rule[e.rule][0].append(
-                self.extractor.extract_feature_values_from_edges([e]))
+            edges_to_add_by_rule[e.rule].append(e)
+            rules.add(e.rule)
         for e in edges_to_remove:
-            changes_by_rule[e.rule][1].append(
-                self.extractor.extract_feature_values_from_edges([e]))
-#        for rule, (edges_to_add_for_rule, edges_to_remove_for_rule) in\
-#                changes_by_rule.items():
-#            self.rule_features[rule].apply_change(
-#                edges_to_add_for_rule, edges_to_remove_for_rule)
+            edges_to_remove_by_rule[e.rule].append(e)
+            rules.add(e.rule)
+        changes_by_rule = {}
+        for rule in rules:
+            changes_by_rule[rule] = (\
+                self.extractor.extract_feature_values_from_edges(\
+                    edges_to_add_by_rule[rule]),
+                self.extractor.extract_feature_values_from_edges(\
+                    edges_to_remove_by_rule[rule]))
         return (roots_to_add, roots_to_remove), changes_by_rule
 
     def save_to_file(self, filename):

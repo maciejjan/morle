@@ -4,7 +4,7 @@ import sys
 import time
 from operator import itemgetter
 import numpy as np
-from scipy.special import beta, betaln
+from scipy.special import beta, betaln, expit
 from datastruct.lexicon import *
 from datastruct.rules import *
 from models.point import PointModel
@@ -359,6 +359,18 @@ class MCMCGraphSampler:
         else:
             raise Exception('Unknown model type.')
 
+    def run_sampling(self):
+        print('Warming up the sampler...')
+        pp = progress_printer(settings.SAMPLING_WARMUP_ITERATIONS)
+        for i in pp:
+            self.next()
+        self.reset()
+        pp = progress_printer(settings.SAMPLING_ITERATIONS)
+        print('Sampling...')
+        for i in pp:
+            self.next()
+        self.update_stats()
+
     def next(self):
         def consider_adding_edge(edge):
 #            return math.exp(-self.model.edge_cost(edge) + edge.target.cost)
@@ -434,15 +446,17 @@ class MCMCGraphSampler:
             for e in edges_to_remove:
                 prob_ratio *= consider_removing_edge(e)
         elif isinstance(self.model, MarginalModel):
-            prob_ratio = math.exp(\
-                -self.model.cost_of_change(edges_to_add, edges_to_remove))
 #            print()
+#            print(self.model.rootdist.features[1].s_0)
 #            for e in edges_to_add:
 #                print('Adding: %s -> %s via %s' % (e.source.key, e.target.key, str(e.rule)))
+#                print(self.model.rule_features[e.rule][1].s_0)
 #            for e in edges_to_remove:
 #                print('Removing: %s -> %s via %s' % (e.source.key, e.target.key, str(e.rule)))
 #            print('cost_of_change = %f' % self.model.cost_of_change(edges_to_add, edges_to_remove))
 #            print('acc_prob = %f' % prob_ratio)
+            prob_ratio = math.exp(\
+                -self.model.cost_of_change(edges_to_add, edges_to_remove))
         else:
             raise Exception('Unknown model type.')
 
@@ -454,17 +468,18 @@ class MCMCGraphSampler:
 #                r = self.lexicon[w_2].deriving_rule()
                 idx = self.edges_hash[(e.source, e.target)][0]
                 self.lexicon.remove_edge(e)
+                if isinstance(self.model, MarginalModel):
+                    self.model.apply_change([], [e])
                 for stat in self.stats.values():
                     stat.edge_removed(self, idx, e)
             # add edges and update stats
             for e in edges_to_add:
                 idx = self.edges_hash[(e.source, e.target)][0]
                 self.lexicon.add_edge(e)
+                if isinstance(self.model, MarginalModel):
+                    self.model.apply_change([e], [])
                 for stat in self.stats.values():
                     stat.edge_added(self, idx, e)
-            # update the model
-            if isinstance(self.model, MarginalModel):
-                self.model.apply_change(edges_to_add, edges_to_remove)
 
         # update the remaining stats
         for stat in self.stats.values():
@@ -479,18 +494,302 @@ class MCMCGraphSampler:
         for stat in self.stats.values():
             stat.update(self)
 
-
+# TODO use simulated annealing
 class MCMCRuleSampler:
-    def __init__(self, ruleset):
-        self.full_ruleset = ruleset
-        self.current_ruleset = ruleset
+    def __init__(self, model, lexicon, edges):
+        self.num = 0
+        self.model = model
+        self.lexicon = lexicon
+        self.edges = edges
+        self.full_ruleset = set(model.rule_features)
+        self.ruleset = self.full_ruleset
+        self.rule_domsize = {}
+        self.rule_costs = {}
+        for rule in self.full_ruleset:
+            self.rule_domsize[rule] = self.model.rule_features[rule][0].trials
+            self.rule_costs[rule] = self.model.rule_cost(rule, self.rule_domsize[rule])
+        self.cost, self.rule_contrib = \
+            self.evaluate_proposal(self.ruleset)
 
     def next(self):
-        # for each rule: determine the expected contribution
-        # propose the next rule set according to the contribution
-        # sample the probability ratio for the computation of acc. prob.
+        next_ruleset = self.propose_next_ruleset()
+        self.print_proposal(next_ruleset)
+        cost, next_rule_contrib = self.evaluate_proposal(next_ruleset)
+        acc_prob = 1 if cost < self.cost else \
+            math.exp((self.cost - cost) * ((self.num+10) / 40)) *\
+            proposal_probability_ratio(next_ruleset, next_rule_contrib)
+        if random.random() < acc_prob:
+            self.cost = cost
+            self.rule_contrib = next_rule_contrib
+            self.accept_ruleset(next_ruleset)
+            print('accepted')
+        self.num += 1
+
+    def propose_next_ruleset(self):
+        result = set()
+        for rule in self.full_ruleset:
+            if random.random() < self.rule_prob(rule):
+                result.add(rule)
+        return result
+
+    def evaluate_proposal(self, ruleset):
+        self.model.reset()
+        new_model = MarginalModel(None, None)
+        new_model.rootdist = self.model.rootdist
+        new_model.ruledist = self.model.ruledist
+        new_model.roots_cost = self.model.roots_cost
+        for rule in ruleset:
+            new_model.add_rule(rule, self.rule_domsize[rule])
+        print(new_model.roots_cost, new_model.rules_cost, new_model.edges_cost)
+
+        self.lexicon.reset(new_model)
+        graph_sampler = MCMCGraphSampler(new_model, self.lexicon,\
+            [edge for edge in self.edges if edge.rule in ruleset])
+        graph_sampler.add_stat('logl', ExpectedLogLikelihoodStatistic(graph_sampler))
+        graph_sampler.add_stat('contrib', RuleExpectedContributionStatistic(graph_sampler))
+        graph_sampler.run_sampling()
+
+        return graph_sampler.stats['logl'].val, graph_sampler.stats['contrib'].values
+
+    def accept_ruleset(self, new_ruleset):
+        for rule in self.ruleset - new_ruleset:
+            self.model.remove_rule(rule)
+        for rule in new_ruleset - self.ruleset:
+            self.model.add_rule(rule, self.rule_domsize[rule])
+        self.ruleset = new_ruleset
+
+    def print_proposal(self, new_ruleset):
+        for rule in self.ruleset - new_ruleset:
+            print('delete: %s' % str(rule))
+        for rule in new_ruleset - self.ruleset:
+            print('restore: %s' % str(rule))
+
+class RuleSetProposalDistribution:
+    def __init__(self, rule_contrib, rule_costs, num):
+        self.rule_prob = {}
+        for rule in rule_costs:
+            rule_score = -rule_costs[rule] +\
+                (rule_contrib[rule] if rule in rule_contrib else 0)
+            self.rule_prob[rule] =\
+                expit(rule_score * ((num+10) / 40))
+
+    def propose(self):
+        next_ruleset = set()
+        for rule, prob in self.rule_prob.items():
+            if random.random() < prob:
+                next_ruleset.add(rule)
+        return next_ruleset
+
+    def proposal_logprob(self, ruleset):
+        return sum(\
+                   (np.log(prob) if rule in ruleset else np.log(1-prob)) \
+                   for rule, prob in self.rule_prob.items())
+
+
+class MCMCAnnealingRuleSampler:
+    def __init__(self, model, lexicon, edges):
+        self.num = 0
+        self.model = model
+        self.lexicon = lexicon
+        self.edges = edges
+        self.full_ruleset = set(model.rule_features)
+        self.ruleset = self.full_ruleset
+        self.rule_domsize = {}
+        self.rule_costs = {}
+        for rule in self.full_ruleset:
+            self.rule_domsize[rule] = self.model.rule_features[rule][0].trials
+            self.rule_costs[rule] = self.model.rule_cost(rule, self.rule_domsize[rule])
+        self.cost, self.proposal_dist = \
+            self.evaluate_proposal(self.ruleset)
+
+    def next(self):
+        next_ruleset = self.proposal_dist.propose()
+        self.print_proposal(next_ruleset)
+        cost, next_proposal_dist = self.evaluate_proposal(next_ruleset)
+        acc_prob = 1 if cost < self.cost else \
+            math.exp((self.cost - cost) * ((self.num+10) / 40)) *\
+            math.exp(next_proposal_dist.proposal_logprob(self.ruleset) -\
+                     self.proposal_dist.proposal_logprob(next_ruleset))
+        print('acc_prob = %f' % acc_prob)
+        if random.random() < acc_prob:
+            self.cost = cost
+            self.proposal_dist = next_proposal_dist
+            self.accept_ruleset(next_ruleset)
+            print('accepted')
+        else:
+            print('rejected')
+        self.num += 1
+
+    def evaluate_proposal(self, ruleset):
+#        self.model.reset()
+        new_model = MarginalModel(None, None)
+        new_model.rootdist = self.model.rootdist
+        new_model.ruledist = self.model.ruledist
+#        new_model.roots_cost = self.model.roots_cost
+        for rule in ruleset:
+            new_model.add_rule(rule, self.rule_domsize[rule])
+        new_model.reset()
+        self.lexicon.reset(new_model)
+        new_model.fit_to_lexicon(self.lexicon)
+        print(new_model.roots_cost, new_model.rules_cost, new_model.edges_cost, new_model.cost())
+
+        graph_sampler = MCMCGraphSampler(new_model, self.lexicon,\
+            [edge for edge in self.edges if edge.rule in ruleset])
+        graph_sampler.add_stat('logl', ExpectedLogLikelihoodStatistic(graph_sampler))
+        graph_sampler.add_stat('contrib', RuleExpectedContributionStatistic(graph_sampler))
+        graph_sampler.run_sampling()
+
+        return graph_sampler.stats['logl'].val,\
+            RuleSetProposalDistribution(
+                graph_sampler.stats['contrib'].values,
+                self.rule_costs, self.num)
+
+    def accept_ruleset(self, new_ruleset):
+        for rule in self.ruleset - new_ruleset:
+            self.model.remove_rule(rule)
+        for rule in new_ruleset - self.ruleset:
+            self.model.add_rule(rule, self.rule_domsize[rule])
+        self.ruleset = new_ruleset
+
+    def print_proposal(self, new_ruleset):
+        for rule in self.ruleset - new_ruleset:
+            print('delete: %s' % str(rule))
+        for rule in new_ruleset - self.ruleset:
+            print('restore: %s' % str(rule))
+
+
+class MCMCRulePosteriorSampler:
+    def __init__(self, model, lexicon, edges):
+        self.model = model
+        self.lexicon = lexicon
+        self.edges = edges
+        self.full_ruleset = set(self.model.rule_features)
+        self.curr_ruleset = self.full_ruleset
+        self.rule_costs = {}
+        self.rule_domsize = {}
+        for rule in self.full_ruleset:
+            self.rule_domsize[rule] = self.model.rule_features[rule][0].trials
+            self.rule_costs[rule] = self.model.rule_cost(rule, self.rule_domsize[rule])
+
+    def next(self):
+
+        def compute_rule_contributions(model):
+            graph_sampler = MCMCGraphSampler(model, self.lexicon,\
+                [edge for edge in self.edges if edge.rule in model.rule_features])
+            graph_sampler.add_stat('rule_contrib',\
+                RuleExpectedContributionStatistic(graph_sampler))
+            graph_sampler.run_sampling()
+            result = {}
+            for rule, cost in self.rule_costs.items():
+                result[rule] = -cost +\
+                    (graph_sampler.stats['rule_contrib'].value(rule)\
+                     if model.has_rule(rule) else 0)
+            return result
+
+        def propose_next_ruleset(contrib):
+            return set(rule for rule, c in contrib.items() \
+                if random.random() < expit(c))
+
+        def compute_ruleset_weights(excluded_rules_1, excluded_rules_2):
+            graph_sampler = MCMCGraphSampler(self.model, self.lexicon, self.edges)
+            graph_sampler.add_stat('weight_1',\
+                GraphsWithoutRuleSetStatistic(graph_sampler, excluded_rules_1))
+            graph_sampler.add_stat('weight_2',\
+                GraphsWithoutRuleSetStatistic(graph_sampler, excluded_rules_2))
+            graph_sampler.run_sampling()
+            return graph_sampler.stats['weight_1'].value(),\
+                graph_sampler.stats['weight_2'].value()
+
+        def compute_rule_prob_logratio(excluded_rules_1, excluded_rules_2):
+            return sum(self.model.rule_cost(rule) for rule in excluded_rules_2) -\
+                sum(self.model.rule_cost(rul) for rule in excluded_rules_1)
+
+        def compute_lex_prob_logratio(weight_1, excluded_rules_1,\
+                                      weight_2, excluded_rules_2):
+            null_betaln = betaln(ALPHA, BETA)
+            return sum(betaln(ALPHA, BETA + self.rule_domsize[rule])-null_betaln \
+                for rule in excluded_rules_1) + math.log(weight_1) -\
+                sum(betaln(ALPHA, BETA + self.rule_domsize[rule])-null_betaln \
+                    for rule in excluded_rules_2) - math.log(weight_2)
+
+        def compute_proposal_prob_logratio(contrib_1, ruleset_1, contrib_2, ruleset_2):
+            return sum(math.log(expit(contrib_2[rule])) for rule in ruleset_1) -\
+                sum(math.log(expit(contrib_1[rule])) for rule in ruleset_2)
+
+        def print_proposal(ruleset_1, ruleset_2):
+            for rule in ruleset_1 - ruleset_2:
+                print('delete: %s' % str(rule))
+            for rule in ruleset_2 - ruleset_1:
+                print('restore: %s' % str(rule))
+
+        print('num_rules = %d' % self.model.num_rules())
+        # first sampling: compute the the expected contributions of rules
+        # (and save them to a file)
+        rule_contrib = compute_rule_contributions(self.model)
+        # propose the next step according to the contributions
+        next_ruleset = propose_next_ruleset(rule_contrib)
+        print_proposal(self.curr_ruleset, next_ruleset)
+        # create a model which contains the sum of old and new rule set
+        combined_ruleset = self.curr_ruleset | next_ruleset
+        self.model.reset()
+        self.lexicon.reset(self.model)
+        for rule in combined_ruleset - self.curr_ruleset:
+            self.model.add_rule(rule, self.domsizes[rule])
+        # compute the contributions according to the proposed model
+        next_model = MarginalModel(None, None)
+        next_model.rootdist = self.model.rootdist
+        next_model.ruledist = self.model.ruledist
+        for rule in next_ruleset:
+            next_model.add_rule(rule, self.rule_domsize[rule])
+        next_contrib = compute_rule_contributions(next_model)
+        # second sampling: compute the expected number of graphs without
+        #   rules not appearing in the first and in the second set
+        curr_excluded_rules = combined_ruleset - self.curr_ruleset
+        next_excluded_rules = combined_ruleset - next_ruleset
+        curr_ruleset_weight, next_ruleset_weight =\
+            compute_ruleset_weights(curr_excluded_rules, next_excluded_rules)
+        if curr_ruleset_weight <= 0 or next_ruleset_weight <= 0:
+            print('zero weights: %f, %f' % (curr_ruleset_weight, next_ruleset_weight))
+            return # TODO exception? 
+        # compute the three relevant values for acceptance/rejection:
+        #   1. rule probability ratio
+        #   2. lexicon probability ratio (from sampling)
+        #   3. proposal probability ratio
+        rule_prob_logratio =\
+            compute_rule_prob_logratio(self.curr_ruleset, next_ruleset)
+        lex_prob_logratio =\
+            compute_lex_prob_ratio(curr_ruleset_weight,
+                                   curr_excluded_rules,
+                                   next_ruleset_weight,
+                                   next_excluded_rules
+            )
+        proposal_prob_logratio = \
+            compute_proposal_prob_logratio(rule_contrib,
+                                           self.curr_ruleset,
+                                           next_contrib,
+                                           next_ruleset)
         # accept/reject
-        pass
+        acc_prob = math.exp(rule_prob_logratio + lex_prob_logratio +\
+                            proposal_prob_logratio)
+        print('acc_prob = %f' % acc_prob)
+        self.model.reset()
+        rules_to_remove = set()
+        if acc_prob >= 1 or acc_prob >= random.random():
+            rules_to_remove = combined_ruleset - next_ruleset
+            self.curr_ruleset = next_ruleset
+            print('accepted')
+        else:
+            rules_to_remove = combined_ruleset - self.curr_ruleset
+            print('rejected')
+        for rule in rules_to_remove:
+            self.model.remove_rule(rule)
+        # TODO if the likelihood is greater than the previous maximum:
+        #   save the rule set
+        #   (what about saving the lexicon?)
+
+
+        # TODO store the rule frequency in the samples as a statistic
+
 
 
 #class MCMCRuleSetSampler:
@@ -710,7 +1009,7 @@ def save_intervals(intervals, filename):
         for rule, ints in intervals.items():
             write_line(fp, (rule, len(ints), ' '.join([str(i) for i in ints])))
 
-def mcmc_inference(lexicon, model, edges):
+def mcmc_inference_preliminary(lexicon, model, edges):
     iter_num = 0
     while iter_num < settings.EM_MAX_ITERATIONS:
         iter_num += 1
@@ -728,6 +1027,12 @@ def mcmc_inference(lexicon, model, edges):
             set(map(Rule.from_string, [':/:lage', '{CAP}:/a:ü/:t', '{CAP}se:/:', '{CAP}:/a:e']))))
         sampler.add_stat('graphs_without_5', GraphsWithoutRuleSetStatistic(sampler,\
             set(map(Rule.from_string, [':/:lage', '{CAP}:/a:ü/:t', '{CAP}se:/:', '{CAP}:/a:e', ':/:ge']))))
+        sampler.add_stat('graphs_without_6', GraphsWithoutRuleSetStatistic(sampler,\
+            set(map(Rule.from_string, [':/e:en']))))
+        sampler.add_stat('graphs_without_7', GraphsWithoutRuleSetStatistic(sampler,\
+            set(map(Rule.from_string, [':{CAP}/en:ung']))))
+        sampler.add_stat('graphs_without_8', GraphsWithoutRuleSetStatistic(sampler,\
+            set(map(Rule.from_string, ['gül:zukünf/:']))))
         sampler.add_stat('exp_logl', ExpectedLogLikelihoodStatistic(sampler))
         sampler.add_stat('exp_contrib', RuleExpectedContributionStatistic(sampler))
 
@@ -750,4 +1055,14 @@ def mcmc_inference(lexicon, model, edges):
         save_edges(sampler, 'edges_sample.txt.%d' % iter_num)
         save_rules(sampler, 'rule_stats.txt.%d' % iter_num)
         break
+
+def mcmc_inference(lexicon, model, edges):
+    iter_num = 0
+    rule_sampler = MCMCAnnealingRuleSampler(model, lexicon, edges)
+    while iter_num < settings.EM_MAX_ITERATIONS:
+        iter_num += 1
+        print('Iteration %d' % iter_num)
+        print('num_rules = %d' % rule_sampler.model.num_rules())
+        print('cost = %f' % rule_sampler.cost)
+        rule_sampler.next()
 
