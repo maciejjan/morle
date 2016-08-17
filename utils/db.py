@@ -1,6 +1,6 @@
 from utils.files import *
 from utils.printer import *
-import settings
+import shared
 from warnings import filterwarnings
 #import MySQLdb
 

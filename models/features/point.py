@@ -1,5 +1,5 @@
 from models.features.generic import *
-import settings
+import shared
 
 import numpy as np
 from scipy.special import betaln, gammaln

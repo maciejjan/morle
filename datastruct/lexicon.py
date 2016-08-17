@@ -1,47 +1,31 @@
-#from datastruct.rules import *
-#from algorithms.align import lcs
 import algorithms.fst
 from algorithms.ngrams import TrigramHash
-#from models.point import PointModel
 from models.marginal import MarginalModel
 from utils.files import *
-import settings
+import shared
+
 from collections import defaultdict
 import itertools
 import re
-#import copy
-#import heapq
 import math
-#import numpy as np
 
-#def freqcl(freq, maxfreq):
-#    try:
-#        return -int(math.log(float(freq) / maxfreq) / math.log(2))
-#    except Exception:
-#        print(freq, maxfreq)
-#
-#def align_words(word_1, word_2):
-#    cs = algorithms.align.lcs(word_1, word_2)
-#    pattern = re.compile('(.*)' + '(.*?)'.join([\
-#        letter for letter in cs]) + '(.*)')
-#    m1 = pattern.search(word_1)
-#    m2 = pattern.search(word_2)
-#    alignment = []
-#    for i, (x, y) in enumerate(zip(m1.groups(), m2.groups())):
-#        if x or y:
-#            alignment.append((x, y))
-#        if i < len(cs):
-#            alignment.append((cs[i], cs[i]))
-#    return alignment
+def get_wordlist_format():
+    result = [str]
+    if shared.config['Features'].getfloat('word_freq_weight') > 0:
+        result.append(int)
+    if shared.config['Features'].getfloat('word_vec_weight') > 0:
+        result.append(\
+            lambda x: np.array(list(map(float, x.split(shared.format['vector_sep'])))))
+    return tuple(result)
 
 def tokenize_word(string):
     '''Separate a string into a word and a POS-tag,
        both expressed as sequences of symbols.'''
-    m = re.match(settings.WORD_PATTERN_CMP, string)
+    m = re.match(shared.compiled_patterns['word'], string)
     if m is None:
         raise Exception('Error while tokenizing word: %s' % string)
-    return tuple(re.findall(settings.SYMBOL_PATTERN_CMP, m.group('word'))),\
-           tuple(re.findall(settings.TAG_PATTERN_CMP, m.group('tag')))
+    return tuple(re.findall(shared.compiled_patterns['symbol'], m.group('word'))),\
+           tuple(re.findall(shared.compiled_patterns['tag'], m.group('tag')))
 
 class LexiconEdge:
     def __init__(self, source, target, rule, cost=0.0):
@@ -60,14 +44,15 @@ class LexiconNode:
     def __init__(self, word, freq=None, vec=None):
         self.word, self.tag = tokenize_word(word)
         self.key = ''.join(self.word + self.tag)
-        if settings.WORD_FREQ_WEIGHT > 0:
+        if shared.config['Features'].getfloat('word_freq_weight') > 0:
             self.freq = freq
             self.logfreq = math.log(self.freq)
-        if settings.WORD_VEC_WEIGHT > 0:
+        if shared.config['Features'].getfloat('word_vec_weight') > 0:
             self.vec = vec
             if self.vec is None:
                 raise Exception("%s vec=None" % (self.key))
-            if self.vec.shape[0] != settings.WORD_VEC_DIM:
+            if self.vec.shape[0] != shared.config['Features']\
+                                          .getfloat('word_vec_dim'):
                 raise Exception("%s dim=%d" % (self.key, self.vec.shape[0]))
         self.parent = None
         self.alphabet = None
@@ -114,24 +99,10 @@ class LexiconNode:
     
     def seq(self):
         return tuple(zip(self.word + self.tag, self.word + self.tag))
-#        self.transducer =\
-#            algorithms.fst.seq_to_transducer(zip(seq, seq), alphabet=alphabet)
     
     def ngrams(self, n):
         # return the n-gram representation
-        raise Exception('Not implemented!')
-    
-#    def depth(self):
-#        if self.prev is None:
-#            return 0
-#        else:
-#            return 1 + self.prev.depth()
-
-#    def edge_label(self, key):
-#        for r, w in self.next.items():
-#            if w.key() == key:
-#                return r
-#        raise Exception('%s: no edge label for %s.' % (self.key(), key))
+        raise NotImplementedError()
     
     def analysis(self):
         analysis = []
@@ -140,140 +111,13 @@ class LexiconNode:
             node = node.prev
             analysis.append(node.key())
         return analysis
-    
-#    def analysis_stems(self):
-#        analysis = []
-#        node = self
-#        analysis.append(node.stem)
-#        while node.prev is not None:
-#            word = node.prev.stem
-#            rule = [r for r, n in node.prev.next.iteritems() if n == node][0]
-#            rule_sp = rule.split('*')
-#            if len(rule_sp) == 3:
-#                if rule_sp[0].find('/') > -1:
-#                    word = word + '+(' + rule_sp[1] + ')'
-#                elif rule_sp[2].find('/') > -1:
-#                    word = '(' + rule_sp[1] + ')+' + word
-##            if not node.prev.prev or len(lcs(node.word, node.prev.word)) > len(lcs(node.word, node.prev.prev.word)):
-#            analysis.append(word)
-#            node = node.prev
-#        return analysis
-    
-#    def analysis_morphochal(self):
-#        analysis = []
-#        node = self
-#        while node.prev is not None:
-#            word = node.prev.word
-#            rule = [r for r, n in node.prev.next.items() if n == node][0]
-#            rule_sp = rule.split('*')
-#            if len(rule_sp) == 3:
-#                rule = rule_sp[0] + '*' + rule_sp[2]
-##                rule = rule_sp[0] + rule_sp[2]
-#                analysis.append(rule_sp[1])
-#            else:
-#                analysis.append(rule)
-##            rule = Rule.from_string(rule)
-##            if rule.prefix[0]:
-##                analysis.append(rule.prefix[0] + '-')
-##            if rule.prefix[1]:
-##                analysis.append(rule.prefix[1] + '+')
-##            if rule.suffix[0]:
-##                analysis.append('-' + rule.suffix[0])
-##            if rule.suffix[1]:
-##                analysis.append('+' + rule.suffix[1])
-##            for x, y in rule.alternations:
-##                if x:
-##                    analysis.append('-' + x + '-')
-##                if y:
-##                    analysis.append('+' + y + '+')
-#            node = node.prev
-#        analysis.append(node.word)
-#        to_remove = []
-#        for x in analysis:
-#            if x.find('-') > -1 and x.replace('-', '+') in analysis:
-#                to_remove.append(x)
-#                to_remove.append(x.replace('-', '+'))
-#            elif x.find('-') > -1 and x.replace('-', '') in analysis:
-#                to_remove.append(x)
-#                to_remove.append(x.replace('-', ''))
-#        for x in to_remove:
-#            if x in analysis:
-#                analysis.remove(x)
-#        analysis = [x for x in analysis \
-#            if (not '+' in x and not '-' in x)\
-#                or (x.replace('+', '') in self.word)]
-#        analysis.reverse()
-#        return analysis
 
     def show_tree(self, space=''):
         print(space + self.key(), self.freq) #, self.sigma
         for w in self.next.values():
             w.show_tree(space=space+'\t')
 
-#    def show_tree_with_prod(self, rules, space='', prod=None, rule=None):
-#        print(space + (('%0.4f ' % prod) if prod else '') + self.word.encode('utf-8'), self.freq, (rule if rule else '')) #, self.sigma)
-#        for r, w in self.next.items():
-#            w.show_tree_with_prod(rules, space=space+'- ', prod=rules[r].prod, rule=r)
-    
-#    def words_in_tree(self):
-#        result = [self.key()]
-#        for w in self.next.values():
-#            result.extend(w.words_in_tree())
-#        return result
-    
-#    def search(self):
-#        '''Depth-first search.'''
-#        yield self
-#        for n in self.next.values():
-#            for x in n.search():
-#                yield x
-    
-#    def annotate_word_structure(self, depth=0):
-#        self.structure = [depth] * len(self.word)
-#        node = self
-#        node_depth = depth
-#        if self.word == u'adresowy':
-#            print(depth)
-#        while node.prev is not None:
-#            node = node.prev
-#            node_depth -= 1
-#            alignment = align_words(self.word, node.word)
-#            i = 0
-#            for x, y in alignment:
-#                if x == y:
-#                    self.structure[i] = node_depth
-#                    i += 1
-#                else:
-#                    i += len(x)
-        # fix prefixes
-#        for i in range(len(self.structure)-1, 0, -1):
-#            if self.structure[i-1] < self.structure[i] and not 0 in self.structure[:i]:
-#                self.structure[i-1] = self.structure[i]
-        # fix suffixes
-#        for i in range(len(self.structure)-1):
-#            if self.structure[i+1] < self.structure[i] and not 0 in self.structure[i:]:
-#                self.structure[i+1] = self.structure[i]
-#        for child in self.next.values():
-#            child.annotate_word_structure(depth+1)
-    
-#    def split(self):
-#        split = []
-#        cur_morph = self.word[0]
-#        for i in range(1, len(self.structure)):
-#            if self.structure[i] == self.structure[i-1]:
-#                cur_morph += self.word[i]
-#            else:
-#                split.append(cur_morph)
-#                cur_morph = self.word[i]
-#        split.append(cur_morph)
-#        return split
-#
-#    def show_split_tree(self, space=''):
-#        print(space + '|'.join(self.split()).encode('utf-8'), self.freq) #, self.sigma)
-#        for w in self.next.values():
-#            w.show_split_tree(space=space+'\t')
 
-#TODO priors on vector representation etc.
 class Lexicon:
     def __init__(self, rootdist=None, ruleset=None):
         self.nodes = {}
@@ -312,13 +156,6 @@ class Lexicon:
             for edge in node.edges:
                 yield edge
 
-#    def get_edges_for_rule(self, rule):
-#        result = []
-#        for w in self.nodes.values():
-#            if rule in w.next:
-#                result.append((w, w.next[rule]))
-#        return result
-
     def recompute_cost(self, model):
         self.cost = sum(rt.cost for rt in self.roots) +\
             sum(edge.cost for edge in self.iter_edges()) +\
@@ -344,64 +181,6 @@ class Lexicon:
         for node in self.nodes.values():
             trh.add(node)
         return trh
-#        if root_prob is None:
-#            root_prob = self.rootdist.word_prob(word)
-#        self.nodes[word] = LexiconNode(word, freq, root_prob)
-#        self.total += freq
-#        self.roots.add(word)
-        # frequency class
-#        if settings.USE_WORD_FREQ:
-#            if freq > self.max_freq:
-#                self.max_freq = freq
-#                self.recalculate_freqcl()
-#            else:
-#                self.nodes[word].freqcl = freqcl(freq, self.max_freq)
-    
-    # TODO store logl, don't calculate it each time!
-#    def logl(self):
-#        result = 0
-#        # probabilities of the roots
-#        plambda = len(self)/2
-#        log_plambda = math.log(plambda)
-#        for root in self.roots:
-#            result += self.nodes[root].log_root_prob
-#            result += log_plambda
-#        result -= plambda
-#        # count rule prior probabilities and edge probabilities
-#        for rule, freq in self.rules_c.items():
-#            result += self.ruleset.rule_cost(rule, freq)
-#        # add frequency class probabilities of the resulting words
-#        if settings.USE_WORD_FREQ:
-#            for w1 in self.values():
-#                for rule, w2 in w1.next.items():
-#                    result += math.log(self.ruleset[rule].freqprob(w2.freqcl - w1.freqcl))
-#        if settings.WORD_VEC_FACTOR > 0:
-#            pass    # TODO word2vec
-#        return result
-    
-#    def try_edge(self, word_1, word_2, rule):
-#        w1, w2 = self.nodes[word_1], self.nodes[word_2]
-#        r = self.ruleset[rule]
-#        plambda = len(self)/2
-#        # change of lexicon log-likelihood
-#        result = math.log(r.prod) - math.log(plambda * w2.root_prob * (1.0 - r.prod))
-#        if settings.USE_WORD_FREQ:
-#            result += math.log(r.freqprob(w2.freqcl - w1.freqcl))
-#        if settings.WORD_VEC_FACTOR > 0:
-#            result += math.log(r.vecprob())
-#            pass    # TODO consider word vector
-#        return result
-    
-#    def edge_possible(self, word_1, word_2, rule):
-#        w1, w2 = self.nodes[word_1], self.nodes[word_2]
-#        if w1.prev is not None and w1.prev.key() == word_2:
-#            return False
-#        if w2.prev is not None:
-#            return False
-#        if rule in w1.next:
-#            return False
-#        # TODO use has_ancestor()?
-#        return True
 
     # TODO full cycle detection
     def check_if_edge_possible(self, edge):
@@ -424,22 +203,6 @@ class Lexicon:
         self.rules_c[edge.rule] += 1
         self.cost += edge.cost - edge.target.cost
     
-#    def draw_edge(self, word_1, word_2, rule):
-#        w1, w2 = self.nodes[word_1], self.nodes[word_2]
-#        if w1.prev is not None and w1.prev.key() == word_2:
-#            raise Exception('Cycle detected: %s, %s' % (word_1, word_2))
-#        if w2.prev is not None:
-#            raise Exception('draw_edge: %s has already got an ingoing edge.' % word_2)
-#        if rule in w1.next:
-#            raise Exception('draw_edge: %s has already got an outgoing edge %s: %s.' %\
-#                (word_1, rule, w1.next[rule].key()))
-#        # draw the edge
-#        w2.prev = w1
-#        w1.next[rule] = w2
-#        # update global information
-#        self.roots.remove(word_2)
-#        self.rules_c.inc(rule)
-
     def remove_edge(self, edge):
         edge.target.parent = None
         self.roots.add(edge.target)
@@ -459,18 +222,11 @@ class Lexicon:
             node.edges = []
             self.roots.add(node)
     
-#    def recalculate_freqcl(self):
-#        for w in self.values():
-#            w.freqcl = freqcl(w.freq, self.max_freq)
-
     def build_transducer(self):
         self.alphabet =\
             tuple(sorted(set(
                 itertools.chain(*(n.word+n.tag for n in self.nodes.values()))
             )))
-#        print(alphabet)
-#        for n in self.nodes.values():
-#            n.build_transducer(alphabet=alphabet)
         self.transducer =\
             algorithms.fst.binary_disjunct(
                 algorithms.fst.seq_to_transducer(\
@@ -480,7 +236,6 @@ class Lexicon:
     
     def save_to_file(self, filename):
         def write_subtree(fp, source, target, rule):
-#            n2 = self.nodes[target]
             line = (source.key, target.key, str(rule)) if source is not None\
                 else ('', target.key, '')
             if settings.WORD_FREQ_WEIGHT > 0.0:
@@ -495,10 +250,10 @@ class Lexicon:
                 write_subtree(fp, None, rt, None)
     
     @staticmethod
-    def init_from_file(filename):
+    def init_from_wordlist(filename):
         '''Create a lexicon with no edges from a wordlist.'''
         lexicon = Lexicon()
-        for node_data in read_tsv_file(filename, settings.WORDLIST_FORMAT):
+        for node_data in read_tsv_file(filename, get_wordlist_format()):
             try:
                 lexicon.add_node(LexiconNode(*node_data))
             except Exception:

@@ -9,7 +9,7 @@ from algorithms.mcmc import *
 #from datastruct.rules import *
 #from utils.files import *
 from utils.printer import *
-#import settings
+#import shared
 #import re
 #
 #import math

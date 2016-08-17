@@ -1,4 +1,4 @@
-import settings
+import shared
 import pickle
 
 class Model:

@@ -2,7 +2,7 @@
 from utils.files import *
 from collections import defaultdict
 import libhfst
-import settings
+import shared
 import random
 
 def generate_n_grams(word, n=None):

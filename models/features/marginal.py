@@ -1,5 +1,5 @@
 from models.features.generic import *
-import settings
+import shared
 
 from collections import defaultdict
 import numpy as np
@@ -75,7 +75,7 @@ class MarginalBinomialFeature(MarginalFeature):
 
 class MarginalExponentialFeature(MarginalFeature):
     def __init__(self):
-        raise Exception('Not implemented!')
+        raise NotImplementedError()
 
 class MarginalGaussianInverseChiSquaredFeature(MarginalFeature):
     def __init__(self, dim, kappa_0, mu_0, nu_0, var_0):
@@ -174,14 +174,14 @@ class MarginalFeatureSet(FeatureSet):
         result = MarginalFeatureSet()
         features = [MarginalBinomialFeature(domsize, alpha=1.1, beta=1.1)]
         weights = [1.0]
-        if settings.WORD_FREQ_WEIGHT > 0.0:
+        if shared.config['Features'].getfloat('word_freq_weight') > 0.0:
             features.append(MarginalGaussianInverseChiSquaredFeature(
                 1, 1, 1, 1, 1))
-            weights.append(settings.WORD_FREQ_WEIGHT)
-        if settings.WORD_VEC_WEIGHT > 0.0:
+            weights.append(shared.config['Features'].getfloat('word_freq_weight'))
+        if shared.config['Features'].getfloat('word_vec_weight') > 0.0:
             features.append(MarginalGaussianInverseChiSquaredFeature(
-                settings.WORD_VEC_DIM, 1, 0, 1, 0.01))
-            weights.append(settings.WORD_VEC_WEIGHT)
+                shared.config['Features'].getint('word_vec_dim'), 1, 0, 1, 0.01))
+            weights.append(shared.config['Features'].getfloat('word_vec_weight'))
         result.features = tuple(features)
         result.weights = tuple(weights)
         return result
@@ -191,16 +191,16 @@ class MarginalFeatureSet(FeatureSet):
         result = MarginalFeatureSet()
         features = [MarginalStringFeature()]
         weights = [1.0]
-        if settings.WORD_FREQ_WEIGHT > 0.0:
+        if shared.config['Features'].getfloat('word_freq_weight') > 0.0:
 #            features.append(MarginalExponentialFeature())
             features.append(MarginalGaussianInverseChiSquaredFeature(\
                 1, 1, 1, 1, 1))
-            weights.append(settings.WORD_FREQ_WEIGHT)
-        if settings.WORD_VEC_WEIGHT > 0.0:
+            weights.append(shared.config['Features'].getfloat('word_freq_weight'))
+        if shared.config['Features'].getfloat('word_vec_weight') > 0.0:
 #            features.append(PointGaussianFeature(dim=settings.WORD_VEC_DIM))
             features.append(MarginalGaussianInverseChiSquaredFeature(\
-                settings.WORD_VEC_DIM, 1, 0, 1, 1))
-            weights.append(settings.WORD_VEC_WEIGHT)
+                shared.config['Features'].getint('word_vec_dim'), 1, 0, 1, 1))
+            weights.append(shared.config['Features'].getfloat('word_vec_weight'))
         result.features = tuple(features)
         result.weights = tuple(weights)
         return result

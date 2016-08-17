@@ -1,8 +1,10 @@
 import libhfst
-import settings
+import shared
 import sys
 
-def seq_to_transducer(alignment, weight=0.0, type=settings.TRANSDUCER_TYPE, alphabet=None):
+def seq_to_transducer(alignment, weight=0.0, type=None, alphabet=None):
+    if type is None:
+        type=shared.config['FST'].getint('transducer_type')
     tr = libhfst.HfstBasicTransducer()
     if alphabet is None:
         alphabet = ()
@@ -74,7 +76,8 @@ def binary_disjunct(transducers):
     t = libhfst.HfstBasicTransducer(t)
 #    add_epsilon_loops(t)
 #    add_word_boundaries(t)
-    return libhfst.HfstTransducer(t, settings.TRANSDUCER_TYPE)
+    tr_type=shared.config['FST'].getint('transducer_type')
+    return libhfst.HfstTransducer(t, tr_type)
 
 A_TO_Z = tuple('abcdefghijklmnoprstuvwxyz')
 
@@ -101,4 +104,25 @@ def id_generator():
                           libhfst.HfstBasicTransition(1, c, c, 0.0))
     tr.set_final_weight(1, 0.0)
     return libhfst.HfstTransducer(tr, settings.TRANSDUCER_TYPE)
+
+def number_of_paths(transducer):
+    t = libhfst.HfstBasicTransducer(transducer)
+    paths_for_state = [1] + [0] * (len(t.states())-1)
+    result = 0
+    changed = True
+    while changed:
+        changed = False
+        new_paths_for_state = [0] * len(t.states())
+        for state in t.states():
+            if paths_for_state[state] > 0:
+                for tr in t.transitions(state):
+                    new_paths_for_state[tr.get_target_state()] +=\
+                        paths_for_state[state]
+                    changed = True
+        for state in t.states():
+            if t.is_final_state(state):
+                result += new_paths_for_state[state]
+        paths_for_state = new_paths_for_state
+    return result
+
 
