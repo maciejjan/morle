@@ -29,3 +29,4 @@ def prepare_point_model():
 def run():
     model, lexicon, edges = prepare_marginal_model()
     algorithms.em.softem(lexicon, model, edges)
+

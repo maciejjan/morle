@@ -6,35 +6,36 @@ import numpy as np
 from scipy.special import betaln, gammaln
 
 class MarginalFeature(Feature):
-    pass
+    def fit(self, values):
+        self.apply_change(values, [])
 
-class MarginalStringFeature(MarginalFeature, StringFeature):
-    def __init__(self):
-        StringFeature.__init__(self)
-        self.reset()
-
-    def cost_of_change(self, values_to_add, values_to_remove):
-        return sum(self.log_probs[ngr] for val in values_to_add for ngr in val) -\
-            sum(self.log_probs[ngr] for val in values_to_remove for ngr in val)
-
-    def apply_change(self, values_to_add, values_to_remove):
-        for val in values_to_add:
-            for ngr in val:
-                if ngr not in self.counts:
-                    self.counts[ngr] = 0
-                self.counts[ngr] += 1
-        for val in values_to_remove:
-            for ngr in val:
-                self.counts[ngr] -= 1
-                if self.counts[ngr] == 0:
-                    del self.counts[ngr]
-
-    def cost(self):
-        return sum(count*self.log_probs[ngr]\
-             for ngr, count in self.counts.items())
-    
-    def reset(self):
-        self.counts = {}
+#class MarginalStringFeature(MarginalFeature, StringFeature):
+#    def __init__(self):
+#        StringFeature.__init__(self)
+#        self.reset()
+#
+#    def cost_of_change(self, values_to_add, values_to_remove):
+#        return sum(self.log_probs[ngr] for val in values_to_add for ngr in val) -\
+#            sum(self.log_probs[ngr] for val in values_to_remove for ngr in val)
+#
+#    def apply_change(self, values_to_add, values_to_remove):
+#        for val in values_to_add:
+#            for ngr in val:
+#                if ngr not in self.counts:
+#                    self.counts[ngr] = 0
+#                self.counts[ngr] += 1
+#        for val in values_to_remove:
+#            for ngr in val:
+#                self.counts[ngr] -= 1
+#                if self.counts[ngr] == 0:
+#                    del self.counts[ngr]
+#
+#    def cost(self):
+#        return sum(count*self.log_probs[ngr]\
+#             for ngr, count in self.counts.items())
+#    
+#    def reset(self):
+#        self.counts = {}
 
 class MarginalBinomialFeature(MarginalFeature):
     def __init__(self, trials, alpha=1, beta=1):
@@ -189,7 +190,8 @@ class MarginalFeatureSet(FeatureSet):
     @staticmethod
     def new_root_feature_set():
         result = MarginalFeatureSet()
-        features = [MarginalStringFeature()]
+#        features = [MarginalStringFeature()]
+        features = [StringFeature()]
         weights = [1.0]
         if shared.config['Features'].getfloat('word_freq_weight') > 0.0:
 #            features.append(MarginalExponentialFeature())
@@ -208,7 +210,7 @@ class MarginalFeatureSet(FeatureSet):
     @staticmethod
     def new_rule_feature_set():
         result = MarginalFeatureSet()
-        result.features = (MarginalStringFeature(),)
+        result.features = (StringFeature(),)
         result.weights = (1.0,)
         return result
     

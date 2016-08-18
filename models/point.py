@@ -2,167 +2,20 @@
 #from datastruct.rules import Rule
 #from models.features.extractor import FeatureValueExtractor
 #from models.features.point import PointFeatureSet
-#from models.generic import Model
+from models.generic import Model
 #from utils.files import *
 #
 #from numpy.linalg import norm
 
 class PointModel(Model):
 
-    def __init__(self, lexicon, ruleset):
-        # TODO move to the superclass
-        self.extractor = FeatureValueExtractor()
-        self.rootdist = None
-        self.ruledist = None
-        self.rule_features = {}
-        self.root_features = None
-        self.roots_cost = 0.0
-        self.edges_cost = 0.0
-        self.rules_cost = 0.0
-
-        if lexicon:
-            self.fit_rootdist(lexicon)
-        if ruleset:
-            self.fit_ruledist(ruleset)
-            for rule in ruleset:
-                self.add_rule(rule, rule.compute_domsize(lexicon))
-        if lexicon:
-            self.fit_to_lexicon(lexicon)
-
-    def fit_rootdist(self, lexicon):
-        # TODO move to the superclass
-        self.rootdist = MarginalFeatureSet.new_root_feature_set()
-        # fit only the first feature (the MarginalStringFeature)
-        self.rootdist[0].fit(\
-            self.extractor.extract_feature_values_from_nodes(\
-                list(lexicon.iter_nodes()))[0])
-    
-    def fit_ruledist(self, ruleset):
-        # TODO move to the superclass
-        self.ruledist = MarginalFeatureSet.new_rule_feature_set()
-        # fit only the first feature (the MarginalStringFeature)
-        self.ruledist[0].fit(\
-            self.extractor.extract_feature_values_from_rules(ruleset)[0])
-    
-    def fit_to_lexicon(self, lexicon):
-        # TODO fit rule parameters to the lexicon
-        raise NotImplementedError()
+    def __init__(self, lexicon=None, rules=None, rule_domsizes=None):
+        Model.__init__(self, lexicon, rules, rule_domsizes)
+        self.model_type = 'point'
 
     def fit_to_sample(self, sample):
         raise NotImplementedError()
 
-    def reset(self):
-        # TODO
-        raise NotImplementedError()
-#        self.rootdist.reset()
-#        self.ruledist.reset()
-#        for features in self.rule_features.values():
-#            features.reset()
-
-    def num_rules(self):
-        # TODO move to the superclass
-        return len(self.rule_features)
-    
-    def cost(self):
-        # TODO move to the superclass
-        return self.roots_cost + self.rules_cost + self.edges_cost
-
-    def has_rule(self, rule):
-        # TODO move to the superclass
-        return rule in self.rule_features
-    
-    def add_rule(self, rule, domsize):
-        # TODO move to the superclass
-        self.rule_features[rule] =\
-            MarginalFeatureSet.new_edge_feature_set(domsize)
-        self.rules_cost += self.ruledist.cost_of_change(\
-            self.extractor.extract_feature_values_from_rules((rule,)), [])
-        self.edges_cost += self.rule_features[rule].cost()
-
-    def remove_rule(self, rule):
-        # TODO move to the superclass
-        self.rules_cost += self.ruledist.cost_of_change([],\
-            self.extractor.extract_feature_values_from_rules((rule,)))
-        self.edges_cost -= self.rule_features[rule].cost()
-        del self.rule_features[rule]
-
-    def rule_cost(self, rule, domsize):
-        # TODO move to the superclass
-        features = \
-            MarginalFeatureSet.new_edge_feature_set(domsize)
-        return self.ruledist.cost_of_change(\
-            self.extractor.extract_feature_values_from_rules((rule,)), []) +\
-            features.cost()
-
-    def cost_of_change(self, edges_to_add, edges_to_remove):
-        # TODO move to the superclass
-        result = 0.0
-        root_changes, changes_by_rule =\
-            self.extract_feature_values_for_change(
-                edges_to_add, edges_to_remove)
-        # apply the changes to roots
-        roots_to_add, roots_to_remove = root_changes
-#        print('rootdist', len(roots_to_add[0]), len(roots_to_remove[0]))
-        result += self.rootdist.cost_of_change(
-            roots_to_add, roots_to_remove)
-        # apply the changes to rule features
-        for rule, (values_to_add, values_to_remove) in changes_by_rule.items():
-#            print(rule, len(values_to_add[0]), len(values_to_remove[0]))
-            result += self.rule_features[rule].cost_of_change(
-                values_to_add, values_to_remove)
-        return result
-
-    def apply_change(self, edges_to_add, edges_to_remove):
-        # the parameters do not change if the lexicon is changed
-        # but change the own likelihood
-        # TODO move to the superclass
-        root_changes, changes_by_rule =\
-            self.extract_feature_values_for_change(
-                edges_to_add, edges_to_remove)
-        # apply the changes to roots
-        roots_to_add, roots_to_remove = root_changes
-        self.roots_cost += \
-            self.rootdist.cost_of_change(roots_to_add, roots_to_remove)
-        self.rootdist.apply_change(roots_to_add, roots_to_remove)
-        # apply the changes to rule features
-        for rule, (values_to_add, values_to_remove) in changes_by_rule.items():
-            self.edges_cost += self.rule_features[rule].cost_of_change(
-                values_to_add, values_to_remove)
-            self.rule_features[rule].apply_change(
-                values_to_add, values_to_remove)
-
-    def extract_feature_values_for_change(self, edges_to_add, edges_to_remove):
-        # TODO move to the superclass
-        # changes to roots
-        roots_to_add = self.extractor.extract_feature_values_from_nodes(
-            [e.target for e in edges_to_remove])
-        roots_to_remove = self.extractor.extract_feature_values_from_nodes(
-            [e.target for e in edges_to_add])
-        # changes to rule features
-        edges_to_add_by_rule = defaultdict(lambda: list())
-        edges_to_remove_by_rule = defaultdict(lambda: list())
-        rules = set()
-        for e in edges_to_add:
-            edges_to_add_by_rule[e.rule].append(e)
-            rules.add(e.rule)
-        for e in edges_to_remove:
-            edges_to_remove_by_rule[e.rule].append(e)
-            rules.add(e.rule)
-        changes_by_rule = {}
-        for rule in rules:
-            changes_by_rule[rule] = (\
-                self.extractor.extract_feature_values_from_edges(\
-                    edges_to_add_by_rule[rule]),
-                self.extractor.extract_feature_values_from_edges(\
-                    edges_to_remove_by_rule[rule]))
-        return (roots_to_add, roots_to_remove), changes_by_rule
-
-    def save_to_file(self, filename):
-        # TODO move to the superclass
-        # forget the transducers, because they are not serializable
-        for rule in self.rule_features:
-            rule.transducer = None
-        Model.save_to_file(self, filename)
 
 #    def __init__(self, lexicon=None, rules=None, edges=None):
 #        self.extractor = FeatureValueExtractor()
