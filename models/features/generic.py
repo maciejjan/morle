@@ -42,6 +42,9 @@ class StringFeature(Feature):
         self.smoothing = -math.log(1 / total)
         for ngram, count in counts.items():
             self.log_probs[ngram] = -math.log(count / total)
+            
+    def null_cost(self):
+        return 0
     
     def num_args(self):
         return 1
@@ -83,6 +86,9 @@ class FeatureSet:
     def reset(self):
         for f in self.features:
             f.reset()
+
+    def null_cost(self):
+        return sum(f.null_cost() for f in self.features)
 
     def cost_of_change(self, values_to_add, values_to_delete):
         # ensure the right size for empty feature vectors

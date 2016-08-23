@@ -26,6 +26,10 @@ filenames = {\
     'index' : 'index.txt',
     'log'   : 'log.txt',
     'rules' : 'rules.txt',
+    'rules-modsel' : 'rules-modsel.txt',
+    'rules-fit' : 'rules-fit.txt',
+    'sample-edge-stats' : 'sample-edge-stats.txt',
+    'sample-rule-stats' : 'sample-rule-stats.txt',
     'wordlist' : 'input.training'
 }
 
@@ -40,21 +44,21 @@ patterns = {}
 patterns['symbol'] = '(?:[\w-]|\{[A-Z0-9]+\})'
 patterns['tag'] = '(?:<[A-Z0-9]+>)'
 patterns['word'] = '^(?P<word>%s+)(?P<tag>%s*)$' %\
-						  (patterns['symbol'], patterns['tag'])
+                          (patterns['symbol'], patterns['tag'])
 
 patterns['rule_subst'] = '%s*%s%s*' %\
-							  (patterns['symbol'], format['rule_subst_sep'], patterns['symbol'])
+                              (patterns['symbol'], format['rule_subst_sep'], patterns['symbol'])
 patterns['rule_named_subst'] = '(?P<x>%s*)%s(?P<y>%s*)' %\
-							  (patterns['symbol'], format['rule_subst_sep'], patterns['symbol'])
+                              (patterns['symbol'], format['rule_subst_sep'], patterns['symbol'])
 patterns['rule_tag_subst'] = '%s*%s%s*' %\
-							  (patterns['tag'], format['rule_subst_sep'], patterns['tag'])
+                              (patterns['tag'], format['rule_subst_sep'], patterns['tag'])
 patterns['rule'] = '^(?P<subst>%s(%s)*)(?:%s(?P<tag_subst>%s))?$' %\
-							  (patterns['rule_subst'],
-							   format['rule_part_sep']+patterns['rule_subst'],
-							   format['rule_tag_sep'],
-							   patterns['rule_tag_subst'])
+                              (patterns['rule_subst'],
+                               format['rule_part_sep']+patterns['rule_subst'],
+                               format['rule_tag_sep'],
+                               patterns['rule_tag_subst'])
 patterns['rule_named_tag_subst'] = '(?P<x>%s*)%s(?P<y>%s*)' %\
-							   (patterns['tag'], format['rule_subst_sep'], patterns['tag'])
+                               (patterns['tag'], format['rule_subst_sep'], patterns['tag'])
 
 compiled_patterns = {}
 for key, val in patterns.items():

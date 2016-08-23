@@ -128,6 +128,12 @@ def main(mode, modules_to_run):
         if 'modsel' in modules_to_run:
             import modules.modsel
             modules.modsel.run()
+        if 'fit' in modules_to_run:
+            import modules.fit
+            modules.fit.run()
+        if 'sample' in modules_to_run:
+            import modules.sample
+            modules.sample.run()
 #    if MODE_EVAL in mode:
 #        if MODULE_PRE in modules:
 #            preprocess.evaluate()

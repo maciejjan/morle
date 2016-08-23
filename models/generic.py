@@ -62,14 +62,15 @@ class Model:
             self.rule_features[rule].fit(edges_to_add)
 
     def reset(self):
-        self.roots_cost = 0.0
-        self.edges_cost = sum(f.null_cost() for f in self.rule_features.values())
-        self.rules_cost = self.ruledist
-                              .cost_of_change(list(self.rule_features.keys()))
         self.rootdist.reset()
         self.ruledist.reset()
         for features in self.rule_features.values():
             features.reset()
+        self.roots_cost = 0.0
+        self.edges_cost = sum(f.null_cost() for f in self.rule_features.values())
+        self.rules_cost = -self.ruledist.cost_of_change([],\
+                            self.extractor.extract_feature_values_from_rules(
+                                self.rule_features.keys()))
 
     def num_rules(self):
         return len(self.rule_features)
@@ -85,7 +86,7 @@ class Model:
             FeatureSetFactory.new_edge_feature_set(self.model_type, domsize)
         self.rules_cost += self.ruledist.cost_of_change(\
             self.extractor.extract_feature_values_from_rules((rule,)), [])
-        self.edges_cost += self.rule_features[rule].cost()
+        self.edges_cost += self.rule_features[rule].null_cost()
 
     def remove_rule(self, rule):
         self.rules_cost += self.ruledist.cost_of_change([],\

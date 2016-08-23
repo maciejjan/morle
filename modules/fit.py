@@ -1,13 +1,12 @@
-# fit the model (with soft-EM algorithm)
 from datastruct.lexicon import *
 from datastruct.rules import *
 from models.point import PointModel
-import algorithms.mcmc
+import algorithms.em
 import shared
 import logging
 
 # model selection (with simulated annealing)
-def prepare_point_model():
+def prepare_model():
     lexicon = Lexicon.init_from_wordlist(shared.filenames['wordlist'])
     logging.getLogger('main').info('Loading rules...')
     rules, rule_domsizes = {}, {}
@@ -26,7 +25,8 @@ def prepare_point_model():
 #    model.save_to_file(model_filename)
     return model, lexicon, edges
 
+# fit the model (with soft-EM algorithm)
 def run():
-    model, lexicon, edges = prepare_marginal_model()
+    model, lexicon, edges = prepare_model()
     algorithms.em.softem(lexicon, model, edges)
 

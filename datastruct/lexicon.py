@@ -211,11 +211,11 @@ class Lexicon:
         self.rules_c[edge.rule] -= 1
         self.cost -= edge.cost - edge.target.cost
     
-    def reset(self, model):
+    def reset(self):
         # TODO refactor
-        if not isinstance(model, MarginalModel):
-            self.cost = sum(node.cost for node in self.iter_nodes()) +\
-                model.null_cost()
+#        if not isinstance(model, MarginalModel):
+#            self.cost = sum(node.cost for node in self.iter_nodes()) +\
+#                model.null_cost()
         self.edges_by_rule = defaultdict(lambda: list())
         for node in self.iter_nodes():
             node.parent = None

@@ -59,7 +59,7 @@ class ScalarStatistic(MCMCStatistic):
     def value(self):
         return self.val
 
-class ExpectedLogLikelihoodStatistic(ScalarStatistic):
+class ExpectedCostStatistic(ScalarStatistic):
     def update(self, sampler):
         pass
     
@@ -70,7 +70,7 @@ class ExpectedLogLikelihoodStatistic(ScalarStatistic):
         pass
     
     def next_iter(self, sampler):
-        self.val = (self.val * (sampler.num-1) + sampler.logl()) / sampler.num
+        self.val = (self.val * (sampler.num-1) + sampler.model.cost()) / sampler.num
 
 class TimeStatistic(ScalarStatistic):
     def reset(self, sampler):
@@ -330,7 +330,7 @@ class RuleIntervalsWithoutStatistic(MCMCStatistic):
 # TODO monitor the number of moves from each variant and their acceptance rates!
 # TODO refactor
 class MCMCGraphSampler:
-    def __init__(self, model, lexicon, edges):
+    def __init__(self, model, lexicon, edges, warmup_iter, sampl_iter):
         self.model = model
         self.lexicon = lexicon
         self.edges = edges
@@ -344,6 +344,8 @@ class MCMCGraphSampler:
         self.len_edges = len(edges)
         self.num = 0        # iteration number
         self.stats = {}
+        self.warmup_iter = warmup_iter
+        self.sampl_iter = sampl_iter
 #        self.accept_all = False
     
     def add_stat(self, name, stat):
@@ -352,20 +354,21 @@ class MCMCGraphSampler:
         self.stats[name] = stat
 
     def logl(self):
-        if isinstance(self.model, PointModel):
-            return self.lexicon.cost
-        elif isinstance(self.model, MarginalModel):
-            return self.model.cost()
-        else:
-            raise Exception('Unknown model type.')
+        return self.model.cost()
+#        if isinstance(self.model, PointModel):
+#            return self.lexicon.cost
+#        elif isinstance(self.model, MarginalModel):
+#            return self.model.cost()
+#        else:
+#            raise Exception('Unknown model type.')
 
     def run_sampling(self):
         logging.getLogger('main').info('Warming up the sampler...')
-        pp = progress_printer(shared.config['modsel'].getint('warmup_iterations'))
+        pp = progress_printer(self.warmup_iter)
         for i in pp:
             self.next()
         self.reset()
-        pp = progress_printer(shared.config['modsel'].getint('sampling_iterations'))
+        pp = progress_printer(self.sampl_iter)
         logging.getLogger('main').info('Sampling...')
         for i in pp:
             self.next()
@@ -625,6 +628,49 @@ class MCMCGraphSampler:
         for stat in self.stats.values():
             stat.update(self)
 
+    def print_scalar_stats(self):
+        stats, stat_names = [], []
+        print()
+        print()
+        print('SIMULATION STATISTICS')
+        print()
+        spacing = max([len(stat_name)\
+                       for stat_name, stat in self.stats.items() 
+                           if isinstance(stat, ScalarStatistic)]) + 2
+        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+            if isinstance(stat, ScalarStatistic):
+                print((' ' * (spacing-len(stat_name)))+stat_name, ':', stat.value())
+        print()
+        print()
+
+    def save_edge_stats(self, filename):
+        stats, stat_names = [], []
+        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+            if isinstance(stat, EdgeStatistic):
+                stat_names.append(stat_name)
+                stats.append(stat)
+        with open_to_write(filename) as fp:
+            write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
+            for i, edge in enumerate(self.edges):
+                write_line(fp, (str(edge.source), str(edge.target), str(edge.rule)) + tuple([stat.value(i) for stat in stats]))
+
+    def save_rule_stats(self, filename):
+        stats, stat_names = [], []
+        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+            if isinstance(stat, RuleStatistic):
+                stat_names.append(stat_name)
+                stats.append(stat)
+        with open_to_write(filename) as fp:
+            write_line(fp, ('rule', 'domsize') + tuple(stat_names))
+            for rule in self.model.rule_features:
+                write_line(fp, (str(rule), self.model.rule_features[rule][0].trials) +\
+                               tuple([stat.value(rule) for stat in stats]))
+            
+    def summary(self):
+        self.print_scalar_stats()
+        self.save_edge_stats(shared.filenames['sample-edge-stats'])
+        self.save_rule_stats(shared.filenames['sample-rule-stats'])
+
 
 class RuleSetProposalDistribution:
     def __init__(self, rule_contrib, rule_costs, num):
@@ -649,7 +695,7 @@ class RuleSetProposalDistribution:
 
 
 class MCMCAnnealingRuleSampler:
-    def __init__(self, model, lexicon, edges):
+    def __init__(self, model, lexicon, edges, warmup_iter, sampl_iter):
         self.num = 0
         self.model = model
         self.lexicon = lexicon
@@ -658,6 +704,8 @@ class MCMCAnnealingRuleSampler:
         self.ruleset = self.full_ruleset
         self.rule_domsize = {}
         self.rule_costs = {}
+        self.warmup_iter = warmup_iter
+        self.sampl_iter = sampl_iter
         for rule in self.full_ruleset:
             self.rule_domsize[rule] = self.model.rule_features[rule][0].trials
             self.rule_costs[rule] = self.model.rule_cost(rule, self.rule_domsize[rule])
@@ -691,17 +739,18 @@ class MCMCAnnealingRuleSampler:
         for rule in ruleset:
             new_model.add_rule(rule, self.rule_domsize[rule])
         new_model.reset()
-        self.lexicon.reset(new_model)
+        self.lexicon.reset()
         new_model.add_lexicon(self.lexicon)
         print(new_model.roots_cost, new_model.rules_cost, new_model.edges_cost, new_model.cost())
 
         graph_sampler = MCMCGraphSampler(new_model, self.lexicon,\
-            [edge for edge in self.edges if edge.rule in ruleset])
-        graph_sampler.add_stat('logl', ExpectedLogLikelihoodStatistic(graph_sampler))
+            [edge for edge in self.edges if edge.rule in ruleset],\
+            self.warmup_iter, self.sampl_iter)
+        graph_sampler.add_stat('cost', ExpectedCostStatistic(graph_sampler))
         graph_sampler.add_stat('contrib', RuleExpectedContributionStatistic(graph_sampler))
         graph_sampler.run_sampling()
 
-        return graph_sampler.stats['logl'].val,\
+        return graph_sampler.stats['cost'].val,\
             RuleSetProposalDistribution(
                 graph_sampler.stats['contrib'].values,
                 self.rule_costs, self.num)
@@ -783,43 +832,6 @@ class MCMCAnnealingRuleSampler:
 def load_edges(filename):
     return list(read_tsv_file(filename, (str, str, str)))
 
-def save_edges(sampler, filename):
-    stats, stat_names = [], []
-    for stat_name, stat in sorted(sampler.stats.items(), key = itemgetter(0)):
-        if isinstance(stat, EdgeStatistic):
-            stat_names.append(stat_name)
-            stats.append(stat)
-    with open_to_write(filename) as fp:
-        write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
-        for i, edge in enumerate(sampler.edges):
-            write_line(fp, (str(edge.source), str(edge.target), str(edge.rule)) + tuple([stat.value(i) for stat in stats]))
-
-def save_rules(sampler, filename):
-    stats, stat_names = [], []
-    for stat_name, stat in sorted(sampler.stats.items(), key = itemgetter(0)):
-        if isinstance(stat, RuleStatistic):
-            stat_names.append(stat_name)
-            stats.append(stat)
-    with open_to_write(filename) as fp:
-        write_line(fp, ('rule', 'domsize') + tuple(stat_names))
-        for rule in sampler.model.rule_features:
-            write_line(fp, (str(rule), sampler.model.rule_features[rule][0].trials) +\
-                           tuple([stat.value(rule) for stat in stats]))
-
-def print_scalar_stats(sampler):
-    stats, stat_names = [], []
-    print()
-    print()
-    print('SIMULATION STATISTICS')
-    print()
-    spacing = max([len(stat_name)\
-                   for stat_name, stat in sampler.stats.items() 
-                       if isinstance(stat, ScalarStatistic)]) + 2
-    for stat_name, stat in sorted(sampler.stats.items(), key = itemgetter(0)):
-        if isinstance(stat, ScalarStatistic):
-            print((' ' * (spacing-len(stat_name)))+stat_name, ':', stat.value())
-    print()
-    print()
 
 def save_intervals(intervals, filename):
     with open_to_write(filename) as fp:
@@ -875,7 +887,9 @@ def save_intervals(intervals, filename):
 
 def mcmc_inference(lexicon, model, edges):
     iter_num = 0
-    rule_sampler = MCMCAnnealingRuleSampler(model, lexicon, edges)
+    rule_sampler = MCMCAnnealingRuleSampler(model, lexicon, edges,
+            shared.config['modsel'].getint('warmup_iterations'),
+            shared.config['modsel'].getint('sampling_iterations'))
     while iter_num < shared.config['modsel'].getint('iterations'):
         iter_num += 1
         logging.getLogger('main').info('Iteration %d' % iter_num)

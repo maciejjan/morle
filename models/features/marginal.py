@@ -44,6 +44,13 @@ class MarginalBinomialFeature(MarginalFeature):
         self.alpha_0 = alpha
         self.beta_0 = beta
         self.reset()
+
+    def null_cost(self):
+        return -betaln(\
+                       self.alpha_0,\
+                       self.trials + self.beta_0
+                      ) +\
+            betaln(self.alpha_0, self.beta_0)
     
     def cost(self):
         return -betaln(\
@@ -86,6 +93,9 @@ class MarginalGaussianInverseChiSquaredFeature(MarginalFeature):
         self.nu_0 = nu_0
         self.var_0 = var_0 * np.ones(dim)
         self.reset()
+
+    def null_cost(self):
+        return self.cost_with_parameters(self.kappa_0, self.mu_0, self.nu_0, self.var_0)
 
     def cost(self):
         return self.cost_with_parameters(self.kappa_n, self.mu_n, self.nu_n, self.var_n)
