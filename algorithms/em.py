@@ -65,8 +65,13 @@ def softem(lexicon, model, edges):
     iter_num = 0
     model.recompute_root_costs(lexicon.iter_nodes())
     while iter_num < shared.config['fit'].getint('iterations'):
+        iter_num += 1
+        logging.getLogger('main').info('iteration %d' % iter_num)
+
         lexicon.reset()
         model.reset()
+        model.add_lexicon(lexicon)
+#        logging.getLogger('main').debug('roots_cost (before sampling) = %f' % model.roots_cost)
         model.recompute_edge_costs(edges)
 
         sampler = MCMCGraphSampler(model, lexicon, edges,

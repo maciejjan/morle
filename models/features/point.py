@@ -27,20 +27,10 @@ class PointBinomialFeature(PointFeature):
     
     def cost(self, values):
         value = sum(values)
-#        if (self.prob == 0.0 and value == 0) or\
-#                (self.prob == 1.0 and value == self.trials):
-#            return 0.0
-#        elif self.prob <= 0.0 or self.prob >= 1.0:
-#            raise Exception('Impossible event: %f %d %d ' % (self.prob, value, self.trials))
         return -value*(np.log(self.prob)-np.log(1-self.prob))
     
     def weighted_cost(self, values):
         value = sum(val*w for val, w in values)
-#        if (self.prob == 0.0 and value == 0) or\
-#                (self.prob == 1.0 and value == self.trials):
-#            return 0.0
-#        elif self.prob <= 0.0 or self.prob >= 1.0:
-#            raise Exception('Impossible event: %f %d %d ' % (self.prob, value, self.trials))
         return -value*(np.log(self.prob)-np.log(1-self.prob))
     
     # the normalizing constant of the distribution

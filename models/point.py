@@ -31,18 +31,18 @@ class PointModel(Model):
 
     def recompute_edge_costs(self, edges):
         for e in edges:
-            logging.getLogger('main').debug(\
-                    ' '.join((e.source.key, e.target.key, str(e.rule),
-                              str(self.edge_cost(e)-e.cost))))
+#            logging.getLogger('main').debug(\
+#                    ' '.join((e.source.key, e.target.key, str(e.rule),
+#                              str(self.edge_cost(e)-e.cost))))
             e.cost = self.edge_cost(e)
 
     def recompute_root_costs(self, roots):
         for root in roots:
             new_cost = self.rootdist.cost_of_change(\
                     self.extractor.extract_feature_values_from_nodes((root,)), ())
-            logging.getLogger('main').debug(\
-                    ' '.join((root.key,
-                              str(new_cost-root.cost))))
+#            logging.getLogger('main').debug(\
+#                    ' '.join((root.key,
+#                              str(new_cost-root.cost))))
             root.cost = new_cost
 
     def cost_of_change(self, edges_to_add, edges_to_remove):
@@ -52,7 +52,15 @@ class PointModel(Model):
                 sum(e.target.cost for e in edges_to_remove)
 
     def apply_change(self, edges_to_add, edges_to_remove):
-        raise NotImplementedError()
+#        logging.getLogger('main').debug('change costs = %d - %d + %d - %d' %\
+#                (sum(e.cost for e in edges_to_add),
+#                 sum(e.cost for e in edges_to_remove),
+#                 sum(e.target.cost for e in edges_to_remove),
+#                 sum(e.target.cost for e in edges_to_add)))
+        self.edges_cost += sum(e.cost for e in edges_to_add) -\
+                           sum(e.cost for e in edges_to_remove)
+        self.roots_cost += sum(e.target.cost for e in edges_to_remove) -\
+                           sum(e.target.cost for e in edges_to_add)
 
     def edge_cost(self, edge):
         return self.rule_features[edge.rule].cost(\

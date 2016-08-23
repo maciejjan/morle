@@ -491,16 +491,14 @@ class MCMCGraphSampler:
         for e in edges_to_remove:
             idx = self.edges_idx[e]
             self.lexicon.remove_edge(e)
-            if isinstance(self.model, MarginalModel):
-                self.model.apply_change([], [e])
+            self.model.apply_change([], [e])
             for stat in self.stats.values():
                 stat.edge_removed(self, idx, e)
         # add edges and update stats
         for e in edges_to_add:
             idx = self.edges_idx[e]
             self.lexicon.add_edge(e)
-            if isinstance(self.model, MarginalModel):
-                self.model.apply_change([e], [])
+            self.model.apply_change([e], [])
             for stat in self.stats.values():
                 stat.edge_added(self, idx, e)
 
