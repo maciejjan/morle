@@ -134,7 +134,7 @@ class Rule:
     
     @staticmethod
     def from_seq(seq, tag_subst):
-        subst, tag_subst = [], ()
+        subst = []
         x_seq, y_seq = (), ()
         for x, y in seq:
             if x == y == libhfst.IDENTITY:

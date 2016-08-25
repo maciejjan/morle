@@ -355,12 +355,6 @@ class MCMCGraphSampler:
 
     def logl(self):
         return self.model.cost()
-#        if isinstance(self.model, PointModel):
-#            return self.lexicon.cost
-#        elif isinstance(self.model, MarginalModel):
-#            return self.model.cost()
-#        else:
-#            raise Exception('Unknown model type.')
 
     def run_sampling(self):
         logging.getLogger('main').info('Warming up the sampler...')
@@ -501,121 +495,6 @@ class MCMCGraphSampler:
             self.model.apply_change([e], [])
             for stat in self.stats.values():
                 stat.edge_added(self, idx, e)
-
-
-#    def _old_next(self):
-#        def consider_adding_edge(edge):
-##            return math.exp(-self.model.edge_cost(edge) + edge.target.cost)
-#            return math.exp(-edge.cost + edge.target.cost)
-#
-#        def consider_removing_edge(edge):
-##            return math.exp(-edge.target.cost + self.model.edge_cost(edge))
-#            return math.exp(-edge.target.cost + edge.cost)
-#
-#        # increase the number of iterations
-#        self.num += 1
-#
-#        # select an edge randomly
-#        edge_idx = random.randrange(self.len_edges)            
-#        edge = self.edges[edge_idx]
-#
-#        # determine the changes to the lexicon
-#        edges_to_add, edges_to_remove = [], []
-#        if edge.target.parent == edge.source:
-#            # delete the selected edge
-#            edges_to_remove.append(edge)
-#        else:
-#            # add the selected edge
-#            edges_to_add.append(edge)
-#            if edge.source.has_ancestor(edge.target):    # cycle
-#                # swap parents
-#                # determine the nodes relevant for swap operation
-#                node_1, node_2 = edge.source, edge.target
-#                node_3 = node_2.parent\
-#                         if node_2.parent is not None\
-#                         else None
-#                node_4 = node_1.parent
-#                node_5 = node_4
-#                if node_5 != node_2:
-#                    while node_5.parent != node_2: 
-#                        node_5 = node_5.parent
-#                # check whether all the relevant edges exist
-#                edge_2_5, edge_3_1, edge_3_2, edge_3_5, edge_4_1 =\
-#                    None, None, None, None, None
-#                try:
-#                    edge_2_5 = self.edges_hash[(node_2, node_5)][1]
-#                    edge_3_1 = self.edges_hash[(node_3, node_1)][1]
-#                    edge_3_2 = self.edges_hash[(node_3, node_2)][1]
-#                    edge_3_5 = self.edges_hash[(node_3, node_5)][1]
-#                    edge_4_1 = self.edges_hash[(node_4, node_1)][1]
-#                except KeyError:
-#                    self.num -= 1
-#                    return
-#                # choose the variant of the swap move and perform it
-#                if random.random() < 0.5:
-#                    edges_to_remove.append(edge_3_2)
-#                    edges_to_remove.append(edge_4_1)
-#                    edges_to_add.append(edge_3_1)
-#                else:
-#                    edges_to_remove.append(edge_2_5)
-#                    edges_to_remove.append(edge_3_2)
-#                    edges_to_add.append(edge_3_5)
-#            elif edge.target.parent is not None:        # word_2 already has a parent
-#                # delete the current parent of word_2
-#                node_2, node_3 = edge.target, edge.target.parent
-#                edge_3_2 = self.edges_hash[(node_3, node_2)][1]
-#                edges_to_remove.append(edge_3_2)
-#
-#        # compute the probability ratio of the proposed graph
-#        # related to the current one
-#        prob_ratio = None
-##        if self.accept_all:
-##            prob_ratio = 1.0
-#        if isinstance(self.model, PointModel):
-#            prob_ratio = 1.0
-#            for e in edges_to_add:
-#                prob_ratio *= consider_adding_edge(e)
-#            for e in edges_to_remove:
-#                prob_ratio *= consider_removing_edge(e)
-#        elif isinstance(self.model, MarginalModel):
-#            print()
-#            print(self.model.rootdist.features[1].s_0)
-#            for e in edges_to_add:
-#                print('Adding: %s -> %s via %s' % (e.source.key, e.target.key, str(e.rule)))
-#                print(self.model.rule_features[e.rule][1].s_0)
-#            for e in edges_to_remove:
-#                print('Removing: %s -> %s via %s' % (e.source.key, e.target.key, str(e.rule)))
-#            print('cost_of_change = %f' % self.model.cost_of_change(edges_to_add, edges_to_remove))
-##            print('acc_prob = %f' % prob_ratio)
-#            prob_ratio = math.exp(\
-#                -self.model.cost_of_change(edges_to_add, edges_to_remove))
-#        else:
-#            raise Exception('Unknown model type.')
-#
-#        # accept/reject
-#        if prob_ratio >= 1 or prob_ratio >= random.random():
-##            print('Accepted')
-#            # remove edges and update stats
-#            for e in edges_to_remove:
-##                r = self.lexicon[w_2].deriving_rule()
-#                idx = self.edges_hash[(e.source, e.target)][0]
-#                self.lexicon.remove_edge(e)
-#                if isinstance(self.model, MarginalModel):
-#                    self.model.apply_change([], [e])
-#                for stat in self.stats.values():
-#                    stat.edge_removed(self, idx, e)
-#            # add edges and update stats
-#            for e in edges_to_add:
-#                idx = self.edges_hash[(e.source, e.target)][0]
-#                self.lexicon.add_edge(e)
-#                if isinstance(self.model, MarginalModel):
-#                    self.model.apply_change([e], [])
-#                for stat in self.stats.values():
-#                    stat.edge_added(self, idx, e)
-#
-#        # update the remaining stats
-#        for stat in self.stats.values():
-#            stat.next_iter(self)
     
     def reset(self):
         self.num = 0
@@ -668,6 +547,41 @@ class MCMCGraphSampler:
         self.print_scalar_stats()
         self.save_edge_stats(shared.filenames['sample-edge-stats'])
         self.save_rule_stats(shared.filenames['sample-rule-stats'])
+
+
+class MCMCSupervisedGraphSampler(MCMCGraphSampler):
+    def __init__(self, model, lexicon, edges, warmup_iter, sampl_iter):
+        logging.getLogger('main').debug('Creating a supervised graph sampler.')
+        MCMCGraphSampler.__init__(self, model, lexicon, edges, warmup_iter, sampl_iter)
+        self.init_lexicon()
+
+    def init_lexicon(self):
+        edges_to_add = []
+        for key, edges in self.edges_hash.items():
+            edges_to_add.append(random.choice(edges))
+        self.accept_move(edges_to_add, [])
+
+    def determine_move_proposal(self, edge):
+        if edge in edge.source.edges:
+            edge_to_add = random.choice(self.edges_hash[(edge.source, edge.target)])
+            if edge_to_add == edge:
+                raise ImpossibleMoveException()
+            return [edge_to_add], [edge], 1
+        else:
+            edge_to_remove = self.find_edge_in_lexicon(edge.source, edge.target)
+            return [edge], [edge_to_remove], 1
+
+    def run_sampling(self):
+        self.reset()
+        MCMCGraphSampler.run_sampling(self)
+
+
+class MCMCGraphSamplerFactory:
+    def new(*args):
+        if shared.config['General'].getboolean('supervised'):
+            return MCMCSupervisedGraphSampler(*args)
+        else:
+            return MCMCGraphSampler(*args)
 
 
 class RuleSetProposalDistribution:
@@ -736,12 +650,15 @@ class MCMCAnnealingRuleSampler:
 #        new_model.roots_cost = self.model.roots_cost
         for rule in ruleset:
             new_model.add_rule(rule, self.rule_domsize[rule])
-        new_model.reset()
         self.lexicon.reset()
+        new_model.reset()
         new_model.add_lexicon(self.lexicon)
         print(new_model.roots_cost, new_model.rules_cost, new_model.edges_cost, new_model.cost())
 
-        graph_sampler = MCMCGraphSampler(new_model, self.lexicon,\
+#        graph_sampler = MCMCGraphSampler(new_model, self.lexicon,\
+#            [edge for edge in self.edges if edge.rule in ruleset],\
+#            self.warmup_iter, self.sampl_iter)
+        graph_sampler = MCMCGraphSamplerFactory.new(new_model, self.lexicon,\
             [edge for edge in self.edges if edge.rule in ruleset],\
             self.warmup_iter, self.sampl_iter)
         graph_sampler.add_stat('cost', ExpectedCostStatistic(graph_sampler))

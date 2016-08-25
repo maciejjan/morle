@@ -134,7 +134,8 @@ def filter_rules(graph_file):
             num_rules += 1
     # cleanup files
     remove_file(graph_file + '.tmp')
-    rename_file(graph_file, graph_file + '.orig')
+    remove_file(graph_file)
+#    rename_file(graph_file, graph_file + '.orig')
     rename_file(graph_file + '.filtered', graph_file)
 #
 #def load_wordset(input_file):
@@ -157,6 +158,18 @@ def build_graph_allrules(lexicon, graph_file):
             for rule in algorithms.align.extract_all_rules(n1, n2):
                 write_line(fp, (str(n1), str(n2), str(rule)))
                 write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
+
+def build_graph_from_training_edges(lexicon, training_file, graph_file):
+    with open_to_write(graph_file) as fp:
+        for word_1, word_2 in read_tsv_file(training_file, (str, str)):
+            if word_1:
+                try:
+                    n1, n2 = lexicon[word_1], lexicon[word_2]
+                    for rule in algorithms.align.extract_all_rules(n1, n2):
+                        write_line(fp, (str(n1), str(n2), str(rule)))
+                except KeyError:
+                    if word_1 not in lexicon:
+                        logging.getLogger('main').warning('%s not in lexicon' % word_1)
 
 #def load_edges_by_rule(lexicon, graph_file):
 #    edges_by_rule, rules = defaultdict(lambda: list()), {}
@@ -197,8 +210,16 @@ def split_rules_in_graph(lexicon, graph_file, model):
 def run():
     logging.getLogger('main').info('Loading lexicon...')
     lexicon = Lexicon.init_from_wordlist(shared.filenames['wordlist'])
-    logging.getLogger('main').info('Building graph...')
-    build_graph_allrules(lexicon, shared.filenames['graph'])
+
+    if shared.config['General'].getboolean('supervised'):
+        logging.getLogger('main').info('Building graph...')
+        build_graph_from_training_edges(lexicon,
+                                        shared.filenames['wordlist'],
+                                        shared.filenames['graph'])
+    else:
+        logging.getLogger('main').info('Building graph...')
+        build_graph_allrules(lexicon, shared.filenames['graph'])
+
     sort_file(shared.filenames['graph'], key=3)
     update_file_size(shared.filenames['graph'])
 #    if settings.LEMMAS_KNOWN:
@@ -208,7 +229,6 @@ def run():
     aggregate_file(shared.filenames['graph'],\
                    shared.filenames['rules'], 3)
     update_file_size(shared.filenames['rules'])
-
     compute_rule_domsizes(lexicon, shared.filenames['rules'])
 
 #    trh = lexicon.trigram_hash()

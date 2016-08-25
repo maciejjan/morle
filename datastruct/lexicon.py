@@ -8,9 +8,12 @@ from collections import defaultdict
 import itertools
 import re
 import math
+import logging
 
 def get_wordlist_format():
     result = [str]
+    if shared.config['General'].getboolean('supervised'):
+        result.append(str)
     if shared.config['Features'].getfloat('word_freq_weight') > 0:
         result.append(int)
     if shared.config['Features'].getfloat('word_vec_weight') > 0:
@@ -25,7 +28,8 @@ def tokenize_word(string):
     if m is None:
         raise Exception('Error while tokenizing word: %s' % string)
     return tuple(re.findall(shared.compiled_patterns['symbol'], m.group('word'))),\
-           tuple(re.findall(shared.compiled_patterns['tag'], m.group('tag')))
+           tuple(re.findall(shared.compiled_patterns['tag'], m.group('tag'))),\
+           m.group('disamb')
 
 class LexiconEdge:
     def __init__(self, source, target, rule, cost=0.0):
@@ -42,8 +46,10 @@ class LexiconEdge:
 
 class LexiconNode:
     def __init__(self, word, freq=None, vec=None):
-        self.word, self.tag = tokenize_word(word)
-        self.key = ''.join(self.word + self.tag)
+        self.word, self.tag, self.disamb = tokenize_word(word)
+        self.key = ''.join(self.word + self.tag) +\
+                   ((shared.format['word_disamb_sep'] + self.disamb)\
+                     if self.disamb else '')
         if shared.config['Features'].getfloat('word_freq_weight') > 0:
             self.freq = freq
             self.logfreq = math.log(self.freq)
@@ -212,10 +218,6 @@ class Lexicon:
         self.cost -= edge.cost - edge.target.cost
     
     def reset(self):
-        # TODO refactor
-#        if not isinstance(model, MarginalModel):
-#            self.cost = sum(node.cost for node in self.iter_nodes()) +\
-#                model.null_cost()
         self.edges_by_rule = defaultdict(lambda: list())
         for node in self.iter_nodes():
             node.parent = None
@@ -254,10 +256,13 @@ class Lexicon:
         '''Create a lexicon with no edges from a wordlist.'''
         lexicon = Lexicon()
         for node_data in read_tsv_file(filename, get_wordlist_format()):
+            # if the input file contains base words -> ignore them for now
+            if shared.config['General'].getboolean('supervised'):
+                node_data = node_data[1:]
             try:
                 lexicon.add_node(LexiconNode(*node_data))
             except Exception:
-                print('Warning: ignoring %s' % node_data[0])
+                logging.getLogger('main').warning('ignoring %s' % node_data[0])
         return lexicon
 
     # init from file of form word_1<TAB>word_2 (extract rules)

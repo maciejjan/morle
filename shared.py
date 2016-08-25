@@ -23,6 +23,7 @@ filenames = {\
     'config' : 'config.ini',
     'config-default' : 'config-default.ini',
     'graph' : 'graph.txt',
+    'graph-modsel' : 'graph-modsel.txt',
     'index' : 'index.txt',
     'log'   : 'log.txt',
     'rules' : 'rules.txt',
@@ -35,6 +36,7 @@ filenames = {\
 
 format = {\
     'vector_sep' : ' ',
+    'word_disamb_sep' : '#',
     'rule_subst_sep' : ':',
     'rule_part_sep' : '/',
     'rule_tag_sep' : '___'
@@ -43,8 +45,10 @@ format = {\
 patterns = {}
 patterns['symbol'] = '(?:[\w-]|\{[A-Z0-9]+\})'
 patterns['tag'] = '(?:<[A-Z0-9]+>)'
-patterns['word'] = '^(?P<word>%s+)(?P<tag>%s*)$' %\
-                          (patterns['symbol'], patterns['tag'])
+patterns['disamb'] = '[0-9]+'
+patterns['word'] = '^(?P<word>%s+)(?P<tag>%s*)(?:%s(?P<disamb>%s))?$' %\
+                          (patterns['symbol'], patterns['tag'], 
+                           format['word_disamb_sep'], patterns['disamb'])
 
 patterns['rule_subst'] = '%s*%s%s*' %\
                               (patterns['symbol'], format['rule_subst_sep'], patterns['symbol'])

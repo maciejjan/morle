@@ -34,8 +34,10 @@ def prepare_model():
 def run():
     model, lexicon, edges = prepare_model()
     logging.getLogger('main').info('Loaded %d rules.' % len(model.rule_features))
-    sampler = MCMCGraphSampler(model, lexicon, edges)
-    sampler.add_stat('logl', ExpectedLogLikelihoodStatistic(sampler))
+    sampler = MCMCGraphSamplerFactory.new(model, lexicon, edges,
+            shared.config['sample'].getint('warmup_iterations'),
+            shared.config['sample'].getint('sampling_iterations'))
+    sampler.add_stat('cost', ExpectedCostStatistic(sampler))
     sampler.add_stat('edge_freq', EdgeFrequencyStatistic(sampler))
     sampler.add_stat('contrib', RuleExpectedContributionStatistic(sampler))
     sampler.run_sampling()

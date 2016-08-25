@@ -10,13 +10,13 @@ def prepare_model():
     lexicon = Lexicon.init_from_wordlist(shared.filenames['wordlist'])
     logging.getLogger('main').info('Loading rules...')
     rules, rule_domsizes = {}, {}
-    for rule, freq, domsize in read_tsv_file(shared.filenames['rules'],\
+    for rule, freq, domsize in read_tsv_file(shared.filenames['rules-modsel'],\
             (str, int, int)):
         rules[rule] = Rule.from_string(rule)
         rule_domsizes[rule] = domsize
     logging.getLogger('main').info('Loading edges...')
     edges = []
-    for w1, w2, r in read_tsv_file(shared.filenames['graph']):
+    for w1, w2, r in read_tsv_file(shared.filenames['graph-modsel']):
         edges.append(LexiconEdge(lexicon[w1], lexicon[w2], rules[r]))
     model = PointModel(lexicon, None)
     model.fit_ruledist(set(rules.values()))
