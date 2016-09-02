@@ -125,4 +125,8 @@ def number_of_paths(transducer):
         paths_for_state = new_paths_for_state
     return result
 
+def rootdist_automaton(rootdist):
+    # create an automaton for word generation
+    raise NotImplementedError()
+
 

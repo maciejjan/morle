@@ -122,6 +122,9 @@ def main(mode, modules_to_run):
 #        if MODULE_TRAIN in modules_to_run:
 #            train.import_from_db()
     if MODE_RUN in mode:
+        if 'analyze' in modules_to_run:
+            import modules.analyze
+            modules.analyze.run()
         if MODULE_PRE in modules_to_run:
             import modules.preprocess
             modules.preprocess.run()
@@ -131,6 +134,9 @@ def main(mode, modules_to_run):
         if 'fit' in modules_to_run:
             import modules.fit
             modules.fit.run()
+        if 'generate' in modules_to_run:
+            import modules.generate
+            modules.generate.run()
         if 'sample' in modules_to_run:
             import modules.sample
             modules.sample.run()

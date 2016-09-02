@@ -38,6 +38,7 @@ def run():
             shared.config['sample'].getint('warmup_iterations'),
             shared.config['sample'].getint('sampling_iterations'))
     sampler.add_stat('cost', ExpectedCostStatistic(sampler))
+    sampler.add_stat('acc_rate', AcceptanceRateStatistic(sampler))
     sampler.add_stat('edge_freq', EdgeFrequencyStatistic(sampler))
     sampler.add_stat('contrib', RuleExpectedContributionStatistic(sampler))
     sampler.run_sampling()

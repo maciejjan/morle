@@ -162,9 +162,10 @@ class Rule:
              shared.format['rule_subst_sep']+\
              ''.join(self.tag_subst[1]) if self.tag_subst else '')
     
-    def build_transducer(self, alphabet=None):
+    def build_transducer(self, weight=0, alphabet=None):
         self.transducer =\
-            algorithms.fst.seq_to_transducer(self.seq(), alphabet=alphabet)
+            algorithms.fst.seq_to_transducer(\
+                self.seq(), weight=weight, alphabet=alphabet)
     
     def lmatch(self, lexicon):
         if lexicon.transducer is None:

@@ -1,1 +1,1 @@
-__all__ = ['preprocess', 'modsel']
+__all__ = ['preprocess', 'modsel', 'fit', 'generate']

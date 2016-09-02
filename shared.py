@@ -31,6 +31,7 @@ filenames = {\
     'rules-fit' : 'rules-fit.txt',
     'sample-edge-stats' : 'sample-edge-stats.txt',
     'sample-rule-stats' : 'sample-rule-stats.txt',
+    'wordgen' : 'wordgen.txt',
     'wordlist' : 'input.training'
 }
 
