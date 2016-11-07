@@ -44,3 +44,7 @@ def run():
     sampler.run_sampling()
     sampler.summary()
 
+def cleanup():
+    remove_file_if_exists(shared.filenames['sample-edge-stats'])
+    remove_file_if_exists(shared.filenames['sample-rule-stats'])
+

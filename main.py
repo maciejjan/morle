@@ -53,7 +53,7 @@ def setup_logger(quiet, verbose):
         '%(asctime)s - %(levelname)s - %(message)s',
         datefmt=shared.config['General'].get('date_format'))
 
-    file_handler = logging.FileHandler(logfile, 'w+', encoding=encoding)
+    file_handler = logging.FileHandler(logfile, 'a', encoding=encoding)
     file_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
     file_handler.setFormatter(file_formatter)
     file_handler.addFilter(lambda x: re.match('.*[1-9]% done', x.msg) is None)
@@ -122,9 +122,6 @@ def main(mode, modules_to_run):
 #        if MODULE_TRAIN in modules_to_run:
 #            train.import_from_db()
     if MODE_RUN in mode:
-        if 'analyze' in modules_to_run:
-            import modules.analyze
-            modules.analyze.run()
         if MODULE_PRE in modules_to_run:
             import modules.preprocess
             modules.preprocess.run()
@@ -134,13 +131,44 @@ def main(mode, modules_to_run):
         if 'fit' in modules_to_run:
             import modules.fit
             modules.fit.run()
-        if 'generate' in modules_to_run:
-            import modules.generate
-            modules.generate.run()
         if 'sample' in modules_to_run:
             import modules.sample
             modules.sample.run()
-#    if MODE_EVAL in mode:
+        if 'compile' in modules_to_run:
+            import modules.compile
+            modules.compile.run()
+        if 'generate' in modules_to_run:
+            import modules.generate
+            modules.generate.run()
+        if 'analyze' in modules_to_run:
+            import modules.analyze
+            modules.analyze.run()
+        if 'eval_infl' in modules_to_run:
+            import modules.eval_infl
+            modules.eval_infl.run()
+    if MODE_EVAL in mode:
+        if 'analyze' in modules_to_run:
+            import modules.analyze
+            modules.analyze.eval()
+    if 'cleanup' in mode:
+        if MODULE_PRE in modules_to_run:
+            import modules.preprocess
+            modules.preprocess.cleanup()
+        if 'modsel' in modules_to_run:
+            import modules.modsel
+            modules.modsel.cleanup()
+        if 'fit' in modules_to_run:
+            import modules.fit
+            modules.fit.cleanup()
+        if 'sample' in modules_to_run:
+            import modules.sample
+            modules.sample.cleanup()
+        if 'compile' in modules_to_run:
+            import modules.compile
+            modules.compile.cleanup()
+        if 'analyze' in modules_to_run:
+            import modules.analyze
+            modules.analyze.cleanup()
 #        if MODULE_PRE in modules:
 #            preprocess.evaluate()
 ##        if MODULE_LEXEMES in modules:

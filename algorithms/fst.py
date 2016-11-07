@@ -1,4 +1,5 @@
 import libhfst
+import os.path
 import shared
 import sys
 
@@ -129,4 +130,17 @@ def rootdist_automaton(rootdist):
     # create an automaton for word generation
     raise NotImplementedError()
 
+def load_transducer(filename):
+    path = os.path.join(shared.options['working_dir'], filename)
+    istr = libhfst.HfstInputStream(path)
+    transducer = istr.read()
+    istr.close()
+    return transducer
+
+def save_transducer(transducer, filename):
+    path = os.path.join(shared.options['working_dir'], filename)
+    ostr = libhfst.HfstOutputStream(filename=path)
+    ostr.write(transducer)
+    ostr.flush()
+    ostr.close()
 

@@ -2,6 +2,7 @@
 
 import algorithms.align
 import algorithms.fastss
+import algorithms.fst
 import algorithms.splrules
 from datastruct.lexicon import *
 from datastruct.rules import *
@@ -159,6 +160,15 @@ def build_graph_allrules(lexicon, graph_file):
                 write_line(fp, (str(n1), str(n2), str(rule)))
                 write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
 
+def build_graph_allrules_fil(lexicon, graph_file, filters):
+    with open_to_write(graph_file) as fp:
+        for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
+            for rule in algorithms.align.extract_all_rules(n1, n2):
+                if all(f.check(n1, n2) for f in filters):
+                    write_line(fp, (str(n1), str(n2), str(rule)))
+                if all(f.check(n2, n1) for f in filters):
+                    write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
+
 def build_graph_from_training_edges(lexicon, training_file, graph_file):
     with open_to_write(graph_file) as fp:
         for word_1, word_2 in read_tsv_file(training_file, (str, str)):
@@ -229,7 +239,16 @@ def run():
     aggregate_file(shared.filenames['graph'],\
                    shared.filenames['rules'], 3)
     update_file_size(shared.filenames['rules'])
+
+    lexicon.build_transducer()
+    algorithms.fst.save_transducer(lexicon.transducer,
+                                   shared.filenames['lexicon-tr'])
     compute_rule_domsizes(lexicon, shared.filenames['rules'])
+
+def cleanup():
+    remove_file_if_exists(shared.filenames['rules'])
+    remove_file_if_exists(shared.filenames['lexicon-tr'])
+    remove_file_if_exists(shared.filenames['graph'])
 
 #    trh = lexicon.trigram_hash()
 #    print('Fitting model...')

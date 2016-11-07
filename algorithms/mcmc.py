@@ -520,6 +520,12 @@ class MCMCGraphSampler:
         print()
         print()
 
+    def log_scalar_stats(self):
+        stats, stat_names = [], []
+        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+            if isinstance(stat, ScalarStatistic):
+                logging.getLogger('main').info('%s = %f' % (stat_name, stat.value()))
+
     def save_edge_stats(self, filename):
         stats, stat_names = [], []
         for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
@@ -547,6 +553,24 @@ class MCMCGraphSampler:
         self.print_scalar_stats()
         self.save_edge_stats(shared.filenames['sample-edge-stats'])
         self.save_rule_stats(shared.filenames['sample-rule-stats'])
+
+# TODO constructor arguments should be the same for every type
+#      (pass ensured edges through the lexicon parameter?)
+# TODO init_lexicon() at creation
+class MCMCSemiSupervisedGraphSampler(MCMCGraphSampler):
+    def __init__(self, model, lexicon, edges, ensured_conn, warmup_iter, sampl_iter):
+        MCMCGraphSampler.__init__(self, model, lexicon, edges, warmup_iter, sampl_iter)
+        self.ensured_conn = ensured_conn
+
+    def determine_move_proposal(self, edge):
+        edges_to_add, edges_to_remove, prop_prob_ratio =\
+            MCMCGraphSampler.determine_move_proposal(self, edge)
+        removed_conn = set((e.source, e.target) for e in edges_to_remove) -\
+                set((e.source, e.target) for e in edges_to_add)
+        if removed_conn & self.ensured_conn:
+            raise ImpossibleMoveException()
+        else:
+            return edges_to_add, edges_to_remove, prop_prob_ratio
 
 
 class MCMCSupervisedGraphSampler(MCMCGraphSampler):
@@ -576,6 +600,7 @@ class MCMCSupervisedGraphSampler(MCMCGraphSampler):
         MCMCGraphSampler.run_sampling(self)
 
 
+# TODO semi-supervised
 class MCMCGraphSamplerFactory:
     def new(*args):
         if shared.config['General'].getboolean('supervised'):
@@ -585,13 +610,13 @@ class MCMCGraphSamplerFactory:
 
 
 class RuleSetProposalDistribution:
-    def __init__(self, rule_contrib, rule_costs, num):
+    def __init__(self, rule_contrib, rule_costs, temperature):
         self.rule_prob = {}
         for rule in rule_costs:
             rule_score = -rule_costs[rule] +\
                 (rule_contrib[rule] if rule in rule_contrib else 0)
             self.rule_prob[rule] =\
-                expit(rule_score * ((num+10) / 40))
+                expit(rule_score * temperature)
 
     def propose(self):
         next_ruleset = set()
@@ -618,6 +643,7 @@ class MCMCAnnealingRuleSampler:
         self.rule_costs = {}
         self.warmup_iter = warmup_iter
         self.sampl_iter = sampl_iter
+        self.update_temperature()
         for rule in self.full_ruleset:
             self.rule_domsize[rule] = self.model.rule_features[rule][0].trials
             self.rule_costs[rule] = self.model.rule_cost(rule, self.rule_domsize[rule])
@@ -629,18 +655,19 @@ class MCMCAnnealingRuleSampler:
 #        self.print_proposal(next_ruleset)
         cost, next_proposal_dist = self.evaluate_proposal(next_ruleset)
         acc_prob = 1 if cost < self.cost else \
-            math.exp((self.cost - cost) * ((self.num+10) / 40)) *\
+            math.exp((self.cost - cost) * self.temperature) *\
             math.exp(next_proposal_dist.proposal_logprob(self.ruleset) -\
                      self.proposal_dist.proposal_logprob(next_ruleset))
-        print('acc_prob = %f' % acc_prob)
+        logging.getLogger('main').debug('acc_prob = %f' % acc_prob)
         if random.random() < acc_prob:
             self.cost = cost
             self.proposal_dist = next_proposal_dist
             self.accept_ruleset(next_ruleset)
-            print('accepted')
+            logging.getLogger('main').debug('accepted')
         else:
-            print('rejected')
+            logging.getLogger('main').debug('rejected')
         self.num += 1
+        self.update_temperature()
 
     def evaluate_proposal(self, ruleset):
 #        self.model.reset()
@@ -653,22 +680,21 @@ class MCMCAnnealingRuleSampler:
         self.lexicon.reset()
         new_model.reset()
         new_model.add_lexicon(self.lexicon)
-        print(new_model.roots_cost, new_model.rules_cost, new_model.edges_cost, new_model.cost())
+#        print(new_model.roots_cost, new_model.rules_cost, new_model.edges_cost, new_model.cost())
 
-#        graph_sampler = MCMCGraphSampler(new_model, self.lexicon,\
-#            [edge for edge in self.edges if edge.rule in ruleset],\
-#            self.warmup_iter, self.sampl_iter)
         graph_sampler = MCMCGraphSamplerFactory.new(new_model, self.lexicon,\
             [edge for edge in self.edges if edge.rule in ruleset],\
             self.warmup_iter, self.sampl_iter)
         graph_sampler.add_stat('cost', ExpectedCostStatistic(graph_sampler))
+        graph_sampler.add_stat('acc_rate', AcceptanceRateStatistic(graph_sampler))
         graph_sampler.add_stat('contrib', RuleExpectedContributionStatistic(graph_sampler))
         graph_sampler.run_sampling()
+        graph_sampler.log_scalar_stats()
 
         return graph_sampler.stats['cost'].val,\
             RuleSetProposalDistribution(
                 graph_sampler.stats['contrib'].values,
-                self.rule_costs, self.num)
+                self.rule_costs, self.temperature)
 
     def accept_ruleset(self, new_ruleset):
         for rule in self.ruleset - new_ruleset:
@@ -683,12 +709,19 @@ class MCMCAnnealingRuleSampler:
         for rule in new_ruleset - self.ruleset:
             print('restore: %s' % str(rule))
 
+    def update_temperature(self):
+        alpha = shared.config['modsel'].getfloat('annealing_alpha')
+        beta = shared.config['modsel'].getfloat('annealing_beta')
+        self.temperature = (self.num + alpha) / beta
+
     def save_rules(self):
-        with open_to_write('rules-modsel.txt') as outfp:
+        # save rules
+        with open_to_write(shared.filenames['rules-modsel']) as outfp:
             for rule, freq, domsize in read_tsv_file(shared.filenames['rules']):
                 if Rule.from_string(rule) in self.model.rule_features:
                     write_line(outfp, (rule, freq, domsize))
-        with open_to_write('graph-modsel.txt') as outfp:
+        # save graph (TODO rename the function?)
+        with open_to_write(shared.filenames['graph-modsel']) as outfp:
             for w1, w2, rule in read_tsv_file(shared.filenames['graph']):
                 if Rule.from_string(rule) in self.model.rule_features:
                     write_line(outfp, (w1, w2, rule))

@@ -1,6 +1,7 @@
 from datastruct.lexicon import *
 from datastruct.rules import *
 from models.marginal import MarginalModel
+from utils.files import *
 import algorithms.mcmc
 import shared
 import logging
@@ -28,4 +29,8 @@ def prepare_marginal_model():
 def run():
     model, lexicon, edges = prepare_marginal_model()
     algorithms.mcmc.mcmc_inference(lexicon, model, edges)
+
+def cleanup():
+    remove_file_if_exists(shared.filenames['graph-modsel'])
+    remove_file_if_exists(shared.filenames['rules-modsel'])
 

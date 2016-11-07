@@ -17,7 +17,8 @@ def prepare_model():
     logging.getLogger('main').info('Loading edges...')
     edges = []
     for w1, w2, r in read_tsv_file(shared.filenames['graph-modsel']):
-        edges.append(LexiconEdge(lexicon[w1], lexicon[w2], rules[r]))
+        if r in rules:
+            edges.append(LexiconEdge(lexicon[w1], lexicon[w2], rules[r]))
     model = PointModel(lexicon, None)
     model.fit_ruledist(set(rules.values()))
     for rule, domsize in rule_domsizes.items():
@@ -29,4 +30,7 @@ def prepare_model():
 def run():
     model, lexicon, edges = prepare_model()
     algorithms.em.softem(lexicon, model, edges)
+
+def cleanup():
+    remove_file_if_exists(shared.filenames['rules-fit'])
 

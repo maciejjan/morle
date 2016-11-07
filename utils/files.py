@@ -117,6 +117,11 @@ def rename_file(old, new):
 def remove_file(filename):
     os.remove(full_path(filename))
 
+def remove_file_if_exists(filename):
+    path = full_path(filename)
+    if os.path.isfile(path):
+        os.remove(path)
+
 # sort file using the unix command
 def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False, stable=False, unique=False):
     sort_call = ['sort', full_path(infile)]
