@@ -106,36 +106,84 @@ import logging
 #            if word_1 in lemmas and word_2 not in lemmas:    # TODO analiza -> analizy not in graph!
 #                write_line(outfp, (word_1, word_2, rule))
 #    update_file_size('graph.txt')
-#
-def filter_rules(graph_file):
-    '''Filter rules according to frequency.'''
-    # Annotate graph with rule frequency
-    # format: w1 w2 rule -> w1 w2 rule freq
+
+def expand_graph(graph_file):
+    '''Annotate graph with additional information needed for filtering:
+       currently rule frequencies.'''
     with open_to_write(graph_file + '.tmp') as graph_tmp_fp:
         for rule, wordpairs in read_tsv_file_by_key(graph_file, 3, 
-                print_progress=True, print_msg='Counting rule frequency...'):
+                print_progress=True, print_msg='Expanding the graph for filtering...'):
             freq = len(wordpairs)
             for w1, w2 in wordpairs:
                 write_line(graph_tmp_fp, (w1, w2, rule, freq))
-    # sort rules according to frequency
-    sort_file(graph_file + '.tmp', stable=True, numeric=True, reverse=True, key=4)
-    # truncate the graph file to most frequent rules
-    logging.getLogger('main').info('Filtering rules...')
+    rename_file(graph_file + '.tmp', graph_file)
+
+def contract_graph(graph_file):
+    '''Remove any additional information needed for filtering.'''
+    with open_to_write(graph_file + '.tmp') as graph_tmp_fp:
+        for w1, w2, rule, freq in read_tsv_file(graph_file,
+                print_progress=True, print_msg='Contracting the graph...'):
+            write_line(graph_tmp_fp, (w1, w2, rule))
+    rename_file(graph_file + '.tmp', graph_file)
+
+def filter_max_num_rules(graph_file):
+    logging.getLogger('main').info('filter_max_num_rules')
+    sort_file(graph_file, stable=True, numeric=True, reverse=True, key=4)
     pp = progress_printer(shared.config['preprocess'].getint('max_num_rules'))
-    with open_to_write(graph_file + '.filtered') as graph_fil_fp:
+    with open_to_write(graph_file + '.tmp') as graph_fil_fp:
         num_rules = 0
-        for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file + '.tmp', (3, 4)):
+        for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file, (3, 4)):
             try:
                 next(pp)
             except StopIteration:
                 break
-            if int(freq) > 1:
+            if int(freq) >= shared.config['preprocess'].getint('min_rule_freq'):
                 for w1, w2 in wordpairs:
-                    write_line(graph_fil_fp, (w1, w2, rule))
+                    write_line(graph_fil_fp, (w1, w2, rule, freq))
             num_rules += 1
-    # cleanup files
-    remove_file(graph_file + '.tmp')
+    rename_file(graph_file + '.tmp', graph_file)
+    update_file_size(graph_file)
+
+def filter_max_edges_per_wordpair(graph_file):
+    sort_file(graph_file, stable=True, key=(1, 2))
+    with open_to_write(graph_file + '.tmp') as graph_fil_fp:
+        for (word_1, word_2), edges in read_tsv_file_by_key(graph_file, (1, 2),
+                print_progress=True, print_msg='filter_max_edges_per_wordpair'):
+            for rule, freq in edges[:shared.config['preprocess'].getint('max_edges_per_wordpair')]:
+                write_line(graph_fil_fp, (word_1, word_2, rule, freq))
+    rename_file(graph_file + '.tmp', graph_file)
+    sort_file(graph_file, key=3)
+    sort_file(graph_file, stable=True, numeric=True, reverse=True, key=4)
+    update_file_size(graph_file)
+
+def filter_min_rule_freq(graph_file):
+    with open_to_write(graph_file + '.tmp') as graph_fil_fp:
+        for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file, (3, 4),
+                print_progress=True, print_msg='filter_min_rule_freq'):
+            if len(wordpairs) >= shared.config['preprocess'].getint('min_rule_freq'):
+                for word_1, word_2 in wordpairs:
+                    write_line(graph_fil_fp, (word_1, word_2, rule, freq))
+    rename_file(graph_file + '.tmp', graph_file)
+    update_file_size(graph_file)
+
+def run_filters(graph_file):
+    expand_graph(graph_file)
+    filter_max_num_rules(graph_file)
+    filter_max_edges_per_wordpair(graph_file)
+    filter_min_rule_freq(graph_file)
+    contract_graph(graph_file)
+
+def filter_rules(graph_file):
+    '''Filter rules according to frequency.'''
+    # Annotate graph with rule frequency
+    # format: w1 w2 rule -> w1 w2 rule freq
+    # truncate the graph file to most frequent rules
+    # sort edges according to wordpair
+    sort_file(graph_file + '.filtered', key=3)
+    sort_file(graph_file + '.filtered', stable=True, numeric=True, reverse=True, key=4)
     remove_file(graph_file)
+    remove_file(graph_file + '.tmp2')
+    # cleanup files
 #    rename_file(graph_file, graph_file + '.orig')
     rename_file(graph_file + '.filtered', graph_file)
 #
@@ -234,7 +282,7 @@ def run():
     update_file_size(shared.filenames['graph'])
 #    if settings.LEMMAS_KNOWN:
 #        filter_lemmas(settings.FILES['surface.graph'])
-    filter_rules(shared.filenames['graph'])
+    run_filters(shared.filenames['graph'])
     update_file_size(shared.filenames['graph'])
     aggregate_file(shared.filenames['graph'],\
                    shared.filenames['rules'], 3)

@@ -72,7 +72,8 @@ def binary_disjunct(transducers):
 #    print('postprocessing')
     t.determinize()
     t.minimize()
-    t.push_weights(libhfst.TO_INITIAL_STATE)
+#    t.push_weights(libhfst.TO_INITIAL_STATE)
+    t.push_weights_to_end()
 #    print('adding epsilon loops and word boundaries')
     t = libhfst.HfstBasicTransducer(t)
 #    add_epsilon_loops(t)
@@ -107,6 +108,10 @@ def id_generator():
     return libhfst.HfstTransducer(tr, settings.TRANSDUCER_TYPE)
 
 def number_of_paths(transducer):
+    # in n-th iteration paths_for_state[s] contains the number of paths
+    # of length n terminating in state s
+    # terminates if maximum n is reached, i.e. paths_for_state > 0
+    # only for states without outgoing transitions
     t = libhfst.HfstBasicTransducer(transducer)
     paths_for_state = [1] + [0] * (len(t.states())-1)
     result = 0
@@ -126,9 +131,33 @@ def number_of_paths(transducer):
         paths_for_state = new_paths_for_state
     return result
 
-def rootdist_automaton(rootdist):
+def rootgen_transducer(rootdist):
     # create an automaton for word generation
-    raise NotImplementedError()
+    if shared.config['Features'].getint('rootdist_n') != 1:
+        raise NotImplementedError('Not implemented for rootdist_n != 1')
+    weights = rootdist.features[0].log_probs
+    tr = libhfst.HfstBasicTransducer()
+    tr.set_final_weight(0, weights[('#',)])
+    for char, weight in weights.items():
+        if char != ('#',):
+            tr.add_transition(0, 
+                libhfst.HfstBasicTransition(0, char[0], char[0], weight))
+    return libhfst.HfstTransducer(tr)
+
+def tag_absorber(alphabet):
+    tr = libhfst.HfstBasicTransducer()
+    for c in alphabet:
+        if shared.compiled_patterns['symbol'].match(c):
+            tr.add_transition(0,
+                libhfst.HfstBasicTransition(0, c, c, 0.0))
+        elif shared.compiled_patterns['tag'].match(c):
+            tr.add_transition(0,
+                libhfst.HfstBasicTransition(1, c, c, 0.0))
+            tr.add_transition(1,
+                libhfst.HfstBasicTransition(1, c, c, 0.0))
+    tr.set_final_weight(0, 0.0)
+    tr.set_final_weight(1, 0.0)
+    return libhfst.HfstTransducer(tr)
 
 def load_transducer(filename):
     path = os.path.join(shared.options['working_dir'], filename)

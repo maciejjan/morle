@@ -128,7 +128,7 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False, stab
     if key:
         if isinstance(key, tuple) and len(key) == 2:
             sort_call.append('-k%d,%d' % key)
-            sort_call.append('-t \'    \'')
+            sort_call.append('-t \'	\'')
         elif isinstance(key, int):
             sort_call.append('-k%d,%d' % (key, key))
             sort_call.append('-t \'	\'')

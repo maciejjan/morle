@@ -10,15 +10,16 @@ from operator import itemgetter
 import sys
 
 def load_rules():
-    return [(Rule.from_string(rule), domsize, prod)\
+    return [(Rule.from_string(rule), -math.log(prod))\
             for rule, domsize, prod in\
-                read_tsv_file(shared.filenames['rules-fit'], (str, int, float))]
+                read_tsv_file(shared.filenames['rules-fit'], (str, int, float))] +\
+           [(Rule.from_string(':/:___:'), 0.0)]
 
 def build_rule_transducers(rules):
 #    rules.sort(reverse=True, key=itemgetter(2))
     transducers = []
-    for rule, domsize, prod in rules:
-        rule.build_transducer(weight=-math.log(prod))
+    for rule, weight in rules:
+        rule.build_transducer(weight=weight)
         transducers.append(rule.transducer)
     return transducers
 

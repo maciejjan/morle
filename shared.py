@@ -29,6 +29,7 @@ filenames = {\
     'index' : 'index.txt',
     'lexicon-tr' : 'lexicon.fsm',
     'log'   : 'log.txt',
+    'rootgen-tr' : 'rootgen.fsm',
     'rules' : 'rules.txt',
     'rules-modsel' : 'rules-modsel.txt',
     'rules-fit' : 'rules-fit.txt',

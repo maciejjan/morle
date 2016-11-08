@@ -31,18 +31,31 @@ import shared
 #import sys
 
 def prepare_automata():
-    Automata = namedtuple('Automata', 
-                          ['lexicon', 'rules', 'word_acc', 
-                           'tag_acc', 'word_gen', 'tag_gen'])
-    lexicon_tr = algorithms.fst.load_transducer(shared.filenames['lexicon-tr'])
+    Automata = namedtuple('Automata', ['lemmatizer', 'tagger', 'inflector'])
+
+    lemmatizer = algorithms.fst.load_transducer(shared.filenames['lexicon-tr'])
+    rootgen = algorithms.fst.load_transducer(shared.filenames['rootgen-tr'])
     rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
-    rules_tr.invert()
-    rules_tr.compose(lexicon_tr)
-#    rules_tr.remove_epsilons()
-#    rules_tr.determinize()
-    rules_tr.minimize()
-    rules_tr.convert(libhfst.HFST_OLW_TYPE)
-    return Automata(lexicon_tr, rules_tr, None, None, None, None) 
+#    lemmatizer.disjunct(rootgen)
+    lemmatizer.minimize()
+    lemmatizer.compose(rules_tr)
+    lemmatizer.minimize()
+    print('Composing rootgen with rules...')
+    rootgen.compose(rules_tr)
+    rootgen.minimize()
+    print('Disjoining lemmatizer with rootgen...')
+    lemmatizer.disjunct(rootgen)
+    print('Done.')
+    lemmatizer.invert()
+
+#    tagger = libhfst.HfstTransducer(lemmatizer)
+#    tagger.output_project()
+#    tag_absorber = algorithms.fst.tag_absorber(lemmatizer.get_alphabet())
+#    tagger.compose(tag_absorber)
+
+    lemmatizer.convert(libhfst.HFST_OLW_TYPE)
+#    tagger.convert(libhfst.HFST_OLW_TYPE)
+    return Automata(lemmatizer, None, None)
 
 def result_index(correct, results):
     try:
@@ -55,7 +68,7 @@ def words_from_paths(paths):
             for word, cost in paths]
 
 def eval_lemmatize(word, base, automata):
-    results = words_from_paths(automata.rules.lookup(word))
+    results = words_from_paths(automata.lemmatizer.lookup(word))
     return result_index(base, results)
 
 def eval_tag(word, base, automata):
