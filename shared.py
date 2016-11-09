@@ -20,6 +20,7 @@ options = {\
 # filenames and patterns -- not changed at runtime
 
 filenames = {\
+    'analyzer-tr' : 'analyzer.fsm',
     'config' : 'config.ini',
     'config-default' : 'config-default.ini',
     'eval.wordlist' : 'input.testing',
@@ -27,6 +28,7 @@ filenames = {\
     'graph' : 'graph.txt',
     'graph-modsel' : 'graph-modsel.txt',
     'index' : 'index.txt',
+    'lemmatizer-tr' : 'analyzer.fsm',
     'lexicon-tr' : 'lexicon.fsm',
     'log'   : 'log.txt',
     'rootgen-tr' : 'rootgen.fsm',
@@ -36,6 +38,7 @@ filenames = {\
     'rules-tr' : 'rules.fsm',
     'sample-edge-stats' : 'sample-edge-stats.txt',
     'sample-rule-stats' : 'sample-rule-stats.txt',
+    'tagger-tr' : 'tagger.fsm',
     'wordgen' : 'wordgen.txt',
     'wordlist' : 'input.training'
 }

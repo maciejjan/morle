@@ -152,12 +152,23 @@ def tag_absorber(alphabet):
                 libhfst.HfstBasicTransition(0, c, c, 0.0))
         elif shared.compiled_patterns['tag'].match(c):
             tr.add_transition(0,
-                libhfst.HfstBasicTransition(1, c, c, 0.0))
+                libhfst.HfstBasicTransition(1, c, libhfst.EPSILON, 0.0))
             tr.add_transition(1,
-                libhfst.HfstBasicTransition(1, c, c, 0.0))
+                libhfst.HfstBasicTransition(1, c, libhfst.EPSILON, 0.0))
     tr.set_final_weight(0, 0.0)
     tr.set_final_weight(1, 0.0)
     return libhfst.HfstTransducer(tr)
+
+def tag_acceptor(tag, alphabet):
+    tr = libhfst.HfstBasicTransducer()
+    for c in alphabet:
+        if shared.compiled_patterns['symbol'].match(c):
+            tr.add_transition(0,
+                libhfst.HfstBasicTransition(0, c, c, 0.0))
+    tr.set_final_weight(0, 0.0)
+    tr_c = libhfst.HfstTransducer(tr)
+    tr_c.concatenate(seq_to_transducer(tuple(zip(tag, tag))))
+    return tr_c
 
 def load_transducer(filename):
     path = os.path.join(shared.options['working_dir'], filename)
@@ -166,9 +177,11 @@ def load_transducer(filename):
     istr.close()
     return transducer
 
-def save_transducer(transducer, filename):
+def save_transducer(transducer, filename, type=None):
+    if type is None:
+        type = shared.config['FST'].getint('transducer_type')
     path = os.path.join(shared.options['working_dir'], filename)
-    ostr = libhfst.HfstOutputStream(filename=path)
+    ostr = libhfst.HfstOutputStream(filename=path, type=type)
     ostr.write(transducer)
     ostr.flush()
     ostr.close()
