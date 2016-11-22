@@ -1,7 +1,10 @@
+from utils.printer import progress_printer
+
 import libhfst
 import os.path
 import shared
 import sys
+import types
 
 def seq_to_transducer(alignment, weight=0.0, type=None, alphabet=None):
     if type is None:
@@ -37,49 +40,48 @@ def seq_to_transducer(alignment, weight=0.0, type=None, alphabet=None):
     tr.set_final_weight(last_state_id, weight)
     return libhfst.HfstTransducer(tr, type)
 
-def binary_disjunct(transducers):
+def binary_disjunct(transducers, print_progress=False):
+    iterator, pp = None, None
+    if isinstance(transducers, list):
+        iterator = iter(transducers)
+        if print_progress:
+            pp = progress_printer(len(transducers))
+    elif isinstance(transducers, types.GeneratorType):
+        iterator = transducers
+    else:
+        raise TypeError('\'transducers\' must be a list or a generator!')
+
+
     stack, sizes = [], []
-#    print('starting')
     count = 0
     while True:
         if len(sizes) >= 2 and sizes[-1] == sizes[-2]:
+            # disjunct the two top transducers from the stack
             first, first_size = stack.pop(), sizes.pop()
             second, second_size = stack.pop(), sizes.pop()
             first.disjunct(second)
-#            if len(first.extract_paths()) <= 1:
-#                print(second.extract_paths())
-#                raise Exception('zonk')
             stack.append(first)
             sizes.append(first_size + second_size)
             stack[-1].minimize()
         else:
-#            print('expand')
+            # push a new transducer to the stack
             try:
-                stack.append(next(transducers))
+                stack.append(next(iterator))
                 sizes.append(1)
                 count += 1
-#                sys.stdout.write('\r'+str(count))
-#                sys.stdout.flush()
+                if print_progress and pp is not None:
+                    next(pp)
             except StopIteration:
                 break
-#    print()
-#    print('final disjunction')
+    # disjunct the remaining transducers and minimize the result
     t = stack.pop()
     while stack:
         t.disjunct(stack.pop())
-#        if len(t.extract_paths()) <= 1:
-#            raise Exception('zonk')
-#    print('postprocessing')
     t.determinize()
     t.minimize()
 #    t.push_weights(libhfst.TO_INITIAL_STATE)
     t.push_weights_to_end()
-#    print('adding epsilon loops and word boundaries')
-    t = libhfst.HfstBasicTransducer(t)
-#    add_epsilon_loops(t)
-#    add_word_boundaries(t)
-    tr_type=shared.config['FST'].getint('transducer_type')
-    return libhfst.HfstTransducer(t, tr_type)
+    return t
 
 A_TO_Z = tuple('abcdefghijklmnoprstuvwxyz')
 
