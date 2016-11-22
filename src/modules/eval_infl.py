@@ -17,6 +17,9 @@
 # n   lemmatization   tagging   generation
 # (numbers for each n)
 
+#TODO implement the tagger differently! no tag absorber,
+#     but rather label the tag transitions with empty symbols on the output side!
+
 from collections import namedtuple
 import libhfst
 
@@ -48,10 +51,14 @@ def compose_for_tagging(transducer):
     transducer.compose(rules_tr)
     transducer.minimize()
     transducer.output_project()
-    tag_absorber = algorithms.fst.tag_absorber(rules_tr.get_alphabet())
-    transducer.compose(tag_absorber)
-    transducer.minimize()
-    transducer.invert()
+#     transducer.minimize()
+    for symbol in transducer.get_alphabet():
+        if shared.compiled_patterns['tag'].match(symbol):
+            print(symbol)
+            transducer.substitute(symbol, libhfst.EPSILON, 
+                                  input=True, output=False)
+#     tag_absorber = algorithms.fst.tag_absorber(rules_tr.get_alphabet())
+#     transducer.compose(tag_absorber)
     return transducer
 
 def compile_tagger():
