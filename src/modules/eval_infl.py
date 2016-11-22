@@ -22,26 +22,20 @@ import libhfst
 
 import algorithms.fst
 from datastruct.lexicon import *
-#from models.point import *
 from utils.files import *
 import shared
-#
-#import logging
-#from operator import itemgetter
-#import sys
+
+def compose_for_lemmatization(transducer):
+    rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+    transducer.compose(rules_tr)
+    transducer.minimize()
+    transducer.invert()
+    return transducer
 
 def compile_lemmatizer():
     logging.getLogger('main').info('Compiling the lemmatizer...')
-    lemmatizer = algorithms.fst.load_transducer(shared.filenames['lexicon-tr'])
-    rootgen = algorithms.fst.load_transducer(shared.filenames['rootgen-tr'])
-    rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
-    lemmatizer.minimize()
-    lemmatizer.compose(rules_tr)
-    lemmatizer.minimize()
-    rootgen.compose(rules_tr)
-    rootgen.minimize()
-    lemmatizer.disjunct(rootgen)
-    lemmatizer.invert()
+    lemmatizer = compose_for_lemmatization(
+        algorithms.fst.load_transducer(shared.filenames['rootgen-tr']))
     lemmatizer.convert(libhfst.HFST_OLW_TYPE)
     algorithms.fst.save_transducer(lemmatizer, 
                                    shared.filenames['lemmatizer-tr'],
@@ -49,18 +43,21 @@ def compile_lemmatizer():
     logging.getLogger('main').info('Done.')
     return lemmatizer
 
+def compose_for_tagging(transducer):
+    rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+    transducer.compose(rules_tr)
+    transducer.minimize()
+    transducer.output_project()
+    tag_absorber = algorithms.fst.tag_absorber(rules_tr.get_alphabet())
+    transducer.compose(tag_absorber)
+    transducer.minimize()
+    transducer.invert()
+    return transducer
+
 def compile_tagger():
     logging.getLogger('main').info('Compiling the tagger...')
-    tagger = algorithms.fst.load_transducer(shared.filenames['lexicon-tr'])
-    rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
-    tagger.minimize()
-    tagger.compose(rules_tr)
-    tagger.minimize()
-    tagger.output_project()
-    tag_absorber = algorithms.fst.tag_absorber(rules_tr.get_alphabet())
-    tagger.compose(tag_absorber)
-    tagger.minimize()
-    tagger.invert()
+    tagger = compose_for_tagging(
+        algorithms.fst.load_transducer(shared.filenames['rootgen-tr']))
     tagger.convert(libhfst.HFST_OLW_TYPE)
     algorithms.fst.save_transducer(tagger,
                                    shared.filenames['tagger-tr'],
