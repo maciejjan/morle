@@ -82,7 +82,7 @@ def prefix_tree_acceptor(seqs):
     print()
     return automaton
 
-def alergia(automaton, alpha=0.05):
+def alergia(automaton, alpha=0.05, freq_threshold=1):
     
     def _test(f1, n1, f2, n2):
         diff = abs(f1/n1 - f2/n2)
@@ -97,6 +97,14 @@ def alergia(automaton, alpha=0.05):
         for tr in automaton.transitions(state):
             weights[tr.get_input_symbol()] = tr.get_weight()
         return weights
+
+    def _state_sum_freq(state):
+        result = 0.0
+        if automaton.is_final_state(state):
+            result += automaton.get_final_weight(state)
+        for tr in automaton.transitions(state):  
+            result += tr.get_weight()
+        return result
 
     def _transitions_dict(state):
         return { tr.get_input_symbol() : tr
@@ -230,6 +238,13 @@ def alergia(automaton, alpha=0.05):
                     queue.append(tr.get_target_state())
         return new_automaton
 
+    def _choose(states):
+        states_fil = [q for q in states\
+                             if _state_sum_freq(q) > freq_threshold]
+        if not states_fil:
+            return None
+        return min(states_fil, key=lambda q: states_ord[q])
+
     red_states = {0}
     blue_states = { tr.get_target_state() 
                     for tr in automaton.transitions(0) }
@@ -237,7 +252,9 @@ def alergia(automaton, alpha=0.05):
     parent = _init_parents()
 
     while blue_states:
-        q_b = min(blue_states, key=lambda q: states_ord[q])
+        q_b = _choose(blue_states)
+        if q_b is None:
+            break
         blue_states.remove(q_b)
 #        print(q_b, q_b in blue_states)
         merged = False

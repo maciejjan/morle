@@ -48,11 +48,29 @@ def build_root_transducer(roots):
     result = algorithms.fst.binary_disjunct(transducers, print_progress=True)
     return result
 
+# def build_rootgen_transducer(roots):
+#     seqs = [(root.word + root.tag, 1) for root in roots]
+#     pta = algorithms.alergia.prefix_tree_acceptor(seqs)
+#     alpha = shared.config['compile'].getfloat('alergia_alpha')
+#     freq_threshold = shared.config['compile'].getint('alergia_freq_threshold')
+#     automaton = algorithms.alergia.alergia(pta, alpha=alpha)
+#     result = libhfst.HfstTransducer(automaton)
+#     return result
+
 def build_rootgen_transducer(roots):
-    seqs = [(root.word + root.tag, 1) for root in roots]
-    pta = algorithms.alergia.prefix_tree_acceptor(seqs)
-    automaton = algorithms.alergia.alergia(pta, alpha=0.05)
+    word_seqs = [(root.word, 1) for root in roots]
+    tag_automaton = algorithms.fst.binary_disjunct([
+                      algorithms.fst.seq_to_transducer(
+                        list(zip(root.tag, root.tag)))
+                      for root in roots])
+
+    word_pta = algorithms.alergia.prefix_tree_acceptor(word_seqs)
+    alpha = shared.config['compile'].getfloat('alergia_alpha')
+    freq_threshold = shared.config['compile'].getint('alergia_freq_threshold')
+    automaton = algorithms.alergia.alergia(word_pta, alpha=alpha, 
+                                           freq_threshold=freq_threshold)
     result = libhfst.HfstTransducer(automaton)
+    result.concatenate(tag_automaton)
     return result
 
 def run():
