@@ -9,43 +9,6 @@ from operator import itemgetter
 import re
 import sys
 
-# TRAINING_FILE = sys.argv[1]
-# VALIDATION_FILE = sys.argv[2]
-# ALPHA = 0.01
-
-# patterns = {}
-# patterns['symbol'] = '(?:[\w-]|\{[A-Z0-9]+\})'
-# patterns['tag'] = '(?:<[A-Z0-9]+>)'
-# patterns['disamb'] = '[0-9]+'
-# patterns['word'] = '^(?P<word>%s+)(?P<tag>%s*)(?:%s(?P<disamb>%s))?$' %\
-#                           (patterns['symbol'], patterns['tag'], 
-#                            '#', patterns['disamb'])
-# compiled_patterns = {}
-# for key, val in patterns.items():
-#     compiled_patterns[key] = re.compile(val)
-
-# def tokenize_word(string):
-#     '''Separate a string into a word and a POS-tag,
-#        both expressed as sequences of symbols.'''
-#     global compiled_patterns
-#     m = re.match(compiled_patterns['word'], string)
-#     if m is None:
-#         raise Exception('Error while tokenizing word: %s' % string)
-#     return tuple(re.findall(compiled_patterns['symbol'], m.group('word'))),\
-#            tuple(re.findall(compiled_patterns['tag'], m.group('tag'))),\
-#            m.group('disamb')
-
-# def load_seqs_from_file(filename):
-#     seqs = []
-#     for line in open(filename):
-#         row = line.rstrip().split('\t')
-#         try:
-#             word, freq = row[1], int(row[2]) if len(row) > 2 else 1
-#             seq_word, seq_tag, disamb = tokenize_word(word)
-#             seqs.append((seq_word + seq_tag, freq))
-#         except Exception as e:
-#             print(e)
-#     return seqs
 
 def prefix_tree_acceptor(seqs):
     '''Returns: HfstBasicTransducer accepting all seqs.'''
@@ -81,6 +44,36 @@ def prefix_tree_acceptor(seqs):
         sys.stdout.write('\r' + str(i))
     print()
     return automaton
+
+def normalize_weights(automaton):
+    '''Convert frequency weights to log-probabilities.'''
+    new_automaton = libhfst.HfstBasicTransducer()
+    queue = [0]
+    processed = set()
+    while queue:
+        state = queue.pop()
+        processed.add(state)
+        transitions = list(automaton.transitions(state))
+        sum_weights = sum(tr.get_weight() for tr in transitions) +\
+            (automaton.get_final_weight(state)\
+               if automaton.is_final_state(state) else 0)
+        if automaton.is_final_state(state):
+            new_final_weight = -math.log(
+              automaton.get_final_weight(state) / sum_weights)
+            new_automaton.set_final_weight(state, new_final_weight)
+        for tr in transitions:
+            new_weight = -math.log(tr.get_weight() / sum_weights)
+            new_automaton.add_transition(
+              state,
+              libhfst.HfstBasicTransition(
+                tr.get_target_state(),
+                tr.get_input_symbol(),
+                tr.get_output_symbol(),
+                new_weight))
+            if tr.get_target_state() not in processed and\
+                    tr.get_target_state() not in queue:
+                queue.append(tr.get_target_state())
+    return new_automaton
 
 def alergia(automaton, alpha=0.05, freq_threshold=1):
     
@@ -208,35 +201,6 @@ def alergia(automaton, alpha=0.05, freq_threshold=1):
                     queue.append(tr.get_target_state())
         return new_automaton
 
-    def _normalize_weights(automaton):
-#        global automaton
-        new_automaton = libhfst.HfstBasicTransducer()
-        queue = [0]
-        processed = set()
-        while queue:
-            state = queue.pop()
-            processed.add(state)
-            transitions = list(automaton.transitions(state))
-            sum_weights = sum(tr.get_weight() for tr in transitions) +\
-                (automaton.get_final_weight(state)\
-                   if automaton.is_final_state(state) else 0)
-            if automaton.is_final_state(state):
-                new_final_weight = -math.log(
-                  automaton.get_final_weight(state) / sum_weights)
-                new_automaton.set_final_weight(state, new_final_weight)
-            for tr in transitions:
-                new_weight = -math.log(tr.get_weight() / sum_weights)
-                new_automaton.add_transition(
-                  state,
-                  libhfst.HfstBasicTransition(
-                    tr.get_target_state(),
-                    tr.get_input_symbol(),
-                    tr.get_output_symbol(),
-                    new_weight))
-                if tr.get_target_state() not in processed and\
-                        tr.get_target_state() not in queue:
-                    queue.append(tr.get_target_state())
-        return new_automaton
 
     def _choose(states):
         states_fil = [q for q in states\
@@ -272,7 +236,7 @@ def alergia(automaton, alpha=0.05, freq_threshold=1):
                       red_states
 #        print(q_b, q_b in blue_states)
 #        print()
-    automaton = _normalize_weights(_remove_unreachable_states(automaton))
+    automaton = normalize_weights(_remove_unreachable_states(automaton))
     return automaton
 
 def validate(automaton, seqs):
