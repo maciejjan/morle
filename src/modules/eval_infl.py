@@ -1,31 +1,12 @@
-# evaluates all inflection tasks at once
-# * lemmatization: word + tag -> lemma + lemma_tag
-#   acceptor(word . tag) .o. inv(rules) .o. lexicon
-# * tagging: word -> tag
-#   in_proj((acceptor(word) . tag_acceptor()) .o. inv(rules) .o. lexicon)
-# * generation: lemma + lemma_tag + tag -> word
-#   out_proj(acceptor(lemma . tag) .o. rules .o. (word_acceptor() . acceptor(tag)))
+'''Inflection evaluation module.'''
 
-# also for untagged data:
-# * lemmatization: word -> lemma
-
-# result of each trial: integer
-# 0 - the correct result not found
-# n > 0 - the correct result found as nth
-
-# format results:
-# n   lemmatization   tagging   generation
-# (numbers for each n)
-
-#TODO implement the tagger differently! no tag absorber,
-#     but rather label the tag transitions with empty symbols on the output side!
-
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 import libhfst
+import logging
 
 import algorithms.fst
-from datastruct.lexicon import *
-from utils.files import *
+from datastruct.lexicon import LexiconNode
+from utils.files import file_exists, open_to_write, read_tsv_file, write_line
 import shared
 
 def compose_for_lemmatization(transducer):
@@ -37,8 +18,16 @@ def compose_for_lemmatization(transducer):
 
 def compile_lemmatizer():
     logging.getLogger('main').info('Compiling the lemmatizer...')
+
     lemmatizer = compose_for_lemmatization(
         algorithms.fst.load_transducer(shared.filenames['rootgen-tr']))
+
+    if shared.config['eval_infl'].getboolean('use_known_roots'):
+        known_roots_lemmatizer = compose_for_lemmatization(
+                                   algorithms.fst.load_transducer(
+                                     shared.filenames['roots-tr']))
+        lemmatizer.disjunct(known_roots_lemmatizer)
+
     lemmatizer.convert(libhfst.HFST_OLW_TYPE)
     algorithms.fst.save_transducer(lemmatizer, 
                                    shared.filenames['lemmatizer-tr'],
@@ -53,7 +42,6 @@ def compose_for_tagging(transducer):
     transducer.output_project()
     for symbol in transducer.get_alphabet():
         if shared.compiled_patterns['tag'].match(symbol):
-            print(symbol)
             transducer.substitute(symbol, libhfst.EPSILON, 
                                   input=True, output=False)
     return transducer
@@ -62,6 +50,13 @@ def compile_tagger():
     logging.getLogger('main').info('Compiling the tagger...')
     tagger = compose_for_tagging(
         algorithms.fst.load_transducer(shared.filenames['rootgen-tr']))
+
+    if shared.config['eval_infl'].getboolean('use_known_roots'):
+        known_roots_tagger = compose_for_tagging(
+                               algorithms.fst.load_transducer(
+                                 shared.filenames['roots-tr']))
+        tagger.disjunct(known_roots_tagger)
+
     tagger.convert(libhfst.HFST_OLW_TYPE)
     algorithms.fst.save_transducer(tagger,
                                    shared.filenames['tagger-tr'],
@@ -134,16 +129,37 @@ def eval_inflect(word, base, automata):
     results = words_from_paths(base_tr.lookup(base))
     return result_index(word, results)
 
+def print_results(results, header):
+    print('\n\n%s\n' % header)
+    sum_res = sum(results.values())
+    for key in sorted(results.keys()):
+        print('%s\t%d\t%0.1f %%' % (str(key), results[key],
+                                    results[key]/sum_res*100))
+
 def run():
     automata = prepare_automata()
+
+    results_lem  = defaultdict(lambda: 0)
+    results_tag  = defaultdict(lambda: 0)
+    results_infl = defaultdict(lambda: 0)
+
     with open_to_write(shared.filenames['eval.report']) as fp:
         for base, word in read_tsv_file(shared.filenames['eval.wordlist'], 
                                         types=(str, str), print_progress=True,
                                         print_msg='Evaluating...'):
             if not base.strip():
                 base = word
-            write_line(fp, (word, base,
-                            eval_lemmatize(word, base, automata),
-                            eval_tag(word, automata),
-                            eval_inflect(word, base, automata)))
+            r_lem = eval_lemmatize(word, base, automata)
+            r_tag = eval_tag(word, automata)
+            r_infl = eval_inflect(word, base, automata)
+
+            results_lem[r_lem] += 1
+            results_tag[r_tag] += 1
+            results_infl[r_infl] += 1
+
+            write_line(fp, (word, base, r_lem, r_tag, r_infl))
+
+    print_results(results_lem, 'LEMMATIZATION RESULTS')
+    print_results(results_tag, 'TAGGING RESULTS')
+    print_results(results_infl, 'INFLECTION RESULTS')
 

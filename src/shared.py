@@ -28,7 +28,7 @@ filenames = {\
     'graph' : 'graph.txt',
     'graph-modsel' : 'graph-modsel.txt',
     'index' : 'index.txt',
-    'lemmatizer-tr' : 'analyzer.fsm',
+    'lemmatizer-tr' : 'lemmatizer.fsm',
     'lexicon-tr' : 'lexicon.fsm',
     'log'   : 'log.txt',
     'rootgen-tr' : 'rootgen.fsm',
