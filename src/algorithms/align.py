@@ -2,6 +2,7 @@ from datastruct.rules import *
 import libhfst
 from operator import itemgetter
 
+# TODO parametrize
 MAX_INFIX_LENGTH = 3
 MAX_AFFIX_LENGTH = 5
 INFIX_SLOTS = 1
