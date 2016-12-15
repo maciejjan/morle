@@ -5,7 +5,7 @@ from datastruct.lexicon import LexiconNode
 from utils.files import read_tsv_file
 import shared
 
-import libhfst
+import hfst
 import logging
 import math
 from operator import itemgetter
@@ -58,12 +58,12 @@ def build_rootgen_transducer(roots):
     automaton = algorithms.alergia.alergia(word_pta, alpha=alpha, 
                                            freq_threshold=freq_threshold)
 
-    tag_automaton = libhfst.HfstTransducer(
+    tag_automaton = hfst.HfstTransducer(
                       algorithms.alergia.normalize_weights(
                         algorithms.alergia.prefix_tree_acceptor(tag_seqs)))
     tag_automaton.minimize()
 
-    result = libhfst.HfstTransducer(automaton)
+    result = hfst.HfstTransducer(automaton)
     result.concatenate(tag_automaton)
     result.minimize()
     return result

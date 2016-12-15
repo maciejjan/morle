@@ -6,7 +6,7 @@
 #   - for each path: if generates new word -> output it and add it to known words
 
 from operator import itemgetter
-import libhfst
+import hfst
 import logging
 import math
 
@@ -49,9 +49,9 @@ def run():
 
     with open_to_write(shared.filenames['wordgen']) as outfp:
         for input_word, outputs in tr.extract_paths(output='dict').items():
-            input_word = input_word.replace(libhfst.EPSILON, '')
+            input_word = input_word.replace(hfst.EPSILON, '')
             for output_word, weight in outputs:
-                output_word = output_word.replace(libhfst.EPSILON, '')
+                output_word = output_word.replace(hfst.EPSILON, '')
                 if output_word not in known_words:
                     write_line(outfp, (output_word, input_word, weight))
                     known_words.add(output_word)

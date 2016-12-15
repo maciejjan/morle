@@ -1,4 +1,4 @@
-import libhfst
+import hfst
 import logging
 import sys
 
@@ -17,7 +17,7 @@ def prepare_analyzer():
     rootgen.minimize()
     analyzer.disjunct(rootgen)
     analyzer.invert()
-    analyzer.convert(libhfst.HFST_OLW_TYPE)
+    analyzer.convert(hfst.HFST_OLW_TYPE)
 
     return analyzer
 

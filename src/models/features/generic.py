@@ -1,6 +1,13 @@
-from collections import defaultdict
+import algorithms.alergia
+import algorithms.fst
+from datastruct.lexicon import tokenize_word
+import shared
 
+from collections import defaultdict
+import hfst
+import logging
 import math
+import numpy as np
 
 class Feature:
     def __init__(self):
@@ -42,6 +49,76 @@ class StringFeature(Feature):
         self.smoothing = -math.log(1 / total)
         for ngram, count in counts.items():
             self.log_probs[ngram] = -math.log(count / total)
+            
+    def null_cost(self):
+        return 0
+    
+    def num_args(self):
+        return 1
+    
+    def parse_string_args(self, log_probs):
+        pass
+
+    def cost_of_change(self, values_to_add, values_to_remove):
+        return self.cost(values_to_add) - self.cost(values_to_remove)
+
+    def apply_change(self, values_to_add, values_to_remove):
+        pass
+
+    def reset(self):
+        pass
+
+# TODO
+class AlergiaStringFeature(Feature):
+    '''A string feature learnt with the ALERGIA algorithm.'''
+
+    def __init__(self):
+        self.automaton = None
+        self.cache = {}
+        # TODO remove cache as soon as the memory leak in HFST is fixed
+
+    def cost(self, values):
+        result = 0.0
+        for val in values:
+            try:
+                if val not in self.cache:
+                    self.cache[val] = self.automaton.lookup(val)[0][1]
+                result += self.cache[val]
+            except IndexError:
+                logging.getLogger('main').warning(
+                    'Zero root probability for: {}'.format(val))
+                return np.inf   # infinite cost if some string is impossible
+        return result
+
+    def fit(self, values):
+        # TODO code duplicated from modules.compile -> refactor!!!
+        word_seqs, tag_seqs = [], []
+        for val in values:
+            word, tag, disamb = tokenize_word(val)
+#             print(word, tag, disamb)
+            word_seqs.append((word, 1))
+            tag_seqs.append((tag, 1))
+#         word_seqs = [(val.word, 1) for val in values]
+#         tag_seqs = [(val.tag, 1) for val in values]
+
+        word_pta = algorithms.alergia.prefix_tree_acceptor(word_seqs)
+        alpha = shared.config['compile'].getfloat('alergia_alpha')
+        freq_threshold = shared.config['compile'].getint('alergia_freq_threshold')
+        automaton = algorithms.alergia.alergia(word_pta, alpha=alpha, 
+                                               freq_threshold=freq_threshold)
+
+        tag_automaton = hfst.HfstTransducer(
+                          algorithms.alergia.normalize_weights(
+                            algorithms.alergia.prefix_tree_acceptor(tag_seqs)))
+        tag_automaton.minimize()
+
+        self.automaton = hfst.HfstTransducer(automaton)
+        self.automaton.concatenate(tag_automaton)
+        self.automaton.remove_epsilons()
+#         self.automaton.minimize()
+        self.automaton.convert(hfst.ImplementationType.HFST_OLW_TYPE)
+#         algorithms.fst.save_transducer(self.automaton, 'stringfeat.fsm',
+#                                        type=hfst.HFST_OLW_TYPE)
             
     def null_cost(self):
         return 0

@@ -1,7 +1,7 @@
 #import algorithms.align
 import algorithms.fst
 from utils.files import *
-import libhfst
+import hfst
 import re
 #from scipy.stats import norm
 from algorithms.ngrams import *
@@ -64,7 +64,7 @@ class Rule:
         if lexicon.transducer is None:
             lexicon.build_transducer()
         self.build_transducer(alphabet=lexicon.alphabet)
-        t = libhfst.HfstTransducer(lexicon.transducer)
+        t = hfst.HfstTransducer(lexicon.transducer)
         t.compose(self.transducer)
         t.determinize()
         t.minimize()
@@ -78,7 +78,7 @@ class Rule:
 #        if lexicon.transducer is None:
 #            lexicon.build_transducer()
 #        self.build_transducer(alphabet=lexicon.alphabet)
-#        t = libhfst.HfstTransducer(lexicon.transducer)
+#        t = hfst.HfstTransducer(lexicon.transducer)
 #        t.compose(self.transducer)
 #        t.determinize()
 #        t.minimize()
@@ -90,14 +90,14 @@ class Rule:
 
     def get_trigrams(self):
         trigrams = []
-        for tr in generate_n_grams(('^',)+self.subst[0][0]+(libhfst.IDENTITY,), 3):
+        for tr in generate_n_grams(('^',)+self.subst[0][0]+(hfst.IDENTITY,), 3):
             if len(tr) == 3:
                 trigrams.append(tr)
         for alt in self.subst[1:-1]:
-            for tr in generate_n_grams((libhfst.IDENTITY,)+alt[0]+(libhfst.IDENTITY,), 3):
+            for tr in generate_n_grams((hfst.IDENTITY,)+alt[0]+(hfst.IDENTITY,), 3):
                 if len(tr) == 3:
                     trigrams.append(tr)
-        for tr in generate_n_grams((libhfst.IDENTITY,)+self.subst[-1][0]+('$',), 3):
+        for tr in generate_n_grams((hfst.IDENTITY,)+self.subst[-1][0]+('$',), 3):
             if len(tr) == 3:
                 trigrams.append(tr)
         return trigrams
@@ -106,24 +106,24 @@ class Rule:
         x_seq, y_seq = [], []
         x_tseq, y_tseq = [], []
         for x, y in self.subst:
-            x_seq.extend(x + (libhfst.EPSILON,)*(len(y)-len(x)))
-            x_seq.append(libhfst.IDENTITY)
-            y_seq.extend((libhfst.EPSILON,)*(len(x)-len(y)) + y)
-            y_seq.append(libhfst.IDENTITY)
+            x_seq.extend(x + (hfst.EPSILON,)*(len(y)-len(x)))
+            x_seq.append(hfst.IDENTITY)
+            y_seq.extend((hfst.EPSILON,)*(len(x)-len(y)) + y)
+            y_seq.append(hfst.IDENTITY)
         x_seq.pop()        # remove the last identity symbol
         y_seq.pop()
         if self.tag_subst:
             xt, yt = self.tag_subst
-            x_seq.extend(xt + (libhfst.EPSILON,)*(len(yt)-len(xt)))
-            y_seq.extend((libhfst.EPSILON,)*(len(xt)-len(yt)) + yt)
+            x_seq.extend(xt + (hfst.EPSILON,)*(len(yt)-len(xt)))
+            y_seq.extend((hfst.EPSILON,)*(len(xt)-len(yt)) + yt)
         return tuple(zip(x_seq, y_seq))
     
     def input_seq(self):
         seq = []
         for x, y in self.subst[:-1]:
             seq.extend(x)
-            if not seq or seq[-1] != libhfst.IDENTITY:
-                seq.append(libhfst.IDENTITY)
+            if not seq or seq[-1] != hfst.IDENTITY:
+                seq.append(hfst.IDENTITY)
         seq.extend(self.subst[-1][0])
         if self.tag_subst:
             seq.extend(self.tag_subst[0])
@@ -137,12 +137,12 @@ class Rule:
         subst = []
         x_seq, y_seq = (), ()
         for x, y in seq:
-            if x == y == libhfst.IDENTITY:
+            if x == y == hfst.IDENTITY:
                 subst.append((x_seq, y_seq))
                 x_seq, y_seq = (), ()
             else:
-                x_seq += (x,) if x != libhfst.EPSILON else ()
-                y_seq += (y,) if y != libhfst.EPSILON else ()
+                x_seq += (x,) if x != hfst.EPSILON else ()
+                y_seq += (y,) if y != hfst.EPSILON else ()
         subst.append((x_seq, y_seq))
         return Rule(tuple(subst), tag_subst)
     
@@ -172,7 +172,7 @@ class Rule:
             lexicon.build_transducer()
         if self.transducer is None:
             self.build_transducer()
-        t = libhfst.HfstTransducer(lexicon.transducer)
+        t = hfst.HfstTransducer(lexicon.transducer)
         t.compose(self.transducer)
         t.input_project()
         t.determinize()
@@ -184,7 +184,7 @@ class Rule:
             lexicon.build_transducer()
         if self.transducer is None:
             self.build_transducer()
-        t = libhfst.HfstTransducer(self.transducer)
+        t = hfst.HfstTransducer(self.transducer)
         t.compose(lexicon.transducer)
         t.output_project()
         t.determinize()

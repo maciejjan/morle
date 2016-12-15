@@ -1,6 +1,6 @@
 import algorithms.fst
-from algorithms.ngrams import TrigramHash
-from models.marginal import MarginalModel
+# from algorithms.ngrams import TrigramHash
+# from models.marginal import MarginalModel
 from utils.files import *
 import shared
 
@@ -50,6 +50,7 @@ class LexiconNode:
         self.key = ''.join(self.word + self.tag) +\
                    ((shared.format['word_disamb_sep'] + self.disamb)\
                      if self.disamb else '')
+        self.word_tag_str = ''.join(self.word + self.tag)
         if shared.config['Features'].getfloat('word_freq_weight') > 0:
             self.freq = freq
             self.logfreq = math.log(self.freq)
@@ -182,11 +183,11 @@ class Lexicon:
         self.roots.add(node)
         self.cost += node.cost
     
-    def trigram_hash(self):
-        trh = TrigramHash()
-        for node in self.nodes.values():
-            trh.add(node)
-        return trh
+#     def trigram_hash(self):
+#         trh = TrigramHash()
+#         for node in self.nodes.values():
+#             trh.add(node)
+#         return trh
 
     # TODO full cycle detection
     def check_if_edge_possible(self, edge):

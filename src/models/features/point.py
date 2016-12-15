@@ -206,7 +206,7 @@ class PointFeatureSet(FeatureSet):
     @staticmethod
     def new_root_feature_set():
         result = PointFeatureSet()
-        features = [StringFeature()]
+        features = [AlergiaStringFeature()]
         weights = [1.0]
         if shared.config['Features'].getfloat('word_freq_weight') > 0.0:
             features.append(PointExponentialFeature())

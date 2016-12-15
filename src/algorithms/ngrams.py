@@ -1,7 +1,7 @@
 #from datastruct.counter import *
 from utils.files import *
 from collections import defaultdict
-import libhfst
+import hfst
 import shared
 import random
 
@@ -163,9 +163,9 @@ class TrigramHash:
         for tr in generate_n_grams(('^',) + node.word + ('$',), 3):
             if len(tr) == 3:
                 self.entries[tr].add(node)
-                self.entries[(libhfst.IDENTITY,) + tr[1:]].add(node)
-                self.entries[tr[:-1] + (libhfst.IDENTITY,)].add(node)
-                self.entries[(libhfst.IDENTITY,) + tr[1:-1] + (libhfst.IDENTITY,)].add(node)
+                self.entries[(hfst.IDENTITY,) + tr[1:]].add(node)
+                self.entries[tr[:-1] + (hfst.IDENTITY,)].add(node)
+                self.entries[(hfst.IDENTITY,) + tr[1:-1] + (hfst.IDENTITY,)].add(node)
     
     def __len__(self):
         return self.num_entries

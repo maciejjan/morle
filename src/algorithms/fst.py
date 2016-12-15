@@ -1,6 +1,6 @@
 from utils.printer import progress_printer
 
-import libhfst
+import hfst
 import os.path
 import shared
 import sys
@@ -9,7 +9,7 @@ import types
 def seq_to_transducer(alignment, weight=0.0, type=None, alphabet=None):
     if type is None:
         type=shared.config['FST'].getint('transducer_type')
-    tr = libhfst.HfstBasicTransducer()
+    tr = hfst.HfstBasicTransducer()
     if alphabet is None:
         alphabet = ()
     alphabet = tuple(sorted(set(alphabet) | set(sum(alignment, ()))))
@@ -17,28 +17,28 @@ def seq_to_transducer(alignment, weight=0.0, type=None, alphabet=None):
     last_state_id = 0
     for (x, y) in alignment:
         state_id = tr.add_state()
-#        tr.add_transition(state_id, libhfst.HfstBasicTransition(state_id, libhfst.EPSILON, libhfst.EPSILON, 0.0))
-        if (x, y) == (libhfst.IDENTITY, libhfst.IDENTITY):
+#        tr.add_transition(state_id, hfst.HfstBasicTransition(state_id, hfst.EPSILON, hfst.EPSILON, 0.0))
+        if (x, y) == (hfst.IDENTITY, hfst.IDENTITY):
             tr.add_transition(last_state_id, 
-                              libhfst.HfstBasicTransition(state_id,
-                                                          libhfst.IDENTITY,
-                                                          libhfst.IDENTITY,
+                              hfst.HfstBasicTransition(state_id,
+                                                          hfst.IDENTITY,
+                                                          hfst.IDENTITY,
                                                           0.0))
             tr.add_transition(state_id, 
-                              libhfst.HfstBasicTransition(state_id,
-                                                          libhfst.IDENTITY,
-                                                          libhfst.IDENTITY,
+                              hfst.HfstBasicTransition(state_id,
+                                                          hfst.IDENTITY,
+                                                          hfst.IDENTITY,
                                                           0.0))
             for a in tr.get_alphabet():
                 if not a.startswith('@_'):
-                    tr.add_transition(last_state_id, libhfst.HfstBasicTransition(state_id, a, a, 0.0))
-                    tr.add_transition(state_id, libhfst.HfstBasicTransition(state_id, a, a, 0.0))
+                    tr.add_transition(last_state_id, hfst.HfstBasicTransition(state_id, a, a, 0.0))
+                    tr.add_transition(state_id, hfst.HfstBasicTransition(state_id, a, a, 0.0))
         else:
             tr.add_transition(last_state_id, 
-                              libhfst.HfstBasicTransition(state_id, x, y, 0.0))
+                              hfst.HfstBasicTransition(state_id, x, y, 0.0))
         last_state_id = state_id
     tr.set_final_weight(last_state_id, weight)
-    return libhfst.HfstTransducer(tr, type)
+    return hfst.HfstTransducer(tr, type)
 
 def binary_disjunct(transducers, print_progress=False):
     iterator, pp = None, None
@@ -79,7 +79,7 @@ def binary_disjunct(transducers, print_progress=False):
         t.disjunct(stack.pop())
     t.determinize()
     t.minimize()
-#    t.push_weights(libhfst.TO_INITIAL_STATE)
+#    t.push_weights(hfst.TO_INITIAL_STATE)
     t.push_weights_to_end()
     return t
 
@@ -95,26 +95,26 @@ def generate_id(id_num):
 #def id_absorber(id_num):
 #    seq = ('$',) + tuple(generate_id(id_num))
 #    return seq_to_transducer(\
-#        zip(seq, (libhfst.EPSILON,)*len(seq)),\
+#        zip(seq, (hfst.EPSILON,)*len(seq)),\
 #        alphabet=A_TO_Z + ('$',))
 
 def id_generator():
-    tr = libhfst.HfstBasicTransducer()
+    tr = hfst.HfstBasicTransducer()
     tr.add_symbols_to_alphabet(A_TO_Z + ('$',))
     tr.add_transition(0, 
-                      libhfst.HfstBasicTransition(1, '$', '$', 0.0))
+                      hfst.HfstBasicTransition(1, '$', '$', 0.0))
     for c in A_TO_Z:
         tr.add_transition(1, 
-                          libhfst.HfstBasicTransition(1, c, c, 0.0))
+                          hfst.HfstBasicTransition(1, c, c, 0.0))
     tr.set_final_weight(1, 0.0)
-    return libhfst.HfstTransducer(tr, settings.TRANSDUCER_TYPE)
+    return hfst.HfstTransducer(tr, settings.TRANSDUCER_TYPE)
 
 def number_of_paths(transducer):
     # in n-th iteration paths_for_state[s] contains the number of paths
     # of length n terminating in state s
     # terminates if maximum n is reached, i.e. paths_for_state > 0
     # only for states without outgoing transitions
-    t = libhfst.HfstBasicTransducer(transducer)
+    t = hfst.HfstBasicTransducer(transducer)
     paths_for_state = [1] + [0] * (len(t.states())-1)
     result = 0
     changed = True
@@ -138,43 +138,43 @@ def rootgen_transducer(rootdist):
     if shared.config['Features'].getint('rootdist_n') != 1:
         raise NotImplementedError('Not implemented for rootdist_n != 1')
     weights = rootdist.features[0].log_probs
-    tr = libhfst.HfstBasicTransducer()
+    tr = hfst.HfstBasicTransducer()
     tr.set_final_weight(0, weights[('#',)])
     for char, weight in weights.items():
         if char != ('#',):
             tr.add_transition(0, 
-                libhfst.HfstBasicTransition(0, char[0], char[0], weight))
-    return libhfst.HfstTransducer(tr)
+                hfst.HfstBasicTransition(0, char[0], char[0], weight))
+    return hfst.HfstTransducer(tr)
 
 def tag_absorber(alphabet):
-    tr = libhfst.HfstBasicTransducer()
+    tr = hfst.HfstBasicTransducer()
     for c in alphabet:
         if shared.compiled_patterns['symbol'].match(c):
             tr.add_transition(0,
-                libhfst.HfstBasicTransition(0, c, c, 0.0))
+                hfst.HfstBasicTransition(0, c, c, 0.0))
         elif shared.compiled_patterns['tag'].match(c):
             tr.add_transition(0,
-                libhfst.HfstBasicTransition(1, c, libhfst.EPSILON, 0.0))
+                hfst.HfstBasicTransition(1, c, hfst.EPSILON, 0.0))
             tr.add_transition(1,
-                libhfst.HfstBasicTransition(1, c, libhfst.EPSILON, 0.0))
+                hfst.HfstBasicTransition(1, c, hfst.EPSILON, 0.0))
     tr.set_final_weight(0, 0.0)
     tr.set_final_weight(1, 0.0)
-    return libhfst.HfstTransducer(tr)
+    return hfst.HfstTransducer(tr)
 
 def tag_acceptor(tag, alphabet):
-    tr = libhfst.HfstBasicTransducer()
+    tr = hfst.HfstBasicTransducer()
     for c in alphabet:
         if shared.compiled_patterns['symbol'].match(c):
             tr.add_transition(0,
-                libhfst.HfstBasicTransition(0, c, c, 0.0))
+                hfst.HfstBasicTransition(0, c, c, 0.0))
     tr.set_final_weight(0, 0.0)
-    tr_c = libhfst.HfstTransducer(tr)
+    tr_c = hfst.HfstTransducer(tr)
     tr_c.concatenate(seq_to_transducer(tuple(zip(tag, tag))))
     return tr_c
 
 def load_transducer(filename):
     path = os.path.join(shared.options['working_dir'], filename)
-    istr = libhfst.HfstInputStream(path)
+    istr = hfst.HfstInputStream(path)
     transducer = istr.read()
     istr.close()
     return transducer
@@ -183,7 +183,7 @@ def save_transducer(transducer, filename, type=None):
     if type is None:
         type = shared.config['FST'].getint('transducer_type')
     path = os.path.join(shared.options['working_dir'], filename)
-    ostr = libhfst.HfstOutputStream(filename=path, type=type)
+    ostr = hfst.HfstOutputStream(filename=path, type=type)
     ostr.write(transducer)
     ostr.flush()
     ostr.close()

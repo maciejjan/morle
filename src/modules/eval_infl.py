@@ -1,7 +1,7 @@
 '''Inflection evaluation module.'''
 
 from collections import defaultdict, namedtuple
-import libhfst
+import hfst
 import logging
 
 import algorithms.fst
@@ -28,10 +28,10 @@ def compile_lemmatizer():
                                      shared.filenames['roots-tr']))
         lemmatizer.disjunct(known_roots_lemmatizer)
 
-    lemmatizer.convert(libhfst.HFST_OLW_TYPE)
+    lemmatizer.convert(hfst.HFST_OLW_TYPE)
     algorithms.fst.save_transducer(lemmatizer, 
                                    shared.filenames['lemmatizer-tr'],
-                                   type=libhfst.HFST_OLW_TYPE)
+                                   type=hfst.HFST_OLW_TYPE)
     logging.getLogger('main').info('Done.')
     return lemmatizer
 
@@ -42,7 +42,7 @@ def compose_for_tagging(transducer):
     transducer.output_project()
     for symbol in transducer.get_alphabet():
         if shared.compiled_patterns['tag'].match(symbol):
-            transducer.substitute(symbol, libhfst.EPSILON, 
+            transducer.substitute(symbol, hfst.EPSILON, 
                                   input=True, output=False)
     return transducer
 
@@ -57,10 +57,10 @@ def compile_tagger():
                                  shared.filenames['roots-tr']))
         tagger.disjunct(known_roots_tagger)
 
-    tagger.convert(libhfst.HFST_OLW_TYPE)
+    tagger.convert(hfst.HFST_OLW_TYPE)
     algorithms.fst.save_transducer(tagger,
                                    shared.filenames['tagger-tr'],
-                                   type=libhfst.HFST_OLW_TYPE)
+                                   type=hfst.HFST_OLW_TYPE)
     logging.getLogger('main').info('Done.')
     return tagger
 
@@ -100,7 +100,7 @@ def result_index(correct, results):
         return 0
     
 def words_from_paths(paths):
-    return [word.replace(libhfst.EPSILON, '') 
+    return [word.replace(hfst.EPSILON, '') 
             for word, cost in paths]
 
 def eval_lemmatize(word, base, automata):
@@ -125,7 +125,7 @@ def eval_inflect(word, base, automata):
     base_tr.compose(automata.inflector)
     base_tr.compose(tag_tr)
     base_tr.minimize()
-#    base_tr.convert(libhfst.HFST_OLW_TYPE)
+#    base_tr.convert(hfst.HFST_OLW_TYPE)
     results = words_from_paths(base_tr.lookup(base))
     return result_index(word, results)
 

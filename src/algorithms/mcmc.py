@@ -14,6 +14,8 @@ from utils.files import *
 from utils.printer import *
 import shared
 
+from pympler import asizeof
+
 # Beta distribution parameters
 #ALPHA = 1
 #BETA = 1
@@ -346,6 +348,7 @@ class MCMCGraphSampler:
         self.stats = {}
         self.warmup_iter = warmup_iter
         self.sampl_iter = sampl_iter
+#         self.tr = tracker.SummaryTracker()
 #        self.accept_all = False
     
     def add_stat(self, name, stat):
@@ -369,6 +372,10 @@ class MCMCGraphSampler:
         self.update_stats()
 
     def next(self):
+#         if self.num % 10000 == 0:
+#             print(asizeof.asized(self, detail=2).format())
+#             for stat_name, stat in self.stats.items():
+#                 print(stat_name, asizeof.asized(stat, detail=2).format())
         # increase the number of iterations
         self.num += 1
 

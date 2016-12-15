@@ -2,7 +2,7 @@ from algorithms.align import extract_all_rules
 from datastruct.rules import *
 from collections import defaultdict
 from operator import itemgetter
-import libhfst
+# import libhfst
 import sys
 
 def compute_possible_edges(edges):

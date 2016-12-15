@@ -12,9 +12,10 @@ class FeatureValueExtractor:
 
     def extract_feature_values_from_nodes(self, nodes):
         features = []
-        features.append(list(algorithms.ngrams.generate_n_grams(\
-            node.word + node.tag + ('#',), self.rootdist_n)\
-                for node in nodes))
+#         features.append(list(algorithms.ngrams.generate_n_grams(\
+#             node.word + node.tag + ('#',), self.rootdist_n)\
+#                 for node in nodes))
+        features.append([node.word_tag_str for node in nodes])
         if self.use_word_freq:
             features.append(list(node.logfreq for node in nodes))
         if self.use_word_vec:
@@ -22,7 +23,8 @@ class FeatureValueExtractor:
         return tuple(features)
     
     def extract_feature_values_from_edges(self, edges):
-        features = [list(1 for e in edges)]
+#         features = [list(1 for e in edges)]
+        features = [[1] * len(edges)]
         if self.use_word_freq:
             # source-target, because target-source typically negative
             features.append(\

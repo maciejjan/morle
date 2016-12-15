@@ -1,9 +1,7 @@
 '''ALERGIA algorithm for learning deterministic automata.'''
 
-from datastruct.lexicon import tokenize_word
-
 from collections import defaultdict
-import libhfst
+import hfst
 import math
 from operator import itemgetter
 import re
@@ -18,7 +16,7 @@ def prefix_tree_acceptor(seqs):
             weight = 0.0 
             try:
                 weight = automaton.get_final_weight(state)
-            except libhfst.StateIsNotFinalException:
+            except hfst.exceptions.StateIsNotFinalException:
                 pass
             automaton.set_final_weight(state, weight + freq)
             return
@@ -33,21 +31,21 @@ def prefix_tree_acceptor(seqs):
             target_state = automaton.add_state()
         automaton.add_transition(
           state,
-          libhfst.HfstBasicTransition(target_state, seq[0], 
+          hfst.HfstBasicTransition(target_state, seq[0], 
                                       seq[0], weight+freq))
         pta_insert(automaton, seq[1:], freq=freq, state=target_state)
 
-    automaton = libhfst.HfstBasicTransducer()
+    automaton = hfst.HfstBasicTransducer()
     for i, (seq, freq) in enumerate(seqs):
 #        pta_insert(automaton, seq, freq)
         pta_insert(automaton, seq, 1)
-        sys.stdout.write('\r' + str(i))
-    print()
+#         sys.stdout.write('\r' + str(i))
+#     print()
     return automaton
 
 def normalize_weights(automaton):
     '''Convert frequency weights to log-probabilities.'''
-    new_automaton = libhfst.HfstBasicTransducer()
+    new_automaton = hfst.HfstBasicTransducer()
     queue = [0]
     processed = set()
     while queue:
@@ -65,7 +63,7 @@ def normalize_weights(automaton):
             new_weight = -math.log(tr.get_weight() / sum_weights)
             new_automaton.add_transition(
               state,
-              libhfst.HfstBasicTransition(
+              hfst.HfstBasicTransition(
                 tr.get_target_state(),
                 tr.get_input_symbol(),
                 tr.get_output_symbol(),
@@ -86,7 +84,7 @@ def alergia(automaton, alpha=0.05, freq_threshold=1):
     def _get_state_weights(state):
         weights = defaultdict(lambda : 0)
         if automaton.is_final_state(state):
-            weights[libhfst.EPSILON] = automaton.get_final_weight(state)
+            weights[hfst.EPSILON] = automaton.get_final_weight(state)
         for tr in automaton.transitions(state):
             weights[tr.get_input_symbol()] = tr.get_weight()
         return weights
@@ -146,7 +144,7 @@ def alergia(automaton, alpha=0.05, freq_threshold=1):
         parent[q_b] = (None, None)
         automaton.add_transition(
           q_f,
-          libhfst.HfstBasicTransition(q_r, symbol, symbol, weight))
+          hfst.HfstBasicTransition(q_r, symbol, symbol, weight))
         _fold(q_r, q_b)
 
     def _fold(q_r, q_b):
@@ -162,13 +160,13 @@ def alergia(automaton, alpha=0.05, freq_threshold=1):
                 automaton.remove_transition(q_r, trs_r[key])
                 automaton.add_transition(
                   q_r,
-                  libhfst.HfstBasicTransition(
+                  hfst.HfstBasicTransition(
                     trs_r[key].get_target_state(), key, key,
                     trs_r[key].get_weight() + tr_b.get_weight()))
                 _fold(trs_r[key].get_target_state(), tr_b.get_target_state())
             else:
                 automaton.remove_transition(q_b, tr_b)
-                tr_r = libhfst.HfstBasicTransition(
+                tr_r = hfst.HfstBasicTransition(
                          tr_b.get_target_state(), key, key,
                          tr_b.get_weight())
                 automaton.add_transition(q_r, tr_r)
@@ -176,7 +174,7 @@ def alergia(automaton, alpha=0.05, freq_threshold=1):
 
     def _remove_unreachable_states(automaton):
 #        global automaton
-        new_automaton = libhfst.HfstBasicTransducer()
+        new_automaton = hfst.HfstBasicTransducer()
         state_map = {0: 0}
         queue = [0]
         processed = set()
@@ -191,7 +189,7 @@ def alergia(automaton, alpha=0.05, freq_threshold=1):
                     state_map[tr.get_target_state()] = new_automaton.add_state()
                 new_automaton.add_transition(
                   state_map[state],
-                  libhfst.HfstBasicTransition(
+                  hfst.HfstBasicTransition(
                     state_map[tr.get_target_state()],
                     tr.get_input_symbol(),
                     tr.get_output_symbol(),
@@ -278,8 +276,8 @@ def print_transitions(automaton, state):
 # #TODO save the resulting automaton
 
 #print('Converting...')
-#tr = libhfst.HfstTransducer(automaton)
-#tr.convert(libhfst.HFST_OLW_TYPE)
+#tr = hfst.HfstTransducer(automaton)
+#tr.convert(hfst.HFST_OLW_TYPE)
 
 # print('Validating...')
 # validate(automaton, load_seqs_from_file(VALIDATION_FILE))
