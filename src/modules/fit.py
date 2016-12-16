@@ -6,9 +6,9 @@ import algorithms.fst
 import shared
 import logging
 
-def save_rootgen_transducer(model):
-    tr = algorithms.fst.rootgen_transducer(model.rootdist)
-    algorithms.fst.save_transducer(tr, shared.filenames['rootgen-tr'])
+# def save_rootgen_transducer(model):
+#     tr = algorithms.fst.rootgen_transducer(model.rootdist)
+#     algorithms.fst.save_transducer(tr, shared.filenames['rootgen-tr'])
 
 # model selection (with simulated annealing)
 def prepare_model():
@@ -29,7 +29,7 @@ def prepare_model():
     for rule, domsize in rule_domsizes.items():
         model.add_rule(rules[rule], domsize)
 #    model.save_to_file(model_filename)
-    save_rootgen_transducer(model)
+#     save_rootgen_transducer(model)
     return model, lexicon, edges
 
 # fit the model (with soft-EM algorithm)

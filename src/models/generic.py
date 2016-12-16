@@ -108,12 +108,10 @@ class Model:
                 edges_to_add, edges_to_remove)
         # apply the changes to roots
         roots_to_add, roots_to_remove = root_changes
-#        print('rootdist', len(roots_to_add[0]), len(roots_to_remove[0]))
         result += self.rootdist.cost_of_change(
             roots_to_add, roots_to_remove)
         # apply the changes to rule features
         for rule, (values_to_add, values_to_remove) in changes_by_rule.items():
-#            print(rule, len(values_to_add[0]), len(values_to_remove[0]))
             result += self.rule_features[rule].cost_of_change(
                 values_to_add, values_to_remove)
         return result

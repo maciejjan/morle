@@ -28,10 +28,10 @@ def compile_lemmatizer():
                                      shared.filenames['roots-tr']))
         lemmatizer.disjunct(known_roots_lemmatizer)
 
-    lemmatizer.convert(hfst.HFST_OLW_TYPE)
+    lemmatizer.convert(hfst.ImplementationType.HFST_OLW_TYPE)
     algorithms.fst.save_transducer(lemmatizer, 
                                    shared.filenames['lemmatizer-tr'],
-                                   type=hfst.HFST_OLW_TYPE)
+                                   type=hfst.ImplementationType.HFST_OLW_TYPE)
     logging.getLogger('main').info('Done.')
     return lemmatizer
 
@@ -57,10 +57,10 @@ def compile_tagger():
                                  shared.filenames['roots-tr']))
         tagger.disjunct(known_roots_tagger)
 
-    tagger.convert(hfst.HFST_OLW_TYPE)
+    tagger.convert(hfst.ImplementationType.HFST_OLW_TYPE)
     algorithms.fst.save_transducer(tagger,
                                    shared.filenames['tagger-tr'],
-                                   type=hfst.HFST_OLW_TYPE)
+                                   type=hfst.ImplementationType.HFST_OLW_TYPE)
     logging.getLogger('main').info('Done.')
     return tagger
 

@@ -2,10 +2,9 @@ import re
 
 # shared
 # .config -- saved in a configuration file in the working dir
-# .working_dir -- working directory
+# .options -- command-line options
 # .filenames
 # .patterns
-# ...
 
 # configuration and working directory -- set at runtime by the 'main' module
 
