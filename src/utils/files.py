@@ -124,7 +124,7 @@ def remove_file_if_exists(filename):
 
 # sort file using the unix command
 def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False, stable=False, unique=False):
-    sort_call = ['sort', full_path(infile)]
+    sort_call = ['sort', full_path(infile), '-T', shared.options['working_dir']]
     if key:
         if isinstance(key, tuple) and len(key) == 2:
             sort_call.append('-k%d,%d' % key)

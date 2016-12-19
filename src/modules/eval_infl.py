@@ -149,15 +149,18 @@ def run():
                                         print_msg='Evaluating...'):
             if not base.strip():
                 base = word
-            r_lem = eval_lemmatize(word, base, automata)
-            r_tag = eval_tag(word, automata)
-            r_infl = eval_inflect(word, base, automata)
+            try:
+                r_lem = eval_lemmatize(word, base, automata)
+                r_tag = eval_tag(word, automata)
+                r_infl = eval_inflect(word, base, automata)
 
-            results_lem[r_lem] += 1
-            results_tag[r_tag] += 1
-            results_infl[r_infl] += 1
+                results_lem[r_lem] += 1
+                results_tag[r_tag] += 1
+                results_infl[r_infl] += 1
 
-            write_line(fp, (word, base, r_lem, r_tag, r_infl))
+                write_line(fp, (word, base, r_lem, r_tag, r_infl))
+            except Exception:
+                logging.getLogger('main').warning('ignoring %s' % word)
 
     print_results(results_lem, 'LEMMATIZATION RESULTS')
     print_results(results_tag, 'TAGGING RESULTS')
