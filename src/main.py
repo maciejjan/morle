@@ -131,6 +131,9 @@ def main(mode, modules_to_run):
         if 'fit' in modules_to_run:
             import modules.fit
             modules.fit.run()
+        if 'naive_fit' in modules_to_run:
+            import modules.naive_fit
+            modules.naive_fit.run()
         if 'sample' in modules_to_run:
             import modules.sample
             modules.sample.run()
