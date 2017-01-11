@@ -40,7 +40,9 @@ filenames = {\
     'sample-rule-stats' : 'sample-rule-stats.txt',
     'tagger-tr' : 'tagger.fsm',
     'wordgen' : 'wordgen.txt',
-    'wordlist' : 'input.training'
+    'wordlist' : 'input.training',
+    'wordlist.left' : 'wordlist-left.training',
+    'wordlist.right' : 'wordlist-right.training'
 }
 
 format = {\

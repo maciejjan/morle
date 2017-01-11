@@ -105,6 +105,13 @@ def build_graph_allrules(lexicon, graph_file):
                 write_line(fp, (str(n1), str(n2), str(rule)))
                 write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
 
+def build_graph_bipartite(lexicon_left, lexicon_right, graph_file):
+    with open_to_write(graph_file) as fp:
+        for n1, n2 in algorithms.fastss.similar_words_bipartite(
+                        lexicon_left, lexicon_right, print_progress=True):
+            for rule in algorithms.align.extract_all_rules(n1, n2):
+                write_line(fp, (str(n1), str(n2), str(rule)))
+
 def build_graph_allrules_fil(lexicon, graph_file, filters):
     with open_to_write(graph_file) as fp:
         for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
@@ -149,9 +156,7 @@ def split_rules_in_graph(lexicon, graph_file, model):
                     (str(e.source), str(e.target), str(e.rule)))
     rename_file(graph_file + '.spl', graph_file)
 
-### MAIN FUNCTIONS ###
-
-def run():
+def run_standard():
     logging.getLogger('main').info('Loading lexicon...')
     lexicon = Lexicon.init_from_wordlist(shared.filenames['wordlist'])
 
@@ -176,6 +181,41 @@ def run():
     algorithms.fst.save_transducer(lexicon.transducer,
                                    shared.filenames['lexicon-tr'])
     compute_rule_domsizes(lexicon, shared.filenames['rules'])
+
+def run_bipartite():
+    logging.getLogger('main').info('Loading lexica...')
+    lexicon_left = Lexicon.init_from_wordlist(
+                     shared.filenames['wordlist.left'])
+    lexicon_right = Lexicon.init_from_wordlist(
+                      shared.filenames['wordlist.right'])
+
+    logging.getLogger('main').info('Building graph...')
+    build_graph_bipartite(
+      lexicon_left, lexicon_right, shared.filenames['graph'])
+
+    sort_file(shared.filenames['graph'], key=3)
+    update_file_size(shared.filenames['graph'])
+    run_filters(shared.filenames['graph'])
+    update_file_size(shared.filenames['graph'])
+    aggregate_file(shared.filenames['graph'],\
+                   shared.filenames['rules'], 3)
+    update_file_size(shared.filenames['rules'])
+
+    lexicon_left.build_transducer()
+    algorithms.fst.save_transducer(lexicon_left.transducer,
+                                   shared.filenames['lexicon-tr'])
+    compute_rule_domsizes(lexicon_left, shared.filenames['rules'])
+
+### MAIN FUNCTIONS ###
+
+def run():
+    if file_exists(shared.filenames['wordlist.left']) and\
+       file_exists(shared.filenames['wordlist.right']):
+        run_bipartite()
+    elif file_exists(shared.filenames['wordlist']):
+        run_standard()
+    else:
+        raise Exception('No input file supplied!')
 
 def cleanup():
     remove_file_if_exists(shared.filenames['rules'])
