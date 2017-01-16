@@ -88,6 +88,12 @@ class LexiconNode:
         while root.prev is not None:
             root = root.prev
         return root
+
+    def subtree(self):
+        result = set(self)
+        for edge in self.edges:
+            result |= edge.target.substree()
+        return result
     
     def has_ancestor(self, node):
         if self.parent is None:
@@ -118,11 +124,6 @@ class LexiconNode:
             node = node.prev
             analysis.append(node.key())
         return analysis
-
-    def show_tree(self, space=''):
-        print(space + self.key(), self.freq) #, self.sigma
-        for w in self.next.values():
-            w.show_tree(space=space+'\t')
 
 
 class Lexicon:

@@ -37,10 +37,19 @@ def run():
     sampler = MCMCGraphSamplerFactory.new(model, lexicon, edges,
             shared.config['sample'].getint('warmup_iterations'),
             shared.config['sample'].getint('sampling_iterations'))
-    sampler.add_stat('cost', ExpectedCostStatistic(sampler))
-    sampler.add_stat('acc_rate', AcceptanceRateStatistic(sampler))
-    sampler.add_stat('edge_freq', EdgeFrequencyStatistic(sampler))
-    sampler.add_stat('contrib', RuleExpectedContributionStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_cost'):
+        sampler.add_stat('cost', ExpectedCostStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_acc_rate'):
+        sampler.add_stat('acc_rate', AcceptanceRateStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_edge_freq'):
+        sampler.add_stat('edge_freq', EdgeFrequencyStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_undirected_edge_freq'):
+        sampler.add_stat('undirected_edge_freq', 
+                         UndirectedEdgeFrequencyStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_path_freq'):
+        sampler.add_stat('path_freq', PathFrequencyStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_rule_contrib'):
+        sampler.add_stat('contrib', RuleExpectedContributionStatistic(sampler))
     sampler.run_sampling()
     sampler.summary()
 

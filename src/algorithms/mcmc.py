@@ -14,7 +14,7 @@ from utils.files import *
 from utils.printer import *
 import shared
 
-from pympler import asizeof
+# from pympler import asizeof
 
 # Beta distribution parameters
 #ALPHA = 1
@@ -159,7 +159,7 @@ class EdgeStatistic(MCMCStatistic):
     def next_iter(self, sampler):
         pass
     
-    def value(self, idx):
+    def value(self, idx, edge):
         return self.values[idx]
 
 class EdgeFrequencyStatistic(EdgeStatistic):
@@ -183,6 +183,81 @@ class EdgeFrequencyStatistic(EdgeStatistic):
              (sampler.num - self.last_modified[idx])) /\
             sampler.num
         self.last_modified[idx] = sampler.num
+
+class WordpairStatistic(MCMCStatistic):
+    def __init__(self, sampler):
+        self.reset(sampler)
+
+    def reset(self, sampler):
+        self.word_ids = {}
+        cur_id = 1
+        for node in sampler.lexicon.iter_nodes():
+            self.word_ids[node.key] = cur_id
+            cur_id += 1
+        self.values = {}
+        self.last_modified = {}
+        
+    def update(self, sampler):
+        raise NotImplementedError()
+
+    def edge_added(self, sampler, idx, edge):
+        raise NotImplementedError()
+
+    def edge_removed(self, sampler, idx, edge):
+        raise NotImplementedError()
+
+    def next_iter(self, sampler):
+        pass
+
+    def value(self, idx, edge):
+        return self.values[self.key_for_edge(edge)]
+
+    def key_for_edge(self, edge):
+        key_1 = self.word_ids[edge.source.key]
+        key_2 = self.word_ids[edge.target.key]
+        return (min(key_1, key_2), max(key_1, key_2))
+
+class UndirectedEdgeFrequencyStatistic(WordpairStatistic):
+    def update(self, sampler):
+        # note: the relation edge <-> wordpair is one-to-one here because 
+        # in well-formed graphs there can only be one edge per wordpair
+        for i, edge in enumerate(sampler.edges):
+            if edge in edge.source.edges:
+                # the edge was present in the last graphs
+                self.edge_removed(sampler, i, edge)
+            else:
+                # the edge was absent in the last graphs
+                self.edge_added(sampler, i, edge)
+
+    def edge_added(self, sampler, idx, edge):
+        key = self.key_for_edge(edge)
+        if key not in self.values:
+            self.values[key] = 0
+            self.last_modified[key] = 0
+        self.values[key] =\
+            self.values[key] * self.last_modified[key] / sampler.num
+        self.last_modified[key] = sampler.num
+
+    def edge_removed(self, sampler, idx, edge):
+        key = self.key_for_edge(edge)
+        if key not in self.values:
+            self.values[key] = 0
+            self.last_modified[key] = 0
+        self.values[key] =\
+            (self.values[key] * self.last_modified[key] +\
+             (sampler.num - self.last_modified[key])) /\
+            sampler.num
+        self.last_modified[key] = sampler.num
+
+class PathFrequencyStatistic(WordpairStatistic):
+    def update(self, sampler):
+        raise NotImplementedError()
+
+    def edge_added(self, sampler, idx, edge):
+        raise NotImplementedError()
+
+    def edge_removed(self, sampler, idx, edge):
+        raise NotImplementedError()
 
 class RuleStatistic(MCMCStatistic):
     def __init__(self, sampler):
@@ -536,13 +611,17 @@ class MCMCGraphSampler:
     def save_edge_stats(self, filename):
         stats, stat_names = [], []
         for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
-            if isinstance(stat, EdgeStatistic):
+            if isinstance(stat, EdgeStatistic) or\
+               isinstance(stat, WordpairStatistic):
                 stat_names.append(stat_name)
                 stats.append(stat)
         with open_to_write(filename) as fp:
             write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
             for i, edge in enumerate(self.edges):
-                write_line(fp, (str(edge.source), str(edge.target), str(edge.rule)) + tuple([stat.value(i) for stat in stats]))
+                write_line(fp, 
+                           (str(edge.source), str(edge.target), 
+                            str(edge.rule)) + tuple([stat.value(i, edge)\
+                                                     for stat in stats]))
 
     def save_rule_stats(self, filename):
         stats, stat_names = [], []
