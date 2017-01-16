@@ -186,14 +186,16 @@ class EdgeFrequencyStatistic(EdgeStatistic):
 
 class WordpairStatistic(MCMCStatistic):
     def __init__(self, sampler):
+        self.word_ids = {}
+        self.words = []
+        cur_id = 0
+        for node in sampler.lexicon.iter_nodes():
+            self.word_ids[node.key] = cur_id
+            self.words.append(node.key)
+            cur_id += 1
         self.reset(sampler)
 
     def reset(self, sampler):
-        self.word_ids = {}
-        cur_id = 1
-        for node in sampler.lexicon.iter_nodes():
-            self.word_ids[node.key] = cur_id
-            cur_id += 1
         self.values = {}
         self.last_modified = {}
         
@@ -209,12 +211,21 @@ class WordpairStatistic(MCMCStatistic):
     def next_iter(self, sampler):
         pass
 
-    def value(self, idx, edge):
-        return self.values[self.key_for_edge(edge)]
+    def value(self, word_1, word_2):
+        key = self.key_for_wordpair(word_1, word_2)
+        if key in self.values:
+            return self.values[key]
+        else:
+            return 0.0
 
     def key_for_edge(self, edge):
         key_1 = self.word_ids[edge.source.key]
         key_2 = self.word_ids[edge.target.key]
+        return (min(key_1, key_2), max(key_1, key_2))
+
+    def key_for_wordpair(self, word_1, word_2):
+        key_1 = self.word_ids[word_1]
+        key_2 = self.word_ids[word_2]
         return (min(key_1, key_2), max(key_1, key_2))
 
 class UndirectedEdgeFrequencyStatistic(WordpairStatistic):
@@ -222,12 +233,20 @@ class UndirectedEdgeFrequencyStatistic(WordpairStatistic):
         # note: the relation edge <-> wordpair is one-to-one here because 
         # in well-formed graphs there can only be one edge per wordpair
         for i, edge in enumerate(sampler.edges):
+            key = self.key_for_edge(edge)   # only for debug
             if edge in edge.source.edges:
                 # the edge was present in the last graphs
                 self.edge_removed(sampler, i, edge)
-            else:
+                logging.getLogger('main').debug('updating +: %s -> %s : %f' %\
+                    (edge.source.key, edge.target.key, self.values[key]))
+        # second loop because all present edges must be processed first
+        for i, edge in enumerate(sampler.edges):
+            key = self.key_for_edge(edge)   # only for debug
+            if edge not in edge.source.edges:
                 # the edge was absent in the last graphs
                 self.edge_added(sampler, i, edge)
+                logging.getLogger('main').debug('updating -: %s -> %s : %f' %\
+                    (edge.source.key, edge.target.key, self.values[key]))
 
     def edge_added(self, sampler, idx, edge):
         key = self.key_for_edge(edge)
@@ -250,14 +269,70 @@ class UndirectedEdgeFrequencyStatistic(WordpairStatistic):
         self.last_modified[key] = sampler.num
 
 class PathFrequencyStatistic(WordpairStatistic):
+    def reset(self, sampler):
+        WordpairStatistic.reset(self, sampler)
+        self.comp = [None] * len(sampler.lexicon)
+        for root in sampler.lexicon.roots:
+            comp = [self.word_ids[node.key] for node in root.subtree()]
+            for x in comp:
+                self.comp[x] = comp
+            for x in comp:
+                for y in comp:
+                    if x != y:
+                        key = (min(x, y), max(x, y))
+                        self.values[key] = 0
+                        self.last_modified[key] = 0
+
     def update(self, sampler):
-        raise NotImplementedError()
+        for key in self.values:
+            key_1, key_2 = key
+            if self.comp[key_1] == self.comp[key_2]:
+                self.values[key] =\
+                    (self.values[key] * self.last_modified[key] +\
+                     (sampler.num - self.last_modified[key])) /\
+                    sampler.num
+            else:
+                self.values[key] =\
+                    self.values[key] * self.last_modified[key] / sampler.num
+            self.last_modified[key] = sampler.num
 
     def edge_added(self, sampler, idx, edge):
-        raise NotImplementedError()
+        for key_1 in self.comp[self.word_ids[edge.source.key]]:
+            for key_2 in self.comp[self.word_ids[edge.target.key]]:
+                key = (min(key_1, key_2), max(key_1, key_2))
+                if key not in self.values:
+                    self.values[key] = 0
+                    self.last_modified[key] = 0
+                self.values[key] =\
+                    self.values[key] * self.last_modified[key] / sampler.num
+                self.last_modified[key] = sampler.num
+        # join the subtrees
+        comp_joined = self.comp[self.word_ids[edge.source.key]] +\
+                      self.comp[self.word_ids[edge.target.key]]
+        for x in comp_joined:
+            self.comp[x] = comp_joined
 
     def edge_removed(self, sampler, idx, edge):
-        raise NotImplementedError()
+        comp_target = [self.word_ids[node.key] \
+                       for node in edge.target.subtree()]
+        comp_source = [x for x in self.comp[self.word_ids[edge.source.key]]\
+                         if x not in comp_target]
+        for key_1 in comp_source:
+            for key_2 in comp_target:
+                key = (min(key_1, key_2), max(key_1, key_2))
+                if key not in self.values:
+                    self.values[key] = 0
+                    self.last_modified[key] = 0
+                self.values[key] =\
+                    (self.values[key] * self.last_modified[key] +\
+                     (sampler.num - self.last_modified[key])) /\
+                    sampler.num
+                self.last_modified[key] = sampler.num
+        # split the component
+        for x in comp_source:
+            self.comp[x] = comp_source
+        for x in comp_target:
+            self.comp[x] = comp_target
 
 class RuleStatistic(MCMCStatistic):
     def __init__(self, sampler):
@@ -611,8 +686,7 @@ class MCMCGraphSampler:
     def save_edge_stats(self, filename):
         stats, stat_names = [], []
         for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
-            if isinstance(stat, EdgeStatistic) or\
-               isinstance(stat, WordpairStatistic):
+            if isinstance(stat, EdgeStatistic):
                 stat_names.append(stat_name)
                 stats.append(stat)
         with open_to_write(filename) as fp:
@@ -634,11 +708,28 @@ class MCMCGraphSampler:
             for rule in self.model.rule_features:
                 write_line(fp, (str(rule), self.model.rule_features[rule][0].trials) +\
                                tuple([stat.value(rule) for stat in stats]))
+
+    def save_wordpair_stats(self, filename):
+        stats, stat_names = [], []
+        keys = set()
+        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+            if isinstance(stat, WordpairStatistic):
+                stat_names.append(stat_name)
+                stats.append(stat)
+                for (idx_1, idx_2) in stat.values:
+                    keys.add((stat.words[idx_1], stat.words[idx_2]))
+        with open_to_write(filename) as fp:
+            write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
+            for (word_1, word_2) in sorted(list(keys)):
+                write_line(fp, 
+                           (word_1, word_2) + tuple([stat.value(word_1, word_2)\
+                                                     for stat in stats]))
             
     def summary(self):
         self.print_scalar_stats()
         self.save_edge_stats(shared.filenames['sample-edge-stats'])
         self.save_rule_stats(shared.filenames['sample-rule-stats'])
+        self.save_wordpair_stats(shared.filenames['sample-wordpair-stats'])
 
 # TODO constructor arguments should be the same for every type
 #      (pass ensured edges through the lexicon parameter?)

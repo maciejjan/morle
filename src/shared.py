@@ -38,6 +38,7 @@ filenames = {\
     'rules-tr' : 'rules.fsm',
     'sample-edge-stats' : 'sample-edge-stats.txt',
     'sample-rule-stats' : 'sample-rule-stats.txt',
+    'sample-wordpair-stats' : 'sample-wordpair-stats.txt',
     'tagger-tr' : 'tagger.fsm',
     'wordgen' : 'wordgen.txt',
     'wordlist' : 'input.training',

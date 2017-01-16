@@ -85,14 +85,14 @@ class LexiconNode:
     
     def root(self):
         root = self
-        while root.prev is not None:
-            root = root.prev
+        while root.parent is not None:
+            root = root.parent
         return root
 
     def subtree(self):
-        result = set(self)
+        result = set([self])
         for edge in self.edges:
-            result |= edge.target.substree()
+            result |= edge.target.subtree()
         return result
     
     def has_ancestor(self, node):
