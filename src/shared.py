@@ -22,6 +22,8 @@ filenames = {\
     'analyzer-tr' : 'analyzer.fsm',
     'config' : 'config.ini',
     'config-default' : 'config-default.ini',
+    'eval.graph.vocab' : 'eval-vocab.txt',
+    'eval.graph' : 'graph.testing',
     'eval.wordlist' : 'input.testing',
     'eval.report' : 'eval.txt',
     'graph' : 'graph.txt',

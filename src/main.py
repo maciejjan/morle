@@ -149,6 +149,9 @@ def main(mode, modules_to_run):
         if 'eval_infl' in modules_to_run:
             import modules.eval_infl
             modules.eval_infl.run()
+        if 'eval_graph' in modules_to_run:
+            import modules.eval_graph
+            modules.eval_graph.run()
     if MODE_EVAL in mode:
         if 'analyze' in modules_to_run:
             import modules.analyze

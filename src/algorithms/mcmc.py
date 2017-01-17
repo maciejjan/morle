@@ -5,6 +5,7 @@ import random
 import sys
 import time
 from operator import itemgetter
+import scipy.sparse
 from scipy.special import beta, betaln, expit
 from datastruct.lexicon import *
 from datastruct.rules import *
@@ -198,6 +199,11 @@ class WordpairStatistic(MCMCStatistic):
     def reset(self, sampler):
         self.values = {}
         self.last_modified = {}
+#         self.values = scipy.sparse.lil_matrix(
+#                         (len(self.words), len(self.words)), dtype=np.float32)
+#         self.last_modified = scipy.sparse.lil_matrix(
+#                                (len(self.words), len(self.words)), 
+#                                dtype=np.uint32)
         
     def update(self, sampler):
         raise NotImplementedError()
@@ -237,16 +243,16 @@ class UndirectedEdgeFrequencyStatistic(WordpairStatistic):
             if edge in edge.source.edges:
                 # the edge was present in the last graphs
                 self.edge_removed(sampler, i, edge)
-                logging.getLogger('main').debug('updating +: %s -> %s : %f' %\
-                    (edge.source.key, edge.target.key, self.values[key]))
+#                 logging.getLogger('main').debug('updating +: %s -> %s : %f' %\
+#                     (edge.source.key, edge.target.key, self.values[key]))
         # second loop because all present edges must be processed first
         for i, edge in enumerate(sampler.edges):
             key = self.key_for_edge(edge)   # only for debug
             if edge not in edge.source.edges:
                 # the edge was absent in the last graphs
                 self.edge_added(sampler, i, edge)
-                logging.getLogger('main').debug('updating -: %s -> %s : %f' %\
-                    (edge.source.key, edge.target.key, self.values[key]))
+#                 logging.getLogger('main').debug('updating -: %s -> %s : %f' %\
+#                     (edge.source.key, edge.target.key, self.values[key]))
 
     def edge_added(self, sampler, idx, edge):
         key = self.key_for_edge(edge)
@@ -333,6 +339,11 @@ class PathFrequencyStatistic(WordpairStatistic):
             self.comp[x] = comp_source
         for x in comp_target:
             self.comp[x] = comp_target
+
+#     def next_iter(self, sampler):
+#         if sampler.num % 1000 == 0:
+#             logging.getLogger('main').debug('size of PathFrequencyStatistic dict: %d' %\
+#                 len(self.values))
 
 class RuleStatistic(MCMCStatistic):
     def __init__(self, sampler):
