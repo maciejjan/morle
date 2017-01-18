@@ -82,7 +82,7 @@ def print_results(precision, recall, fscore, prob_bins):
 def run():
     eval_vocab, eval_edges = load_evaluation_data()
     edges = load_experiment_data()
-    prob_bins = [i/10 for i in range(10)]
+    prob_bins = [i/100 for i in range(10)] + [i/10 for i in range(1, 10)]
     precision, recall, fscore = \
         evaluate(edges, eval_edges, eval_vocab, prob_bins)
     print_results(precision, recall, fscore, prob_bins)
