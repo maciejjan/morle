@@ -2,6 +2,12 @@ from utils.files import open_to_write, read_tsv_file, write_line
 import shared
 
 
+def load_baseline_data():
+    return sorted(list(set(
+               (min(word_1, word_2), max(word_1, word_2))\
+                for (word_1, word_2) in read_tsv_file(\
+                    shared.filenames['graph'], types=(str, str)))))
+
 def load_evaluation_data():
     vocab = set(word for (word,) in read_tsv_file(\
                 shared.filenames['eval.graph.vocab']))
@@ -19,6 +25,43 @@ def load_experiment_data():
              for word_1, word_2, prob in reader if float(prob) > 0.0]
     edges.sort()
     return edges
+
+def eval_baseline(edges, eval_edges, eval_vocab):
+    i_edges = iter(edges)
+    i_eval_edges = iter(eval_edges)
+    cur_edge = next(i_edges)
+    cur_eval_edge = next(i_eval_edges)
+
+    tp, fp, fn = 0, 0, 0
+
+    while True:
+        if cur_edge[:2] == cur_eval_edge[:2]:
+            tp += 1
+            try:
+                cur_edge = next(i_edges)
+                cur_eval_edge = next(i_eval_edges)
+            except StopIteration:
+                break
+        elif cur_edge[:2] < cur_eval_edge[:2]:
+            if cur_edge[0] in eval_vocab or cur_edge[1] in eval_vocab:
+                fp += 1
+            try:
+                cur_edge = next(i_edges)
+            except StopIteration:
+                break
+        else:
+            if cur_eval_edge[0] in eval_vocab or cur_eval_edge[1] in eval_vocab:
+                fn += 1
+            try:
+                cur_eval_edge = next(i_eval_edges)
+            except StopIteration:
+                break
+
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    fscore = 2 / (1/precision + 1/recall)
+
+    return precision, recall, fscore
 
 def evaluate(edges, eval_edges, eval_vocab, prob_bins):
     tp = [0] * len(prob_bins)
@@ -81,8 +124,15 @@ def print_results(precision, recall, fscore, prob_bins):
 
 def run():
     eval_vocab, eval_edges = load_evaluation_data()
+    baseline = load_baseline_data()
     edges = load_experiment_data()
-    prob_bins = [i/100 for i in range(10)] + [i/10 for i in range(1, 10)]
+
+    precision, recall, fscore = \
+        eval_baseline(baseline, eval_edges, eval_vocab)
+    print('bas\t{:2.2f}\t{:2.2f}\t{:2.2f}\t'.format(
+        precision*100, recall*100, fscore*100))
+    prob_bins = [i/1000 for i in range(10)] + [i/100 for i in range(1, 10)] +\
+                [i/10 for i in range(1, 10)]
     precision, recall, fscore = \
         evaluate(edges, eval_edges, eval_vocab, prob_bins)
     print_results(precision, recall, fscore, prob_bins)
