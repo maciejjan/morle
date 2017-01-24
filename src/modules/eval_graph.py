@@ -43,14 +43,14 @@ def eval_baseline(edges, eval_edges, eval_vocab):
             except StopIteration:
                 break
         elif cur_edge[:2] < cur_eval_edge[:2]:
-            if cur_edge[0] in eval_vocab or cur_edge[1] in eval_vocab:
+            if cur_edge[0] in eval_vocab and cur_edge[1] in eval_vocab:
                 fp += 1
             try:
                 cur_edge = next(i_edges)
             except StopIteration:
                 break
         else:
-            if cur_eval_edge[0] in eval_vocab or cur_eval_edge[1] in eval_vocab:
+            if cur_eval_edge[0] in eval_vocab and cur_eval_edge[1] in eval_vocab:
                 fn += 1
             try:
                 cur_eval_edge = next(i_eval_edges)
@@ -89,7 +89,7 @@ def evaluate(edges, eval_edges, eval_vocab, prob_bins):
                 except StopIteration:
                     break
             elif cur_edge[:2] < cur_eval_edge[:2]:
-                if cur_edge[0] in eval_vocab or cur_edge[1] in eval_vocab:
+                if cur_edge[0] in eval_vocab and cur_edge[1] in eval_vocab:
                     write_line(evalfp, cur_edge + (0.0,))
                     prob = cur_edge[2]
                     for i, pb in enumerate(prob_bins):
@@ -100,7 +100,7 @@ def evaluate(edges, eval_edges, eval_vocab, prob_bins):
                 except StopIteration:
                     break
             else:
-                if cur_eval_edge[0] in eval_vocab or cur_eval_edge[1] in eval_vocab:
+                if cur_eval_edge[0] in eval_vocab and cur_eval_edge[1] in eval_vocab:
                     write_line(evalfp, cur_eval_edge + (0.0, 1.0))
                     for i in range(len(prob_bins)):
                         fn[i] += 1
