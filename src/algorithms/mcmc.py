@@ -839,13 +839,14 @@ class MCMCAnnealingRuleSampler:
             self.evaluate_proposal(self.ruleset)
 
     def next(self):
+        logging.getLogger('main').debug('temperature = %f' % self.temperature)
         next_ruleset = self.proposal_dist.propose()
 #        self.print_proposal(next_ruleset)
         cost, next_proposal_dist = self.evaluate_proposal(next_ruleset)
         acc_prob = 1 if cost < self.cost else \
-            math.exp((self.cost - cost) * self.temperature) #*\
-#             math.exp(next_proposal_dist.proposal_logprob(self.ruleset) -\
-#                      self.proposal_dist.proposal_logprob(next_ruleset))
+            math.exp((self.cost - cost) * self.temperature) *\
+            math.exp(next_proposal_dist.proposal_logprob(self.ruleset) -\
+                     self.proposal_dist.proposal_logprob(next_ruleset))
         logging.getLogger('main').debug('acc_prob = %f' % acc_prob)
         if random.random() < acc_prob:
             self.cost = cost
@@ -900,7 +901,7 @@ class MCMCAnnealingRuleSampler:
     def update_temperature(self):
         alpha = shared.config['modsel'].getfloat('annealing_alpha')
         beta = shared.config['modsel'].getfloat('annealing_beta')
-        self.temperature = (self.num + alpha) / beta
+        self.temperature = (self.num + alpha) * beta
 
     def save_rules(self):
         # save rules
