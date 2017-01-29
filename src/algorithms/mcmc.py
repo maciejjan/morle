@@ -843,9 +843,9 @@ class MCMCAnnealingRuleSampler:
 #        self.print_proposal(next_ruleset)
         cost, next_proposal_dist = self.evaluate_proposal(next_ruleset)
         acc_prob = 1 if cost < self.cost else \
-            math.exp((self.cost - cost) * self.temperature) *\
-            math.exp(next_proposal_dist.proposal_logprob(self.ruleset) -\
-                     self.proposal_dist.proposal_logprob(next_ruleset))
+            math.exp((self.cost - cost) * self.temperature) #*\
+#             math.exp(next_proposal_dist.proposal_logprob(self.ruleset) -\
+#                      self.proposal_dist.proposal_logprob(next_ruleset))
         logging.getLogger('main').debug('acc_prob = %f' % acc_prob)
         if random.random() < acc_prob:
             self.cost = cost
