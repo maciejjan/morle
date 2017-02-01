@@ -28,6 +28,25 @@ class Feature:
     def reset(self):
         raise NotImplementedError()
 
+class ZeroCostFeature:
+    def __init__(self):
+        pass
+    
+    def cost_of_change(self, values_to_add, values_to_remove):
+        return 0.0
+    
+    def apply_change(self, values_to_add, values_to_remove):
+        pass
+
+    def fit(self, values):
+        pass
+
+    def null_cost(self):
+        return 0.0
+
+    def reset(self):
+        pass
+
 class StringFeature(Feature):
     '''A string feature drawn from an n-gram distribution.'''
 

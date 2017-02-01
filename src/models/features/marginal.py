@@ -220,7 +220,8 @@ class MarginalFeatureSet(FeatureSet):
     @staticmethod
     def new_rule_feature_set():
         result = MarginalFeatureSet()
-        result.features = (StringFeature(),)
+#         result.features = (StringFeature(),)
+        result.features = (ZeroCostFeature(),)
         result.weights = (1.0,)
         return result
     
