@@ -2,6 +2,7 @@ import shared
 import argparse
 import configparser
 import logging
+import os
 import os.path
 import re
 #import warnings
@@ -88,6 +89,8 @@ def setup():
     args = ap.parse_args()
     if args.workdir is not None:
         shared.options['working_dir'] = os.path.normpath(args.workdir)
+    else:
+        shared.options['working_dir'] = os.getcwd()
     if not os.path.isdir(shared.options['working_dir']):
         raise RuntimeError('%s: the supplied working directory does not exist!' %\
                            shared.options['working_dir'])

@@ -82,7 +82,7 @@ def softem(lexicon, model, edges):
         sampler.add_stat('exp_cost', ExpectedCostStatistic(sampler))
         sampler.run_sampling()
 
-        sample = list((edge, sampler.stats['exp_edge_freq'].value(i))\
+        sample = list((edge, sampler.stats['exp_edge_freq'].value(i, edge))\
                       for i, edge in enumerate(sampler.edges))
         model.fit_to_sample(sample)
         model.save_rules(shared.filenames['rules-fit'])

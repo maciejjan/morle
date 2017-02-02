@@ -25,15 +25,18 @@ def load_rules():
                 read_tsv_file(shared.filenames['rules-fit'], (str, int, float))]
 
 def build_rule_transducers(rules):
+    max_cost = shared.config['generate'].getfloat('max_cost')
     rules.sort(reverse=True, key=itemgetter(2))
     transducers, potential_words = [], 0
     for rule, domsize, prod in rules:
-        if potential_words + domsize >= shared.config['generate']\
-                                              .getint('max_words'):
-                break
-        rule.build_transducer(weight=-math.log(prod))
-        transducers.append(rule.transducer)
-        potential_words += domsize
+#         if potential_words + domsize >= shared.config['generate']\
+#                                               .getint('max_words'):
+#                 break
+        cost = -math.log(prod)
+        if cost < max_cost:
+            rule.build_transducer(weight=-math.log(prod))
+            transducers.append(rule.transducer)
+#         potential_words += domsize
     return transducers
 
 def word_generator():
@@ -51,17 +54,17 @@ def word_generator():
     tr.compose(rules_tr)
     tr.minimize()
 
-    count, max_count = 0, shared.config['generate'].getint('max_words')
+#     count, max_count = 0, shared.config['generate'].getint('max_words')
     for input_word, outputs in tr.extract_paths(output='dict').items():
         input_word = input_word.replace(hfst.EPSILON, '')
         for output_word, weight in outputs:
             output_word = output_word.replace(hfst.EPSILON, '')
             if output_word not in known_words:
                 yield (output_word, input_word, weight)
-                count += 1
-                if count >= max_count:
-                    return
-                known_words.add(output_word)
+#                 count += 1
+#                 if count >= max_count:
+#                     return
+#                 known_words.add(output_word)
 
 def run():
     wordgen = word_generator()
