@@ -133,6 +133,45 @@ def number_of_paths(transducer):
         paths_for_state = new_paths_for_state
     return result
 
+def delenv(alphabet, max_affix_size, max_infix_size, max_infix_slots):
+    
+    def add_deletion_chain(tr, alphabet, state, length):
+        for i in range(length):
+            for c in alphabet:
+                if c not in (hfst.EPSILON, hfst.IDENTITY, hfst.UNKNOWN):
+                    tr.add_transition(state+i,
+                                      hfst.HfstBasicTransition(
+                                          state+i+1, 
+                                          c, hfst.EPSILON, 0.0))
+        last_state = state + length
+        for i in range(length):
+            tr.add_transition(state+i,
+                              hfst.HfstBasicTransition(
+                                  last_state,
+                                  hfst.EPSILON, hfst.EPSILON, 0.0))
+        return last_state
+
+    def add_identity_loop(tr, alphabet, state):
+        for c in alphabet:
+            tr.add_transition(state,
+                              hfst.HfstBasicTransition(state, c, c, 0.0))
+
+    tr = hfst.HfstBasicTransducer()
+    # prefix
+    state = add_deletion_chain(tr, alphabet, 0, max_affix_size)
+    add_identity_loop(tr, alphabet, state)
+    # infixes
+    for i in range(max_infix_slots):
+        state = add_deletion_chain(tr, alphabet, state, max_infix_size)
+        add_identity_loop(tr, alphabet, state)
+    # suffix
+    state = add_deletion_chain(tr, alphabet, state, max_affix_size)
+    tr.set_final_weight(state, 0.0)
+    tr_c = hfst.HfstTransducer(tr, hfst.ImplementationType.SFST_TYPE)
+    tr_c.remove_epsilons()
+    tr_c.minimize()
+    return tr_c
+
 def rootgen_transducer(rootdist):
     # create an automaton for word generation
     if shared.config['Features'].getint('rootdist_n') != 1:
