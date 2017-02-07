@@ -226,16 +226,17 @@ class Lexicon:
             node.edges = []
             self.roots.add(node)
     
-    def build_transducer(self):
+    def build_transducer(self, print_progress=False):
         self.alphabet =\
             tuple(sorted(set(
                 itertools.chain(*(n.word+n.tag for n in self.nodes.values()))
             )))
         self.transducer =\
             algorithms.fst.binary_disjunct(
-                algorithms.fst.seq_to_transducer(\
-                        n.seq(), alphabet=self.alphabet)\
-                    for n in self.nodes.values()
+                [algorithms.fst.seq_to_transducer(\
+                         n.seq(), alphabet=self.alphabet)\
+                     for n in self.nodes.values()],
+                print_progress=print_progress
             )
     
     def save_to_file(self, filename):

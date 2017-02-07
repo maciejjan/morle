@@ -27,6 +27,7 @@ filenames = {\
     'eval.wordlist' : 'input.testing',
     'eval.report' : 'eval.txt',
     'graph' : 'graph.txt',
+    'analyze.graph' : 'graph.analyze',
     'graph-modsel' : 'graph-modsel.txt',
     'index' : 'index.txt',
     'lemmatizer-tr' : 'lemmatizer.fsm',
@@ -44,6 +45,7 @@ filenames = {\
     'tagger-tr' : 'tagger.fsm',
     'wordgen' : 'wordgen.txt',
     'wordlist' : 'input.training',
+    'analyze.wordlist' : 'input.analyze',
     'wordlist.left' : 'wordlist-left.training',
     'wordlist.right' : 'wordlist-right.training'
 }

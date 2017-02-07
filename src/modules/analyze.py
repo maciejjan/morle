@@ -1,31 +1,57 @@
-import hfst
-import logging
-import sys
-
+from algorithms.align import extract_all_rules
 import algorithms.fst
+from datastruct.lexicon import Lexicon
+from utils.files import file_exists, open_to_write, read_tsv_file, write_line
+from utils.printer import progress_printer
 import shared
 
-def prepare_analyzer():
-    analyzer = algorithms.fst.load_transducer(shared.filenames['lexicon-tr'])
-    rootgen = algorithms.fst.load_transducer(shared.filenames['rootgen-tr'])
-    rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+import hfst
+import logging
 
-    analyzer.minimize()
+
+def prepare_analyzer(lexicon):
+    rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+    logging.getLogger('main').info('Building lexicon transducer...')
+    lexicon.build_transducer(print_progress=True)
+    analyzer = hfst.HfstTransducer(lexicon.transducer)
+    logging.getLogger('main').info('Composing with rules...')
     analyzer.compose(rules_tr)
     analyzer.minimize()
-    rootgen.compose(rules_tr)
-    rootgen.minimize()
-    analyzer.disjunct(rootgen)
-    analyzer.invert()
-    analyzer.convert(hfst.HFST_OLW_TYPE)
-
+    logging.getLogger('main').info('Composing again with lexicon...')
+    analyzer.compose(lexicon.transducer)
+    analyzer.minimize()
+    analyzer.convert(hfst.ImplementationType.HFST_OLW_TYPE)
     return analyzer
 
+def load_rules():
+    filename = shared.filenames['rules-modsel']
+    if not file_exists(filename):
+        filename = shared.filename['rules']
+    rules = set()
+    for (rule,) in read_tsv_file(filename, types=(str,)):
+        rules.add(rule)
+    return rules
+
+def analyze(lexicon, rules, analyzer):
+    logging.getLogger('main').info('Analyzing...')
+    pp = progress_printer(len(lexicon))
+    with open_to_write(shared.filenames['analyze.graph']) as outfp:
+        for node in lexicon.iter_nodes():
+            similar_words = set([word for word, cost in\
+                                          analyzer.lookup(node.key)\
+                                          if node.key < word])
+            for word in similar_words:
+                for rule in extract_all_rules(node, lexicon[word]):
+                    if str(rule) in rules:
+                        write_line(outfp, (node.key, word, str(rule)))
+                    rule = rule.reverse()
+                    if str(rule) in rules:
+                        write_line(outfp, (word, node.key, str(rule)))
+            next(pp)
+
 def run():
-    analyzer = prepare_analyzer()
-    logging.getLogger('main').info('Ready.')
-    for line in sys.stdin:
-        word = line.rstrip()
-        for base, cost in analyzer.lookup(word):
-            print('\t'.join([base, str(cost)]))
+    lexicon = Lexicon.init_from_wordlist(shared.filenames['analyze.wordlist'])
+    analyzer = prepare_analyzer(lexicon)
+    rules = load_rules()
+    analyze(lexicon, rules, analyzer)
 
