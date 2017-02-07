@@ -20,7 +20,7 @@ def load_rules():
 def load_roots():
 
     def root_reader():
-        col = 0 if shared.config['General'].getboolean('supervised') else 1
+        col = 0 # if shared.config['General'].getboolean('supervised') else 1
         for row in read_tsv_file(shared.filenames['wordlist']):
             if col < len(row) and row[col]:
                 yield row[col]
