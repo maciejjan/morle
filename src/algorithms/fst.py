@@ -133,7 +133,8 @@ def number_of_paths(transducer):
         paths_for_state = new_paths_for_state
     return result
 
-def delenv(alphabet, max_affix_size, max_infix_size, max_infix_slots):
+def delenv(alphabet, max_affix_size, max_infix_size, max_infix_slots,
+           deletion_symbol='@_DEL_@'):
     
     def add_deletion_chain(tr, alphabet, state, length):
         for i in range(length):
@@ -142,7 +143,7 @@ def delenv(alphabet, max_affix_size, max_infix_size, max_infix_slots):
                     tr.add_transition(state+i,
                                       hfst.HfstBasicTransition(
                                           state+i+1, 
-                                          c, hfst.EPSILON, 0.0))
+                                          c, deletion_symbol, 0.0))
         last_state = state + length
         for i in range(length):
             tr.add_transition(state+i,
@@ -171,6 +172,43 @@ def delenv(alphabet, max_affix_size, max_infix_size, max_infix_slots):
     tr_c.remove_epsilons()
     tr_c.minimize()
     return tr_c
+    
+# TODO similar_words():
+#      lookup word to find out substrings,
+#      lookup each substring, sum and remove duplicates
+def delfilter(alphabet, length, deletion_symbol='@_DEL_@'):
+    tr = hfst.HfstBasicTransducer()
+    tr.set_final_weight(0, 0.0)
+    printable_chars = set(alphabet) -\
+                      { hfst.EPSILON, hfst.IDENTITY, hfst.UNKNOWN,
+                        deletion_symbol }
+    for i in range(length):
+        for c in printable_chars:
+            tr.add_transition(i,
+                              hfst.HfstBasicTransition(i+1, c, c, 0.0))
+        tr.add_transition(i+1,
+                          hfst.HfstBasicTransition(
+                              i, deletion_symbol, hfst.EPSILON, 0.0))
+        tr.set_final_weight(i+1, 0.0)
+    first_negative_state = length+1
+    tr.add_transition(0, hfst.HfstBasicTransition(
+                             first_negative_state, deletion_symbol,
+                             hfst.EPSILON, 0.0))
+    for c in printable_chars:
+        tr.add_transition(first_negative_state, 
+                          hfst.HfstBasicTransition(0, c, c, 0.0))
+    for i in range(length-1):
+        tr.add_transition(first_negative_state+i,
+                          hfst.HfstBasicTransition(
+                              first_negative_state+i+1, 
+                              deletion_symbol, hfst.EPSILON, 0.0))
+        for c in printable_chars:
+            tr.add_transition(first_negative_state+i+1,
+                              hfst.HfstBasicTransition(
+                                  first_negative_state+i, c, c, 0.0))
+    tr_c = hfst.HfstTransducer(tr, hfst.ImplementationType.SFST_TYPE)
+    return tr_c
+                                                   
 
 def rootgen_transducer(rootdist):
     # create an automaton for word generation
