@@ -167,7 +167,7 @@ def delenv(alphabet, max_affix_size, max_infix_size, max_infix_slots):
     # suffix
     state = add_deletion_chain(tr, alphabet, state, max_affix_size)
     tr.set_final_weight(state, 0.0)
-    tr_c = hfst.HfstTransducer(tr, hfst.ImplementationType.SFST_TYPE)
+    tr_c = hfst.HfstTransducer(tr)
     tr_c.remove_epsilons()
     tr_c.minimize()
     return tr_c
