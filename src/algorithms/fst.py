@@ -206,7 +206,7 @@ def delfilter(alphabet, length, deletion_symbol='@_DEL_@'):
             tr.add_transition(first_negative_state+i+1,
                               hfst.HfstBasicTransition(
                                   first_negative_state+i, c, c, 0.0))
-    tr_c = hfst.HfstTransducer(tr, hfst.ImplementationType.SFST_TYPE)
+    tr_c = hfst.HfstTransducer(tr)
     return tr_c
                                                    
 
