@@ -134,18 +134,21 @@ def number_of_paths(transducer):
     return result
 
 def delenv(alphabet, max_affix_size, max_infix_size, max_infix_slots,
-           deletion_symbol='@_DEL_@'):
+           deletion_symbol='@_DEL_@', deletion_slot_symbol='@_DELSLOT_@'):
     
     def add_deletion_chain(tr, alphabet, state, length):
-        for i in range(length):
+        tr.add_transition(state,
+                          hfst.HfstBasicTransition(
+                              state+1, hfst.EPSILON, deletion_slot_symbol, 0.0))
+        for i in range(1, length+1):
             for c in alphabet:
                 if c not in (hfst.EPSILON, hfst.IDENTITY, hfst.UNKNOWN):
                     tr.add_transition(state+i,
                                       hfst.HfstBasicTransition(
                                           state+i+1, 
                                           c, deletion_symbol, 0.0))
-        last_state = state + length
-        for i in range(length):
+        last_state = state + length + 1
+        for i in [0] + list(range(2, length+1)):
             tr.add_transition(state+i,
                               hfst.HfstBasicTransition(
                                   last_state,
@@ -154,17 +157,21 @@ def delenv(alphabet, max_affix_size, max_infix_size, max_infix_slots,
 
     def add_identity_loop(tr, alphabet, state):
         for c in alphabet:
-            tr.add_transition(state,
-                              hfst.HfstBasicTransition(state, c, c, 0.0))
+            if c not in (hfst.EPSILON, hfst.IDENTITY, hfst.UNKNOWN):
+                tr.add_transition(state,
+                                  hfst.HfstBasicTransition(state+1, c, c, 0.0))
+                tr.add_transition(state+1,
+                                  hfst.HfstBasicTransition(state+1, c, c, 0.0))
+        return state+1
 
     tr = hfst.HfstBasicTransducer()
     # prefix
     state = add_deletion_chain(tr, alphabet, 0, max_affix_size)
-    add_identity_loop(tr, alphabet, state)
+    state = add_identity_loop(tr, alphabet, state)
     # infixes
     for i in range(max_infix_slots):
         state = add_deletion_chain(tr, alphabet, state, max_infix_size)
-        add_identity_loop(tr, alphabet, state)
+        state = add_identity_loop(tr, alphabet, state)
     # suffix
     state = add_deletion_chain(tr, alphabet, state, max_affix_size)
     tr.set_final_weight(state, 0.0)
@@ -176,9 +183,13 @@ def delenv(alphabet, max_affix_size, max_infix_size, max_infix_slots,
 # TODO similar_words():
 #      lookup word to find out substrings,
 #      lookup each substring, sum and remove duplicates
-def delfilter(alphabet, length, deletion_symbol='@_DEL_@'):
+def delfilter(alphabet, length, deletion_symbol='@_DEL_@',
+              deletion_slot_symbol='@_DELSLOT_@'):
     tr = hfst.HfstBasicTransducer()
     tr.set_final_weight(0, 0.0)
+    tr.add_transition(0,
+                      hfst.HfstBasicTransition(
+                          0, deletion_slot_symbol, deletion_slot_symbol, 0.0))
     printable_chars = set(alphabet) -\
                       { hfst.EPSILON, hfst.IDENTITY, hfst.UNKNOWN,
                         deletion_symbol }
@@ -189,6 +200,9 @@ def delfilter(alphabet, length, deletion_symbol='@_DEL_@'):
         tr.add_transition(i+1,
                           hfst.HfstBasicTransition(
                               i, deletion_symbol, hfst.EPSILON, 0.0))
+        tr.add_transition(i+1,
+                          hfst.HfstBasicTransition(
+                              i+1, deletion_slot_symbol, deletion_slot_symbol, 0.0))
         tr.set_final_weight(i+1, 0.0)
     first_negative_state = length+1
     tr.add_transition(0, hfst.HfstBasicTransition(
@@ -202,6 +216,9 @@ def delfilter(alphabet, length, deletion_symbol='@_DEL_@'):
                           hfst.HfstBasicTransition(
                               first_negative_state+i+1, 
                               deletion_symbol, hfst.EPSILON, 0.0))
+        tr.add_transition(first_negative_state+i+1,
+                          hfst.HfstBasicTransition(
+                              first_negative_state+i+1, deletion_slot_symbol, deletion_slot_symbol, 0.0))
         for c in printable_chars:
             tr.add_transition(first_negative_state+i+1,
                               hfst.HfstBasicTransition(
