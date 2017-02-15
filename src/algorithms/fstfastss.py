@@ -49,18 +49,3 @@ def similar_words(tr_left, tr_right=None):
         count += 1
         print('\r', count, sep='', end='')
 
-#     for word_left in words_left:
-#         substrings = [remove_eps(substr)\
-#                       for cost, substr in my_tr_left.lookup(word_left,
-#                                                             output='raw')]
-#         max_len = max(len(ss) for ss in substrings)
-#         seqs = [list(zip(ss, ss)) for ss in substrings 
-#                                   if len(ss) >= max_len / 2]
-#         t = binary_disjunct(seq_to_transducer(seq, alphabet=my_tr_left.get_alphabet()) for seq in seqs)
-#         t.compose(my_tr_right)
-#         t.output_project()
-#         t.minimize()
-#         for word_right in t.extract_paths():
-#             yield (word_left, word_right)
-
-
