@@ -148,7 +148,7 @@ def delenv(alphabet, max_affix_size, max_infix_size, max_infix_slots,
                                           state+i+1, 
                                           c, deletion_symbol, 0.0))
         last_state = state + length + 1
-        for i in [0] + list(range(2, length+1)):
+        for i in range(length+1):
             tr.add_transition(state+i,
                               hfst.HfstBasicTransition(
                                   last_state,

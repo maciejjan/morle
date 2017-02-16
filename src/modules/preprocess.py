@@ -12,12 +12,14 @@ import logging
 def expand_graph(graph_file):
     '''Annotate graph with additional information needed for filtering:
        currently rule frequencies.'''
+    min_freq = shared.config['preprocess'].getint('min_rule_freq')
     with open_to_write(graph_file + '.tmp') as graph_tmp_fp:
         for rule, wordpairs in read_tsv_file_by_key(graph_file, 3, 
                 print_progress=True, print_msg='Expanding the graph for filtering...'):
             freq = len(wordpairs)
-            for w1, w2 in wordpairs:
-                write_line(graph_tmp_fp, (w1, w2, rule, freq))
+            if freq >= min_freq:
+                for w1, w2 in wordpairs:
+                    write_line(graph_tmp_fp, (w1, w2, rule, freq))
     rename_file(graph_file + '.tmp', graph_file)
 
 def contract_graph(graph_file):
@@ -58,21 +60,21 @@ def filter_max_edges_per_wordpair(graph_file):
     sort_file(graph_file, stable=True, numeric=True, reverse=True, key=4)
     update_file_size(graph_file)
 
-def filter_min_rule_freq(graph_file):
-    with open_to_write(graph_file + '.tmp') as graph_fil_fp:
-        for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file, (3, 4),
-                print_progress=True, print_msg='filter_min_rule_freq'):
-            if len(wordpairs) >= shared.config['preprocess'].getint('min_rule_freq'):
-                for word_1, word_2 in wordpairs:
-                    write_line(graph_fil_fp, (word_1, word_2, rule, freq))
-    rename_file(graph_file + '.tmp', graph_file)
-    update_file_size(graph_file)
+# def filter_min_rule_freq(graph_file):
+#     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
+#         for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file, (3, 4),
+#                 print_progress=True, print_msg='filter_min_rule_freq'):
+#             if len(wordpairs) >= shared.config['preprocess'].getint('min_rule_freq'):
+#                 for word_1, word_2 in wordpairs:
+#                     write_line(graph_fil_fp, (word_1, word_2, rule, freq))
+#     rename_file(graph_file + '.tmp', graph_file)
+#     update_file_size(graph_file)
 
 def run_filters(graph_file):
     expand_graph(graph_file)
     filter_max_num_rules(graph_file)
     filter_max_edges_per_wordpair(graph_file)
-    filter_min_rule_freq(graph_file)
+#     filter_min_rule_freq(graph_file)
     contract_graph(graph_file)
 
 def filter_rules(graph_file):
@@ -104,6 +106,12 @@ def build_graph_allrules(lexicon, graph_file):
             for rule in algorithms.align.extract_all_rules(n1, n2):
                 write_line(fp, (str(n1), str(n2), str(rule)))
                 write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
+
+def build_graph_fstfastss(lexicon, graph_file):
+    # TODO preprocessing
+    # TODO thread
+    # TODO multi-threaded processing
+    pass
 
 def build_graph_bipartite(lexicon_left, lexicon_right, graph_file):
     with open_to_write(graph_file) as fp:
