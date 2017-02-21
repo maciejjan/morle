@@ -2,10 +2,10 @@ import algorithms.align
 import algorithms.fastss
 import algorithms.fst
 import algorithms.fstfastss
-import algorithms.splrules
+# import algorithms.splrules # TODO deprecated
 from datastruct.lexicon import *
 from datastruct.rules import *
-from models.point import *
+# from models.point import *
 from utils.files import *
 from utils.printer import *
 
@@ -64,6 +64,7 @@ def filter_max_edges_per_wordpair(graph_file):
     sort_files(graph_file, stable=True, numeric=True, reverse=True, key=4)
     update_file_size(graph_file)
 
+#TODO not needed -> done by expand_graph()
 # def filter_min_rule_freq(graph_file):
 #     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
 #         for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file, (3, 4),

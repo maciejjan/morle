@@ -1,5 +1,5 @@
 from collections import defaultdict
-import algorithms.branching
+# import algorithms.branching # TODO deprecated
 from algorithms.mcmc import *
 #import algorithms.ngrams
 #import algorithms.optrules
@@ -14,52 +14,53 @@ from utils.printer import *
 #
 #import math
 
-def hardem(lexicon, model, edges):
-    old_cost = lexicon.cost + model.cost
-    old_num_rules = model.num_rules()
-    iter_num = 0
-    print('num_rules = %d' % old_num_rules)
-    print('cost = %f' % old_cost)
-
-    # main EM loop
-#    while True:
-    while iter_num < settings.EM_MAX_ITERATIONS:
-        iter_num += 1
-        print()
-        print('=== Iteration %d ===' % iter_num)
-        print('Resetting lexicon...')
-        lexicon.reset(model)
-#        lexicon.recompute_cost(model)
-        # compute maximum branching
-        print('Computing maximum branching...')
-        vertices = list(lexicon.iter_nodes())
-        edges = list(e for e in edges if model.has_rule(e.rule))
-        branching = algorithms.branching.branching(vertices, edges)
-        for e in branching:
-            lexicon.add_edge(e)
-        print('intermediate lexicon cost: %f' % lexicon.cost)
-        # fit the model to the optimum lexicon
-        print('Fitting the model...')
-        model.fit_to_lexicon(lexicon)
-        # recompute edge costs
-        for e in edges:
-            if model.has_rule(e.rule):
-                e.cost = model.edge_cost(e)
-            elif lexicon.has_edge(e):
-                lexicon.remove_edge(e)
-        lexicon.recompute_cost(model)
-        # compute iteration statistics and interruption criterion
-        num_rules = model.num_rules()
-        cost = lexicon.cost + model.cost
-        print('num_rules = %d' % num_rules)
-        print('lexicon cost = %f' % lexicon.cost)
-        print('model cost = %f' % model.cost)
-        print('total cost = %f' % cost)
-#        if 0 <= old_cost-cost <= 1 and num_rules == old_num_rules:
-#            break
-#        break # TODO test
-        old_cost = cost
-        old_num_rules = num_rules
+# TODO deprecated
+# def hardem(lexicon, model, edges):
+#     old_cost = lexicon.cost + model.cost
+#     old_num_rules = model.num_rules()
+#     iter_num = 0
+#     print('num_rules = %d' % old_num_rules)
+#     print('cost = %f' % old_cost)
+# 
+#     # main EM loop
+# #    while True:
+#     while iter_num < settings.EM_MAX_ITERATIONS:
+#         iter_num += 1
+#         print()
+#         print('=== Iteration %d ===' % iter_num)
+#         print('Resetting lexicon...')
+#         lexicon.reset(model)
+# #        lexicon.recompute_cost(model)
+#         # compute maximum branching
+#         print('Computing maximum branching...')
+#         vertices = list(lexicon.iter_nodes())
+#         edges = list(e for e in edges if model.has_rule(e.rule))
+#         branching = algorithms.branching.branching(vertices, edges)
+#         for e in branching:
+#             lexicon.add_edge(e)
+#         print('intermediate lexicon cost: %f' % lexicon.cost)
+#         # fit the model to the optimum lexicon
+#         print('Fitting the model...')
+#         model.fit_to_lexicon(lexicon)
+#         # recompute edge costs
+#         for e in edges:
+#             if model.has_rule(e.rule):
+#                 e.cost = model.edge_cost(e)
+#             elif lexicon.has_edge(e):
+#                 lexicon.remove_edge(e)
+#         lexicon.recompute_cost(model)
+#         # compute iteration statistics and interruption criterion
+#         num_rules = model.num_rules()
+#         cost = lexicon.cost + model.cost
+#         print('num_rules = %d' % num_rules)
+#         print('lexicon cost = %f' % lexicon.cost)
+#         print('model cost = %f' % model.cost)
+#         print('total cost = %f' % cost)
+# #        if 0 <= old_cost-cost <= 1 and num_rules == old_num_rules:
+# #            break
+# #        break # TODO test
+#         old_cost = cost
+#         old_num_rules = num_rules
 
 def softem(lexicon, model, edges):
     iter_num = 0
