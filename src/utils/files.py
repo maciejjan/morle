@@ -123,8 +123,16 @@ def remove_file_if_exists(filename):
         os.remove(path)
 
 # sort file using the unix command
-def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False, stable=False, unique=False):
-    sort_call = ['sort', full_path(infile), '-T', shared.options['working_dir']]
+def sort_files(infiles, outfile=None, key=None, reverse=False, numeric=False, 
+               stable=False, unique=False, threads=None):
+    sort_call = ['sort']
+    if isinstance(infiles, str):
+        sort_call.append(full_path(infiles))
+    elif isinstance(infiles, list):
+        sort_call.extend([full_path(infile) for infile in infiles])
+    else:
+        raise RuntimeError('sort: wrong input type!')
+    sort_call += ['-T', shared.options['working_dir']]
     if key:
         if isinstance(key, tuple) and len(key) == 2:
             sort_call.append('-k%d,%d' % key)
@@ -141,16 +149,30 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False, stab
         sort_call.append('-s')
     if unique:
         sort_call.append('-u')
+    if threads is not None and isinstance(threads, int):
+        sort_call.append('--parallel={}'.format(threads))
     sort_call.append('-o')
     if outfile:
         sort_call.append(full_path(outfile))
     else:
-        sort_call.append(full_path(infile) + '.sorted')
+        if isinstance(infiles, str):
+            sort_call.append(full_path(infiles) + '.sorted')
+        elif isinstance(infiles, list):
+            sort_call.append(full_path(infiles[0]) + '.sorted')
+        else:
+            raise RuntimeError('sort: wrong input type!')
     logging.getLogger('main').debug(' '.join(sort_call))
     os.system(' '.join(sort_call))
     if outfile is None:
-        remove_file(infile)
-        rename_file(infile + '.sorted', infile)
+        if isinstance(infiles, str):
+            remove_file(infiles)
+            rename_file(infiles + '.sorted', infiles)
+        elif isinstance(infiles, list):
+            for infile in infiles:
+                remove_file(infile)
+            rename_file(infiles[0] + '.sorted', infiles[0])
+        else:
+            raise RuntimeError('sort: wrong input type!')
 
 def aggregate_file(infile, outfile=None, key=1):
     if outfile is None:
