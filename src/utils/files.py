@@ -124,7 +124,7 @@ def remove_file_if_exists(filename):
 
 # sort file using the unix command
 def sort_files(infiles, outfile=None, key=None, reverse=False, numeric=False, 
-               stable=False, unique=False, threads=None):
+               stable=False, unique=False, parallel=None):
     sort_call = ['sort']
     if isinstance(infiles, str):
         sort_call.append(full_path(infiles))
@@ -149,8 +149,8 @@ def sort_files(infiles, outfile=None, key=None, reverse=False, numeric=False,
         sort_call.append('-s')
     if unique:
         sort_call.append('-u')
-    if threads is not None and isinstance(threads, int):
-        sort_call.append('--parallel={}'.format(threads))
+    if parallel is not None and isinstance(parallel, int):
+        sort_call.append('--parallel={}'.format(parallel))
     sort_call.append('-o')
     if outfile:
         sort_call.append(full_path(outfile))

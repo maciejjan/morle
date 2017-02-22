@@ -1,4 +1,4 @@
-import algorithms.ngrams
+# import algorithms.ngrams #TODO deprecated
 import shared
 
 class FeatureValueExtractor:

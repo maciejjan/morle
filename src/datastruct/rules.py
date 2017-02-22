@@ -4,7 +4,7 @@ from utils.files import *
 import hfst
 import re
 #from scipy.stats import norm
-from algorithms.ngrams import *
+# from algorithms.ngrams import *
 from operator import itemgetter
 #import math
 
@@ -88,19 +88,20 @@ class Rule:
 ##            break
 #        return sum(len(t.lookup(node.key)) for node in lexicon.iter_nodes())
 
-    def get_trigrams(self):
-        trigrams = []
-        for tr in generate_n_grams(('^',)+self.subst[0][0]+(hfst.IDENTITY,), 3):
-            if len(tr) == 3:
-                trigrams.append(tr)
-        for alt in self.subst[1:-1]:
-            for tr in generate_n_grams((hfst.IDENTITY,)+alt[0]+(hfst.IDENTITY,), 3):
-                if len(tr) == 3:
-                    trigrams.append(tr)
-        for tr in generate_n_grams((hfst.IDENTITY,)+self.subst[-1][0]+('$',), 3):
-            if len(tr) == 3:
-                trigrams.append(tr)
-        return trigrams
+# TODO deprecated
+#     def get_trigrams(self):
+#         trigrams = []
+#         for tr in generate_n_grams(('^',)+self.subst[0][0]+(hfst.IDENTITY,), 3):
+#             if len(tr) == 3:
+#                 trigrams.append(tr)
+#         for alt in self.subst[1:-1]:
+#             for tr in generate_n_grams((hfst.IDENTITY,)+alt[0]+(hfst.IDENTITY,), 3):
+#                 if len(tr) == 3:
+#                     trigrams.append(tr)
+#         for tr in generate_n_grams((hfst.IDENTITY,)+self.subst[-1][0]+('$',), 3):
+#             if len(tr) == 3:
+#                 trigrams.append(tr)
+#         return trigrams
 
     def seq(self):
         x_seq, y_seq = [], []
@@ -129,8 +130,9 @@ class Rule:
             seq.extend(self.tag_subst[0])
         return tuple(seq)
     
-    def ngrams(self):
-        pass
+#   TODO deprecated
+#     def ngrams(self):
+#         pass
     
     @staticmethod
     def from_seq(seq, tag_subst):

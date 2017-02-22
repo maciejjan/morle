@@ -1,4 +1,5 @@
-from algorithms.fst import binary_disjunct, delenv, delfilter, seq_to_transducer, save_transducer
+from algorithms.fst import binary_disjunct, delenv, delfilter,\
+                           seq_to_transducer, save_transducer
 from utils.printer import progress_printer
 import shared
 
@@ -28,7 +29,8 @@ def build_fastss_cascade(lex_tr_left, lex_tr_right=None, max_word_len=20):
     if lex_tr_right is None:
         fastss_tr_right = hfst.HfstTransducer(fastss_tr_left)
     else:
-        fastss_tr_right = build_substring_transducer(lex_tr_right, max_word_len)
+        fastss_tr_right = \
+            build_substring_transducer(lex_tr_right, max_word_len)
     fastss_tr_right.invert()
 
     fastss_tr_left.convert(hfst.ImplementationType.HFST_OL_TYPE)
@@ -52,6 +54,8 @@ def build_fastss_cascade(lex_tr_left, lex_tr_right=None, max_word_len=20):
     finally:
         ostr.close()
 
+# TODO parameter `restart_interval` -- restart the subprocess every N words
+#      to counter the memory leak
 def similar_words(words, transducer_path):
     cmd = ['hfst-lookup', '-i', transducer_path, '-C', 'composition']
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -75,7 +79,4 @@ def similar_words(words, transducer_path):
         count += 1
     p.stdin.close()
     p.wait()
-
-# TODO:
-# - start multiple subprocesses in parallel and return their outputs
 

@@ -10,8 +10,23 @@ from utils.files import *
 from utils.printer import *
 
 import logging
+import multiprocessing
 import os.path
-import threading
+# import threading
+
+
+def partition_data_for_threads(size):
+    '''Divides the data into equal chunks for threads.
+       Takes only the size of the data as parameter
+       and returns the indices for each thread.'''
+    num_threads = shared.config['preprocess'].getint('num_threads')
+    step = size // num_threads
+    cur_idx = 0
+    for i in range(num_threads-1):
+        yield (cur_idx, cur_idx+step)
+        cur_idx += step
+    # take account for the rounding error in the last chunk
+    yield (cur_idx, size)
 
 def expand_graph(graph_file):
     '''Annotate graph with additional information needed for filtering:
@@ -19,12 +34,14 @@ def expand_graph(graph_file):
     min_freq = shared.config['preprocess'].getint('min_rule_freq')
     with open_to_write(graph_file + '.tmp') as graph_tmp_fp:
         for rule, wordpairs in read_tsv_file_by_key(graph_file, 3, 
-                print_progress=True, print_msg='Expanding the graph for filtering...'):
+                print_progress=True,
+                print_msg='Expanding the graph for filtering...'):
             freq = len(wordpairs)
             if freq >= min_freq:
                 for w1, w2 in wordpairs:
                     write_line(graph_tmp_fp, (w1, w2, rule, freq))
     rename_file(graph_file + '.tmp', graph_file)
+    update_file_size(graph_file)
 
 def contract_graph(graph_file):
     '''Remove any additional information needed for filtering.'''
@@ -64,22 +81,22 @@ def filter_max_edges_per_wordpair(graph_file):
     sort_files(graph_file, stable=True, numeric=True, reverse=True, key=4)
     update_file_size(graph_file)
 
-#TODO not needed -> done by expand_graph()
-# def filter_min_rule_freq(graph_file):
-#     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
-#         for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file, (3, 4),
-#                 print_progress=True, print_msg='filter_min_rule_freq'):
-#             if len(wordpairs) >= shared.config['preprocess'].getint('min_rule_freq'):
-#                 for word_1, word_2 in wordpairs:
-#                     write_line(graph_fil_fp, (word_1, word_2, rule, freq))
-#     rename_file(graph_file + '.tmp', graph_file)
-#     update_file_size(graph_file)
+# again, because after other filters some frequencies have decreased
+def filter_min_rule_freq(graph_file):
+    with open_to_write(graph_file + '.tmp') as graph_fil_fp:
+        for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file, (3, 4),
+                print_progress=True, print_msg='filter_min_rule_freq'):
+            if len(wordpairs) >= shared.config['preprocess'].getint('min_rule_freq'):
+                for word_1, word_2 in wordpairs:
+                    write_line(graph_fil_fp, (word_1, word_2, rule, freq))
+    rename_file(graph_file + '.tmp', graph_file)
+    update_file_size(graph_file)
 
 def run_filters(graph_file):
     expand_graph(graph_file)
     filter_max_num_rules(graph_file)
     filter_max_edges_per_wordpair(graph_file)
-#     filter_min_rule_freq(graph_file)
+    filter_min_rule_freq(graph_file)
     contract_graph(graph_file)
 
 def filter_rules(graph_file):
@@ -97,13 +114,14 @@ def filter_rules(graph_file):
     rename_file(graph_file + '.filtered', graph_file)
 
 
-def build_graph(lexicon, graph_file):
-    with open_to_write(graph_file) as fp:
-        for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
-            rule = algorithms.align.extract_rule(n1, n2)
-            if rule is not None:
-                write_line(fp, (str(n1), str(n2), str(rule)))
-                write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
+# TODO deprecated
+# def build_graph(lexicon, graph_file):
+#     with open_to_write(graph_file) as fp:
+#         for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
+#             rule = algorithms.align.extract_rule(n1, n2)
+#             if rule is not None:
+#                 write_line(fp, (str(n1), str(n2), str(rule)))
+#                 write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
 
 def build_graph_allrules(lexicon, graph_file):
     with open_to_write(graph_file) as fp:
@@ -111,31 +129,8 @@ def build_graph_allrules(lexicon, graph_file):
             for rule in algorithms.align.extract_all_rules(n1, n2):
                 write_line(fp, (str(n1), str(n2), str(rule)))
                 write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
+    sort_files(graph_file, key=3)
 
-
-class CandidateEdgeExtractor(threading.Thread):
-    def __init__(self, lexicon, words, transducer_path, output_file):
-        threading.Thread.__init__(self)
-        self.lexicon = lexicon
-        self.words = words
-        self.transducer_path = transducer_path
-#         self.out_lock = out_lock
-        self.output_file = output_file
-
-    def run(self):
-        # TODO logging in the depth of similar_words() - show progress
-        # TODO one file per thread and merge at the end?
-        sw = algorithms.fstfastss.similar_words(self.words, self.transducer_path)
-        with open_to_write(self.output_file) as outfp:
-            for word_1, word_2 in sw:
-                if word_1 < word_2:
-                    n1, n2 = self.lexicon[word_1], self.lexicon[word_2]
-                    rules = algorithms.align.extract_all_rules(n1, n2)
-#                 with self.out_lock:
-                    for rule in rules:
-                        write_line(outfp, (str(n1), str(n2), str(rule)))
-                        write_line(outfp, (str(n2), str(n1), 
-                                           rule.reverse().to_string()))
 
 def build_graph_fstfastss(lexicon, graph_file):
     transducer_path = os.path.join(shared.options['working_dir'], 'fastss.fsm')
@@ -144,34 +139,86 @@ def build_graph_fstfastss(lexicon, graph_file):
     algorithms.fstfastss.build_fastss_cascade(lexicon.transducer, 
                                               max_word_len=max_word_length)
 
-    def _partition_input_data(size):
-        num_threads = shared.config['preprocess'].getint('num_threads')
-        step = size // num_threads
-        cur_idx = 0
-        for i in range(num_threads-1):
-            yield (cur_idx, cur_idx+step)
-            cur_idx += step
-        # take account for the rounding error in the last chunk
-        yield (cur_idx, size)
+    def _extract_candidate_edges(lexicon, words, transducer_path, output_file):
+        sw = algorithms.fstfastss.similar_words(words, transducer_path)
+        with open_to_write(output_file) as outfp:
+            for word_1, word_2 in sw:
+                if word_1 < word_2:
+                    n1, n2 = lexicon[word_1], lexicon[word_2]
+                    rules = algorithms.align.extract_all_rules(n1, n2)
+                    for rule in rules:
+                        write_line(outfp, (str(n1), str(n2), str(rule)))
+                        write_line(outfp, (str(n2), str(n1), 
+                                           rule.reverse().to_string()))
 
     logging.getLogger('main').info('Building the graph...')
     words = list(lexicon.keys())
-    threads, thread_outfiles = [], []
-    for thread_id, (i, j) in enumerate(_partition_input_data(len(words))):
-        print(thread_id, i, j)
-        thread_outfile = graph_file + '.' + str(thread_id)
-        t = CandidateEdgeExtractor(lexicon, words[i:j], transducer_path,
-                                   thread_outfile)
-        threads.append(t)
-        thread_outfiles.append(thread_outfile)
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-    num_threads = shared.config['preprocess'].getint('num_threads')
-    sort_files(thread_outfiles, outfile=graph_file, key=3, threads=num_threads)
-    for filename in thread_outfiles:
-        remove_file(filename)
+    processes, outfiles = [], []
+    for p_id, (i, j) in enumerate(partition_data_for_threads(len(words))):
+        print(p_id, i, j)
+        outfile = graph_file + '.' + str(p_id)
+        p = multiprocessing.Process(target=_extract_candidate_edges,
+                                    args=(lexicon, words[i:j],
+                                          transducer_path, outfile))
+        processes.append(p)
+        outfiles.append(outfile)
+    for p in processes:
+        p.start()
+    for p in processes:
+        p.join()
+    sort_files(outfiles, outfile=graph_file, key=3, parallel=len(processes))
+    for outfile in outfiles:
+        remove_file(outfile)
+
+# class CandidateEdgeExtractionThread(threading.Thread):
+#     def __init__(self, lexicon, words, transducer_path, output_file):
+#         threading.Thread.__init__(self)
+#         self.lexicon = lexicon
+#         self.words = words
+#         self.transducer_path = transducer_path
+# #         self.out_lock = out_lock
+#         self.output_file = output_file
+# 
+#     def run(self):
+#         # TODO logging in the depth of similar_words() - show progress
+#         # TODO one file per thread and merge at the end?
+#         sw = algorithms.fstfastss.similar_words(self.words, self.transducer_path)
+#         with open_to_write(self.output_file) as outfp:
+#             for word_1, word_2 in sw:
+#                 if word_1 < word_2:
+#                     n1, n2 = self.lexicon[word_1], self.lexicon[word_2]
+#                     rules = algorithms.align.extract_all_rules(n1, n2)
+# #                 with self.out_lock:
+#                     for rule in rules:
+#                         write_line(outfp, (str(n1), str(n2), str(rule)))
+#                         write_line(outfp, (str(n2), str(n1), 
+#                                            rule.reverse().to_string()))
+# 
+# def build_graph_fstfastss(lexicon, graph_file):
+#     transducer_path = os.path.join(shared.options['working_dir'], 'fastss.fsm')
+#     max_word_length = max([len(n.seq()) for n in lexicon.iter_nodes()])
+#     logging.getLogger('main').info('Building the FastSS cascade...')
+#     algorithms.fstfastss.build_fastss_cascade(lexicon.transducer, 
+#                                               max_word_len=max_word_length)
+# 
+#     logging.getLogger('main').info('Building the graph...')
+#     words = list(lexicon.keys())
+#     threads, thread_outfiles = [], []
+#     for thread_id, (i, j) in enumerate(partition_data_for_threads(len(words))):
+#         print(thread_id, i, j)
+#         thread_outfile = graph_file + '.' + str(thread_id)
+#         t = CandidateEdgeExtractionThread(lexicon, words[i:j], transducer_path,
+#                                           thread_outfile)
+#         threads.append(t)
+#         thread_outfiles.append(thread_outfile)
+#     for t in threads:
+#         t.start()
+#     for t in threads:
+#         t.join()
+#     num_threads = shared.config['preprocess'].getint('num_threads')
+#     sort_files(thread_outfiles, outfile=graph_file, key=3, threads=num_threads)
+#     for filename in thread_outfiles:
+#         remove_file(filename)
 
 def build_graph_bipartite(lexicon_left, lexicon_right, graph_file):
     with open_to_write(graph_file) as fp:
@@ -208,15 +255,85 @@ def build_graph_from_training_edges(lexicon, training_file, graph_file):
                     if word_1 not in lexicon:
                         logging.getLogger('main').warning('%s not in lexicon' % word_1)
 
-# TODO parallelize
 def compute_rule_domsizes(lexicon, rules_file):
-    with open_to_write(rules_file + '.tmp') as outfp:
-        for rule_str, freq in read_tsv_file(rules_file, (str, int), print_progress=True,\
-                print_msg='Estimating rule domain sizes...'):
+    
+    def _compute_domsizes(lexicon, rules, outlck, outfp):
+        results = []
+        # compute domsizes
+        for rule_str, freq in rules:
             rule = Rule.from_string(rule_str)
             domsize = rule.compute_domsize(lexicon)
-            write_line(outfp, (rule, freq, domsize))
-    rename_file(rules_file + '.tmp', rules_file)
+            results.append((rule_str, freq, domsize))
+        # write the results to the output file
+        with outlck:
+            for rule_str, freq, domsize in results:
+                write_line(outfp, (rule_str, freq, domsize))
+
+    rules = [(rule_str, freq) for rule_str, freq in \
+                                  read_tsv_file(rules_file, (str, int))]
+    outlck = multiprocessing.Lock()
+    output_file = rules_file + '.tmp'
+    with open_to_write(output_file) as outfp:
+        processes = []
+        for i, j in partition_data_for_threads(len(rules)):
+            p = multiprocessing.Process(
+                    target=_compute_domsizes,
+                    args=(lexicon, rules[i:j], outlck, outfp))
+            processes.append(p)
+        for p in processes:
+            p.start()
+        for p in processes:
+            p.join()
+    rename_file(output_file, rules_file)
+    sort_files(rules_file, reverse=True, numeric=True, key=2)
+
+# class RuleDomsizeComputationThread(threading.Thread):
+#     def __init__(self, lexicon, rules, outlck, outfp):
+#         threading.Thread.__init__(self)
+#         self.lexicon = lexicon
+#         self.rules = rules
+#         self.outlck = outlck
+#         self.outfp = outfp
+# 
+#     def run(self):
+#         results = []
+#         # compute domsizes
+#         for rule_str, freq in self.rules:
+#             rule = Rule.from_string(rule_str)
+#             domsize = rule.compute_domsize(self.lexicon)
+#             results.append((rule_str, freq, domsize))
+#         # write the results to the output file
+#         with self.outlck:
+#             for rule_str, freq, domsize in results:
+#                 write_line(self.outfp, (rule_str, freq, domsize))
+# 
+# def compute_rule_domsizes(lexicon, rules_file):
+#     rules = [(rule_str, freq) for rule_str, freq in \
+#                                   read_tsv_file(rules_file, (str, int))]
+#     outlck = threading.Lock()
+#     output_file = rules_file + '.tmp'
+#     with open_to_write(output_file) as outfp:
+#         threads = []
+#         for i, j in partition_data_for_threads(len(rules)):
+#             t = RuleDomsizeComputationThread(lexicon, rules[i:j], 
+#                                              outlck, outfp)
+#             threads.append(t)
+#         for t in threads:
+#             t.start()
+#         for t in threads:
+#             t.join()
+#     rename_file(output_file, rules_file)
+#     sort_files(rules_file, reverse=True, numeric=True, key=2)
+
+# TODO deprecated
+# def compute_rule_domsizes(lexicon, rules_file):
+#     with open_to_write(rules_file + '.tmp') as outfp:
+#         for rule_str, freq in read_tsv_file(rules_file, (str, int), print_progress=True,\
+#                 print_msg='Estimating rule domain sizes...'):
+#             rule = Rule.from_string(rule_str)
+#             domsize = rule.compute_domsize(lexicon)
+#             write_line(outfp, (rule, freq, domsize))
+#     rename_file(rules_file + '.tmp', rules_file)
 
 # TODO deprecated
 # def split_rules_in_graph(lexicon, graph_file, model):
@@ -251,7 +368,6 @@ def run_standard():
 #         build_graph_allrules(lexicon, shared.filenames['graph'])
         build_graph_fstfastss(lexicon, shared.filenames['graph'])
 
-#     sort_files(shared.filenames['graph'], key=3)
     update_file_size(shared.filenames['graph'])
     run_filters(shared.filenames['graph'])
     update_file_size(shared.filenames['graph'])
@@ -259,6 +375,7 @@ def run_standard():
                    shared.filenames['rules'], 3)
     update_file_size(shared.filenames['rules'])
 
+    logging.getLogger('main').info('Computing rule domain sizes...')
     compute_rule_domsizes(lexicon, shared.filenames['rules'])
 
 def run_bipartite():
