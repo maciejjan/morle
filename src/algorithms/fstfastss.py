@@ -11,24 +11,73 @@ import sys
 
 def write_delenv_transducer(filename, max_affix_size, max_infix_size,\
                             max_infix_slots):
-    raise NotImplementedError()
-#     with open(filename, 'w+') as fp:
-#         for i in range(max_deletions):
-#             print(i, file=fp)
-#             print(i, i, '@_IDENTITY_SYMBOL_@', '@_IDENTITY_SYMBOL_@',\
-#                   sep='\t', file=fp)
-#             print(i, i+1, '@_UNKNOWN_SYMBOL_@', '@_DELETION_SYMBOL_@',\
-#                   sep='\t', file=fp)
-#             print(i, i+1, '@_EPSILON_SYMBOL_@', '@_DELETION_SYMBOL_@',\
-#                   sep='\t', file=fp)
-#         print(max_deletions, file=fp)
-#         print(max_deletions, max_deletions, '@_IDENTITY_SYMBOL_@',
-#               '@_IDENTITY_SYMBOL_@', sep='\t', file=fp)
 
-def write_delfilter_transducer(filename, max_word_len):
-    pass
+    def add_deletion_chain(outfp, state, length):
+        print(state, state+1, '@_EPSILON_SYMBOL_@', '@_DELSLOT_SYMBOL_@',
+              sep='\t', file=outfp)
+        for i in range(1, length+1):
+            print(state+i, state+i+1, '@_UNKNOWN_SYMBOL_@', 
+                  '@_DELETION_SYMBOL_@', sep='\t', file=outfp)
+        last_state = state + length + 1
+        for i in range(length+1):
+            print(state+i, last_state, '@_EPSILON_SYMBOL_@',
+                  '@_EPSILON_SYMBOL_@', sep='\t', file=outfp)
+        return last_state
+
+    def add_identity_loop(outfp, state):
+        print(state, state+1, '@_IDENTITY_SYMBOL_@', '@_IDENTITY_SYMBOL_@',
+              sep='\t', file=outfp)
+        print(state+1, state+1, '@_IDENTITY_SYMBOL_@', '@_IDENTITY_SYMBOL_@',
+              sep='\t', file=outfp)
+        return state+1
+
+    with open(filename, 'w+') as outfp:
+#     with open_to_write(filename) as outfp:
+        # prefix
+        state = add_deletion_chain(outfp, 0, max_affix_size)
+        state = add_identity_loop(outfp, state)
+        # infixes
+        for i in range(max_infix_slots):
+            state = add_deletion_chain(outfp, state, max_infix_size)
+            state = add_identity_loop(outfp, state)
+        # suffix
+        state = add_deletion_chain(outfp, state, max_affix_size)
+        # set final state
+        print(state, file=outfp)
+
+def write_delfilter_transducer(filename, length):
+#     with open_to_write(filename) as outfp:
+    with open(filename, 'w+') as outfp:
+        print(0, 0, '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@', sep='\t',
+              file=outfp)
+        for i in range(length):
+            print(i, i+1, '@_IDENTITY_SYMBOL_@', '@_IDENTITY_SYMBOL_@',
+                  sep='\t', file=outfp)
+            print(i+1, i, '@_DELETION_SYMBOL_@', '@_EPSILON_SYMBOL_@',
+                  sep='\t', file=outfp)
+            print(i+1, i+1, '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@',
+                  sep='\t', file=outfp)
+            print(i+1, file=outfp)
+        first_negative_state = length+1
+        print(0, first_negative_state, '@_DELETION_SYMBOL_@',
+              '@_EPSILON_SYMBOL_@', sep='\t', file=outfp)
+        print(first_negative_state, 0, '@_IDENTITY_SYMBOL_@',
+              '@_IDENTITY_SYMBOL_@', sep='\t', file=outfp)
+        print(first_negative_state, first_negative_state, '@_DELSLOT_SYMBOL_@', 
+              '@_DELSLOT_SYMBOL_@', sep='\t', file=outfp)
+        for i in range(length-1):
+            print(first_negative_state+i, first_negative_state+i+1,
+                  '@_DELETION_SYMBOL_@', '@_EPSILON_SYMBOL_@', sep='\t',
+                  file=outfp)
+            print(first_negative_state+i+1, first_negative_state+i,
+                  '@_IDENTITY_SYMBOL_@', '@_IDENTITY_SYMBOL_@', sep='\t',
+                  file=outfp)
+            print(first_negative_state+i+1, first_negative_state+i+1,
+                  '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@', sep='\t',
+                  file=outfp)
 
 def build_fastss_cascade(tr_file, max_word_len=20):
+    # TODO build delfilter and delenv
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                          stderr=None, universal_newlines=True)
     p.stdin.write('read att delfilter.att\n')
