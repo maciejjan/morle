@@ -12,8 +12,29 @@ from utils.printer import *
 import logging
 import multiprocessing
 import os.path
+import subprocess
 # import threading
 
+# input file: wordlist
+# output file: transducer file
+def build_lexicon_transducer(lexicon, output_file):
+    # build the lexc file
+    lex_file = output_file + '.lex'
+    tags = set()
+    for node in lexicon.iter_nodes():
+        for t in node.tag:
+            tags.add(t)
+    with open_to_write(lex_file) as lexfp:
+        lexfp.write('Multichar_Symbols ' + 
+                    ' '.join(shared.multichar_symbols + list(tags)) + '\n\n')
+        lexfp.write('LEXICON Root\n')
+        for node in lexicon.iter_nodes():
+            lexfp.write('\t' + ''.join(node.word + node.tag) + ' # ;\n')
+    # compile the lexc file
+    cmd = ['hfst-lexc', '-f', 'sfst', full_path(lex_file), 
+           '-o', full_path(output_file)]
+    subprocess.run(cmd)
+    remove_file(lex_file)
 
 def partition_data_for_threads(size):
     '''Divides the data into equal chunks for threads.
@@ -354,29 +375,30 @@ def run_standard():
     logging.getLogger('main').info('Loading lexicon...')
     lexicon = Lexicon.init_from_wordlist(shared.filenames['wordlist'])
     logging.getLogger('main').info('Building the lexicon transducer...')
-    lexicon.build_transducer()
-    algorithms.fst.save_transducer(lexicon.transducer,
-                                   shared.filenames['lexicon-tr'])
-
-    if shared.config['General'].getboolean('supervised'):
-        logging.getLogger('main').info('Building graph...')
-        build_graph_from_training_edges(lexicon,
-                                        shared.filenames['wordlist'],
-                                        shared.filenames['graph'])
-    else:
-        logging.getLogger('main').info('Building graph...')
-#         build_graph_allrules(lexicon, shared.filenames['graph'])
-        build_graph_fstfastss(lexicon, shared.filenames['graph'])
-
-    update_file_size(shared.filenames['graph'])
-    run_filters(shared.filenames['graph'])
-    update_file_size(shared.filenames['graph'])
-    aggregate_file(shared.filenames['graph'],\
-                   shared.filenames['rules'], 3)
-    update_file_size(shared.filenames['rules'])
-
-    logging.getLogger('main').info('Computing rule domain sizes...')
-    compute_rule_domsizes(lexicon, shared.filenames['rules'])
+    build_lexicon_transducer(lexicon, shared.filenames['lexicon-tr'])
+#     lexicon.build_transducer()
+#     algorithms.fst.save_transducer(lexicon.transducer,
+#                                    shared.filenames['lexicon-tr'])
+# 
+#     if shared.config['General'].getboolean('supervised'):
+#         logging.getLogger('main').info('Building graph...')
+#         build_graph_from_training_edges(lexicon,
+#                                         shared.filenames['wordlist'],
+#                                         shared.filenames['graph'])
+#     else:
+#         logging.getLogger('main').info('Building graph...')
+# #         build_graph_allrules(lexicon, shared.filenames['graph'])
+#         build_graph_fstfastss(lexicon, shared.filenames['graph'])
+# 
+#     update_file_size(shared.filenames['graph'])
+#     run_filters(shared.filenames['graph'])
+#     update_file_size(shared.filenames['graph'])
+#     aggregate_file(shared.filenames['graph'],\
+#                    shared.filenames['rules'], 3)
+#     update_file_size(shared.filenames['rules'])
+# 
+#     logging.getLogger('main').info('Computing rule domain sizes...')
+#     compute_rule_domsizes(lexicon, shared.filenames['rules'])
 
 def run_bipartite():
     logging.getLogger('main').info('Loading lexica...')

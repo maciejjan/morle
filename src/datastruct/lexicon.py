@@ -21,6 +21,64 @@ def get_wordlist_format():
             lambda x: np.array(list(map(float, x.split(shared.format['vector_sep'])))))
     return tuple(result)
 
+# def normalize_word(string):
+#     # deal with capital letters
+#     if string.isupper():
+#         string = '{ALLCAPS}' + string.lower()
+#     else:
+#         new_string_chars = []
+#         for c in string:
+#             new_string_chars.append('{CAP}' + c.lower() if c.isupper() else c)
+#         string = ''.join(new_string_chars)
+#     # perform substritutions
+#     for subst_from, subst_to in shared.normalization_substitutions:
+#         string = string.replace(subst_from, subst_to)
+#     return string
+# 
+# def unnormalize_word(string):
+#     # perform substritutions
+#     for subst_from, subst_to in shared.normalization_substitutions:
+#         string = string.replace(subst_to, subst_from)
+#     # deal with capital letters
+#     if string.startswith('{ALLCAPS}'):
+#         return string[9:].upper()
+#     else:
+#         new_string_chars = []
+#         while string:
+#             if string.startswith('{CAP}'):
+#                 new_string_chars.append(string[5].upper())
+#                 string = string[6:]
+#             else:
+#                 new_string_chars.append(string[0])
+#                 string = string[1:]
+#         return ''.join(new_string_chars)
+
+def normalize_seq(seq):
+    result = []
+    allcaps = True
+    for c in seq:
+        if c.isupper() and c not in shared.multichar_symbols:
+            result.append(c.lower())
+        else:
+            allcaps = False
+            break
+    if allcaps:
+        return ('{ALLCAPS}',) + tuple(result)
+    else:
+        result = []
+        for c in seq:
+            if c.isupper() and c not in shared.multichar_symbols:
+                result.append('{CAP}')
+                result.append(c.lower())
+            elif c in shared.normalization_substitutions:
+                result.append(shared.normalization_substitutions[c])
+            else:
+                result.append(c)
+        return tuple(result)
+
+def unnormalize_seq(seq):
+    raise NotImplementedError()
+
 def tokenize_word(string):
     '''Separate a string into a word and a POS-tag,
        both expressed as sequences of symbols.'''
@@ -46,11 +104,14 @@ class LexiconEdge:
 
 class LexiconNode:
     def __init__(self, word, freq=None, vec=None):
+        self.key = word
         self.word, self.tag, self.disamb = tokenize_word(word)
-        self.key = ''.join(self.word + self.tag) +\
-                   ((shared.format['word_disamb_sep'] + self.disamb)\
-                     if self.disamb else '')
-        self.word_tag_str = ''.join(self.word + self.tag)
+        self.word = normalize_seq(self.word)
+# TODO deprecated
+#         self.key = ''.join(self.word + self.tag) +\
+#                    ((shared.format['word_disamb_sep'] + self.disamb)\
+#                      if self.disamb else '')
+#         self.word_tag_str = ''.join(self.word + self.tag)
         if shared.config['Features'].getfloat('word_freq_weight') > 0:
             self.freq = freq
             self.logfreq = math.log(self.freq)
@@ -226,18 +287,19 @@ class Lexicon:
             node.edges = []
             self.roots.add(node)
     
-    def build_transducer(self, print_progress=False):
-        self.alphabet =\
-            tuple(sorted(set(
-                itertools.chain(*(n.word+n.tag for n in self.nodes.values()))
-            )))
-        self.transducer =\
-            algorithms.fst.binary_disjunct(
-                [algorithms.fst.seq_to_transducer(\
-                         n.seq(), alphabet=self.alphabet)\
-                     for n in self.nodes.values()],
-                print_progress=print_progress
-            )
+# TODO deprecated
+#     def build_transducer(self, print_progress=False):
+#         self.alphabet =\
+#             tuple(sorted(set(
+#                 itertools.chain(*(n.word+n.tag for n in self.nodes.values()))
+#             )))
+#         self.transducer =\
+#             algorithms.fst.binary_disjunct(
+#                 [algorithms.fst.seq_to_transducer(\
+#                          n.seq(), alphabet=self.alphabet)\
+#                      for n in self.nodes.values()],
+#                 print_progress=print_progress
+#             )
     
     def save_to_file(self, filename):
         def write_subtree(fp, source, target, rule):
@@ -262,10 +324,10 @@ class Lexicon:
             # if the input file contains base words -> ignore them for now
             if shared.config['General'].getboolean('supervised'):
                 node_data = node_data[1:]
-            try:
-                lexicon.add_node(LexiconNode(*node_data))
-            except Exception:
-                logging.getLogger('main').warning('ignoring %s' % node_data[0])
+#             try:
+            lexicon.add_node(LexiconNode(*node_data))
+#             except Exception:
+#                 logging.getLogger('main').warning('ignoring %s' % node_data[0])
         return lexicon
 
     # init from file of form word_1<TAB>word_2 (extract rules)

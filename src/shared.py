@@ -59,7 +59,7 @@ format = {\
 }
 
 patterns = {}
-patterns['symbol'] = '(?:[\w-]|\{[A-Z0-9]+\})'
+patterns['symbol'] = '(?:[\w\-\.]|\{[A-Z0-9]+\})'
 patterns['tag'] = '(?:<[A-Z0-9]+>)'
 patterns['disamb'] = '[0-9]+'
 patterns['word'] = '^(?P<word>%s+)(?P<tag>%s*)(?:%s(?P<disamb>%s))?$' %\
@@ -83,4 +83,13 @@ patterns['rule_named_tag_subst'] = '(?P<x>%s*)%s(?P<y>%s*)' %\
 compiled_patterns = {}
 for key, val in patterns.items():
     compiled_patterns[key] = re.compile(val)
+
+normalization_substitutions = {
+    '.' : '{FS}',
+    '-' : '{HYPH}'
+}
+unnormalization_substitutions = \
+    { val : key for key, val in normalization_substitutions.items() }
+multichar_symbols = ['{ALLCAPS}', '{CAP}'] +\
+    [subst_to for subst_from, subst_to in normalization_substitutions.items()]
 
