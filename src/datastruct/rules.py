@@ -60,11 +60,12 @@ class Rule:
             return False
         return True
     
-    def compute_domsize(self, lexicon):
-        if lexicon.transducer is None:
-            lexicon.build_transducer()
-        self.build_transducer(alphabet=lexicon.alphabet)
-        t = hfst.HfstTransducer(lexicon.transducer)
+    def compute_domsize(self, lexicon_tr):
+# TODO deprecated
+#         if lexicon.transducer is None:
+#             lexicon.build_transducer()
+        self.build_transducer(alphabet=lexicon_tr.get_alphabet())
+        t = hfst.HfstTransducer(lexicon_tr)
         t.compose(self.transducer)
         t.determinize()
         t.minimize()

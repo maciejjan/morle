@@ -104,13 +104,13 @@ class LexiconEdge:
 
 class LexiconNode:
     def __init__(self, word, freq=None, vec=None):
-        self.key = word
+        self.literal = word
         self.word, self.tag, self.disamb = tokenize_word(word)
         self.word = normalize_seq(self.word)
 # TODO deprecated
-#         self.key = ''.join(self.word + self.tag) +\
-#                    ((shared.format['word_disamb_sep'] + self.disamb)\
-#                      if self.disamb else '')
+        self.key = ''.join(self.word + self.tag) +\
+                   ((shared.format['word_disamb_sep'] + self.disamb)\
+                     if self.disamb else '')
 #         self.word_tag_str = ''.join(self.word + self.tag)
         if shared.config['Features'].getfloat('word_freq_weight') > 0:
             self.freq = freq
