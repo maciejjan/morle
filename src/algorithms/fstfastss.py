@@ -1,13 +1,9 @@
-# from algorithms.fst import binary_disjunct, delenv, delfilter,\
-#                            seq_to_transducer, save_transducer
-# from utils.printer import progress_printer
+from algorithms.fst import load_cascade
 from utils.files import full_path, remove_file
 import shared
 
-# from collections import defaultdict
 import hfst
 import subprocess
-# import os.path
 import sys
 import tqdm
 
@@ -15,26 +11,25 @@ def write_delenv_transducer(filename, max_affix_size, max_infix_size,\
                             max_infix_slots):
 
     def add_deletion_chain(outfp, state, length):
-        print(state, state+1, '@_EPSILON_SYMBOL_@', '@_DELSLOT_SYMBOL_@',
+        print(state, state+1, hfst.EPSILON, '@_DELSLOT_SYMBOL_@',
               sep='\t', file=outfp)
         for i in range(1, length+1):
-            print(state+i, state+i+1, '@_UNKNOWN_SYMBOL_@', 
+            print(state+i, state+i+1, hfst.UNKNOWN, 
                   '@_DELETION_SYMBOL_@', sep='\t', file=outfp)
         last_state = state + length + 1
         for i in range(length+1):
-            print(state+i, last_state, '@_EPSILON_SYMBOL_@',
-                  '@_EPSILON_SYMBOL_@', sep='\t', file=outfp)
+            print(state+i, last_state, hfst.EPSILON,
+                  hfst.EPSILON, sep='\t', file=outfp)
         return last_state
 
     def add_identity_loop(outfp, state):
-        print(state, state+1, '@_IDENTITY_SYMBOL_@', '@_IDENTITY_SYMBOL_@',
+        print(state, state+1, hfst.IDENTITY, hfst.IDENTITY,
               sep='\t', file=outfp)
-        print(state+1, state+1, '@_IDENTITY_SYMBOL_@', '@_IDENTITY_SYMBOL_@',
+        print(state+1, state+1, hfst.IDENTITY, hfst.IDENTITY,
               sep='\t', file=outfp)
         return state+1
 
     with open(filename, 'w+') as outfp:
-#     with open_to_write(filename) as outfp:
         # prefix
         state = add_deletion_chain(outfp, 0, max_affix_size)
         state = add_identity_loop(outfp, state)
@@ -48,31 +43,30 @@ def write_delenv_transducer(filename, max_affix_size, max_infix_size,\
         print(state, file=outfp)
 
 def write_delfilter_transducer(filename, length):
-#     with open_to_write(filename) as outfp:
     with open(filename, 'w+') as outfp:
         print(0, 0, '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@', sep='\t',
               file=outfp)
         for i in range(length):
-            print(i, i+1, '@_IDENTITY_SYMBOL_@', '@_IDENTITY_SYMBOL_@',
+            print(i, i+1, hfst.IDENTITY, hfst.IDENTITY,
                   sep='\t', file=outfp)
-            print(i+1, i, '@_DELETION_SYMBOL_@', '@_EPSILON_SYMBOL_@',
+            print(i+1, i, '@_DELETION_SYMBOL_@', hfst.EPSILON,
                   sep='\t', file=outfp)
             print(i+1, i+1, '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@',
                   sep='\t', file=outfp)
             print(i+1, file=outfp)
         first_negative_state = length+1
         print(0, first_negative_state, '@_DELETION_SYMBOL_@',
-              '@_EPSILON_SYMBOL_@', sep='\t', file=outfp)
-        print(first_negative_state, 0, '@_IDENTITY_SYMBOL_@',
-              '@_IDENTITY_SYMBOL_@', sep='\t', file=outfp)
+              hfst.EPSILON, sep='\t', file=outfp)
+        print(first_negative_state, 0, hfst.IDENTITY,
+              hfst.IDENTITY, sep='\t', file=outfp)
         print(first_negative_state, first_negative_state, '@_DELSLOT_SYMBOL_@', 
               '@_DELSLOT_SYMBOL_@', sep='\t', file=outfp)
         for i in range(length-1):
             print(first_negative_state+i, first_negative_state+i+1,
-                  '@_DELETION_SYMBOL_@', '@_EPSILON_SYMBOL_@', sep='\t',
+                  '@_DELETION_SYMBOL_@', hfst.EPSILON, sep='\t',
                   file=outfp)
             print(first_negative_state+i+1, first_negative_state+i,
-                  '@_IDENTITY_SYMBOL_@', '@_IDENTITY_SYMBOL_@', sep='\t',
+                  hfst.IDENTITY, hfst.IDENTITY, sep='\t',
                   file=outfp)
             print(first_negative_state+i+1, first_negative_state+i+1,
                   '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@', sep='\t',
@@ -106,71 +100,11 @@ def build_fastss_cascade(lexicon_tr_file, max_word_len=20):
 #     p.stdin.write('lookup-optimize\n')
     p.stdin.write('save stack {}\n'.format(full_path('fastss.fsm')))
     p.stdin.write('quit\n')
-#     p.stdin.write('read att {}\n'.format(delfilter_file))
-#     p.stdin.write('read att {}\n'.format(delenv_file))
-#     p.stdin.write('compose\n')
-#     p.stdin.write('minimize\n')
-#     p.stdin.write('load stack {}\n'.format(full_path(lexicon_tr_file)))
-#     p.stdin.write('compose\n')
-#     p.stdin.write('minimize\n')
-#     p.stdin.write('define T\n')
-#     p.stdin.write('push T\n')
-#     p.stdin.write('push T\n')
-#     p.stdin.write('invert\n')
-#     p.stdin.write('lookup-optimize\n')
-#     p.stdin.write('save stack {}\n'.format(full_path('fastss.fsm')))
-#     p.stdin.write('quit\n')
     p.stdin.close()
     p.wait()
     
 #     remove_file(delenv_file)
 #     remove_file(delfilter_file)
-
-# def build_substring_transducer(lexicon_tr, max_word_len):
-#     alphabet = lexicon_tr.get_alphabet()
-#     d = delenv(alphabet,
-#                shared.config['preprocess'].getint('max_affix_length'),
-#                shared.config['preprocess'].getint('max_infix_length'),
-#                shared.config['preprocess'].getint('max_infix_slots'))
-#     d.compose(delfilter(alphabet, max_word_len))
-#     d.minimize()
-#     
-#     result = hfst.HfstTransducer(lexicon_tr)
-#     result.compose(d)
-#     result.minimize()
-#     return result
-# 
-# # TODO output file as function parameter
-# # TODO use hfst-xfst and hfst-lexc
-# def build_fastss_cascade(lex_tr_left, lex_tr_right=None, max_word_len=20):
-#     fastss_tr_left = build_substring_transducer(lex_tr_left, max_word_len)
-#     if lex_tr_right is None:
-#         fastss_tr_right = hfst.HfstTransducer(fastss_tr_left)
-#     else:
-#         fastss_tr_right = \
-#             build_substring_transducer(lex_tr_right, max_word_len)
-#     fastss_tr_right.invert()
-# 
-#     fastss_tr_left.convert(hfst.ImplementationType.HFST_OL_TYPE)
-#     fastss_tr_right.convert(hfst.ImplementationType.HFST_OL_TYPE)
-# #     save_transducer(substr_tr_left,
-# #                     os.path.join(shared.options['working_dir'], 'tr_l.fsm'),
-# #                     type=hfst.ImplementationType.HFST_OL_TYPE)
-# #     save_transducer(substr_tr_right,
-# #                     os.path.join(shared.options['working_dir'], 'tr_r.fsm'),
-# #                     type=hfst.ImplementationType.HFST_OL_TYPE)
-#     # save cascade
-#     tr_path = os.path.join(shared.options['working_dir'], 'fastss.fsm')
-#     ostr = hfst.HfstOutputStream(filename=tr_path, 
-#                                  type=hfst.ImplementationType.HFST_OL_TYPE)
-#     try:
-#         ostr.write(fastss_tr_left)
-#         ostr.write(fastss_tr_right)
-#         ostr.flush()
-#     except Exception:
-#         pass
-#     finally:
-#         ostr.close()
 
 def similar_words_with_lookup(words, transducer_path):
     cmd = ['hfst-lookup', '-i', transducer_path, '-C', 'composition']
@@ -207,20 +141,11 @@ def similar_words_with_lookup(words, transducer_path):
     p.wait()
 
 def similar_words_with_block_composition(words, transducer_path):
-    istr = hfst.HfstInputStream(transducer_path)
-    delenv = istr.read()
-    right_tr = istr.read()
-    istr.close()
-
-    block_size = shared.config['preprocess'].getint('block_size')
-    count = 0
-    progressbar = None
-    if shared.config['preprocess'].getint('num_processes') == 1:
-        progressbar = tqdm.tqdm(len(words))
-    while count < len(words):
-        block = words[count:count+block_size]
-#         print(block)
-        tr = hfst.fst(block)
+    def _compose_block(block, delenv, right_tr, tokenizer):
+#         tr = hfst.fst(block)    # TODO tokenize?
+        tr = hfst.empty_fst()
+        for word in block:
+            tr.disjunct(hfst.tokenized_fst(tokenizer.tokenize(word)))
         tr.minimize()
         tr.convert(hfst.ImplementationType.SFST_TYPE)
 #         print(tr.number_of_states(), tr.number_of_arcs())
@@ -229,15 +154,14 @@ def similar_words_with_block_composition(words, transducer_path):
 #         print(tr.number_of_states(), tr.number_of_arcs())
         tr.compose(right_tr)
         tr.minimize()
-#         print(tr.number_of_states(), tr.number_of_arcs())
-        similar_words = { word: set() for word in block }
+        return tr
 
-        tr_b = hfst.HfstBasicTransducer(tr)
+    def _extract_unique_io_pairs(transducer):
+        tr_b = hfst.HfstBasicTransducer(transducer)
         previous_io_pairs = []
         for s in tr_b.states():
             previous_io_pairs.append(set())
         previous_io_pairs[0].add(('', ''))
-        
         results = set()
         empty = False
         while not empty:
@@ -256,23 +180,32 @@ def similar_words_with_block_composition(words, transducer_path):
                         sym_in = transition.get_input_symbol()
                         if sym_in == hfst.EPSILON:
                             sym_in = ''
-                        elif sym_in == hfst.IDENTITY or sym_in == hfst.UNKNOWN:
+                        elif sym_in in (hfst.IDENTITY, hfst.UNKNOWN):
                             raise RuntimeError('Illegal symbol!')
                         sym_out = transition.get_output_symbol()
                         if sym_out == hfst.EPSILON:
                             sym_out = ''
-                        elif sym_out == hfst.IDENTITY or sym_out == hfst.UNKNOWN:
+                        elif sym_out in (hfst.IDENTITY, hfst.UNKNOWN):
                             raise RuntimeError('Illegal symbol!')
                         current_io_pairs[target_state].add(
                             (str_in+sym_in, str_out+sym_out))
             previous_io_pairs = current_io_pairs
+        return results
 
-        for word_1, word_2 in results:
+    delenv, right_tr = load_cascade(transducer_path)
+    tok = hfst.HfstTokenizer()
+    for sym in shared.multichar_symbols:
+        tok.add_multichar_symbol(sym)
+    block_size = shared.config['preprocess'].getint('block_size')
+    count = 0
+    progressbar = None
+    if shared.config['preprocess'].getint('num_processes') == 1:
+        progressbar = tqdm.tqdm(total=len(words))
+    while count < len(words):
+        block = words[count:count+block_size]
+        tr = _compose_block(block, delenv, right_tr, tok)
+        for word_1, word_2 in _extract_unique_io_pairs(tr):
             yield (word_1, word_2)
-        
-#         for word in block:
-#             yield (word, word)
-
         count += block_size
         if progressbar is not None:
             progressbar.update(len(block))

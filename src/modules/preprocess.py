@@ -13,7 +13,7 @@ import logging
 import multiprocessing
 import os.path
 import subprocess
-# import tqdm
+import tqdm
 # import threading
 
 # input file: wordlist
@@ -32,8 +32,7 @@ def build_lexicon_transducer(lexicon, output_file):
         for node in lexicon.iter_nodes():
             lexfp.write('\t' + ''.join(node.word + node.tag) + ' # ;\n')
     # compile the lexc file
-    cmd = ['hfst-lexc', full_path(lex_file), 
-           '-o', full_path(output_file)]
+    cmd = ['hfst-lexc', full_path(lex_file), '-o', full_path(output_file)]
     subprocess.run(cmd)
     remove_file(lex_file)
 
@@ -234,10 +233,15 @@ def compute_rule_domsizes(lexicon_tr_file, rules_file):
     def _compute_domsizes(lexicon_tr, rules, outlck, outfp):
         results = []
         # compute domsizes
+        progressbar = None
+        if shared.config['preprocess'].getint('num_processes') == 1:
+            progressbar = tqdm.tqdm(total=len(rules))
         for rule_str, freq in rules:
             rule = Rule.from_string(rule_str)
             domsize = rule.compute_domsize(lexicon_tr)
             results.append((rule_str, freq, domsize))
+            if progressbar is not None:
+                progressbar.update()
         # write the results to the output file
         with outlck:
             for rule_str, freq, domsize in results:
@@ -262,69 +266,6 @@ def compute_rule_domsizes(lexicon_tr_file, rules_file):
             p.join()
     rename_file(output_file, rules_file)
     sort_files(rules_file, reverse=True, numeric=True, key=2)
-
-# class RuleDomsizeComputationThread(threading.Thread):
-#     def __init__(self, lexicon, rules, outlck, outfp):
-#         threading.Thread.__init__(self)
-#         self.lexicon = lexicon
-#         self.rules = rules
-#         self.outlck = outlck
-#         self.outfp = outfp
-# 
-#     def run(self):
-#         results = []
-#         # compute domsizes
-#         for rule_str, freq in self.rules:
-#             rule = Rule.from_string(rule_str)
-#             domsize = rule.compute_domsize(self.lexicon)
-#             results.append((rule_str, freq, domsize))
-#         # write the results to the output file
-#         with self.outlck:
-#             for rule_str, freq, domsize in results:
-#                 write_line(self.outfp, (rule_str, freq, domsize))
-# 
-# def compute_rule_domsizes(lexicon, rules_file):
-#     rules = [(rule_str, freq) for rule_str, freq in \
-#                                   read_tsv_file(rules_file, (str, int))]
-#     outlck = threading.Lock()
-#     output_file = rules_file + '.tmp'
-#     with open_to_write(output_file) as outfp:
-#         threads = []
-#         for i, j in partition_data_for_threads(len(rules)):
-#             t = RuleDomsizeComputationThread(lexicon, rules[i:j], 
-#                                              outlck, outfp)
-#             threads.append(t)
-#         for t in threads:
-#             t.start()
-#         for t in threads:
-#             t.join()
-#     rename_file(output_file, rules_file)
-#     sort_files(rules_file, reverse=True, numeric=True, key=2)
-
-# TODO deprecated
-# def compute_rule_domsizes(lexicon, rules_file):
-#     with open_to_write(rules_file + '.tmp') as outfp:
-#         for rule_str, freq in read_tsv_file(rules_file, (str, int), print_progress=True,\
-#                 print_msg='Estimating rule domain sizes...'):
-#             rule = Rule.from_string(rule_str)
-#             domsize = rule.compute_domsize(lexicon)
-#             write_line(outfp, (rule, freq, domsize))
-#     rename_file(rules_file + '.tmp', rules_file)
-
-# TODO deprecated
-# def split_rules_in_graph(lexicon, graph_file, model):
-#     with open_to_write(graph_file + '.spl') as outfp:
-#         for rule_str, wordpairs in read_tsv_file_by_key(graph_file, key=3,\
-#                 print_progress=True):
-#             rule = Rule.from_string(rule_str)
-#             edges = [LexiconEdge(lexicon[w1], lexicon[w2], rule)\
-#                 for w1, w2 in wordpairs]
-#             edges_spl =\
-#                 algorithms.splrules.split_rule(rule_str, edges, lexicon, model)
-#             for e in edges_spl:
-#                 write_line(outfp,\
-#                     (str(e.source), str(e.target), str(e.rule)))
-#     rename_file(graph_file + '.spl', graph_file)
 
 def run_standard():
     logging.getLogger('main').info('Loading lexicon...')
@@ -355,6 +296,11 @@ def run_standard():
                           shared.filenames['rules'])
 
 def run_bipartite():
+    # TODO
+    # build the lexicon from left and right wordlist together
+    # build the FastSS cascade from right wordlist
+    # extract similar words for the words from the left wordlist
+
     logging.getLogger('main').info('Loading lexica...')
     lexicon_left = Lexicon.init_from_wordlist(
                      shared.filenames['wordlist.left'])

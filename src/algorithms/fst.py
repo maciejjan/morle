@@ -273,6 +273,14 @@ def load_transducer(filename):
     istr.close()
     return transducer
 
+def load_cascade(filename):
+    transducers = []
+    istr = hfst.HfstInputStream(filename)
+    while not istr.is_eof():
+        transducers.append(istr.read())
+    istr.close()
+    return tuple(transducers)
+
 def save_transducer(transducer, filename, type=None):
     if type is None:
         type = shared.config['FST'].getint('transducer_type')
@@ -282,3 +290,10 @@ def save_transducer(transducer, filename, type=None):
     ostr.flush()
     ostr.close()
 
+def save_cascade(transducers, filename, type=None):
+    raise NotImplementedError()
+#     istr = hfst.HfstInputStream(filename)
+#     delenv = istr.read()
+#     right_tr = istr.read()
+#     istr.close()
+#     return delenv, right_tr
