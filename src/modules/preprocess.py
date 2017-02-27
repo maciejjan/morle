@@ -281,17 +281,26 @@ def run_bipartite():
     # build the FastSS cascade from right wordlist
     # extract similar words for the words from the left wordlist
 
-    logging.getLogger('main').info('Loading lexica...')
-    lexicon_left = Lexicon.init_from_wordlist(
-                     shared.filenames['wordlist.left'])
-    lexicon_right = Lexicon.init_from_wordlist(
-                      shared.filenames['wordlist.right'])
+    logging.getLogger('main').info('Loading lexicon...')
+    lexicon = Lexicon.init_from_wordlist(shared.filenames['wordlist'])
+    logging.getLogger('main').info('Building the lexicon transducer...')
+    # TODO build transducer: for the left lexicon (roots.fsm?)
+    build_lexicon_transducer(lexicon, shared.filenames['lexicon-tr'])
 
-    logging.getLogger('main').info('Building graph...')
-    build_graph_bipartite(
-      lexicon_left, lexicon_right, shared.filenames['graph'])
+    if shared.config['General'].getboolean('supervised'):
+        logging.getLogger('main').info('Building graph...')
+        build_graph_from_training_edges(lexicon,
+                                        shared.filenames['wordlist'],
+                                        shared.filenames['graph'])
+    else:
+        logging.getLogger('main').info('Building graph...')
+#         build_graph_allrules(lexicon, shared.filenames['graph'])
+        # TODO build the cascade for the right transducer
+        # TODO lookup the words from the left transducer
+        build_graph_fstfastss(lexicon, shared.filenames['lexicon-tr'], 
+                              shared.filenames['graph'])
 
-    sort_files(shared.filenames['graph'], key=3)
+    # TODO the rest unchanged
     update_file_size(shared.filenames['graph'])
     run_filters(shared.filenames['graph'])
     update_file_size(shared.filenames['graph'])
@@ -299,10 +308,9 @@ def run_bipartite():
                    shared.filenames['rules'], 3)
     update_file_size(shared.filenames['rules'])
 
-    lexicon_left.build_transducer()
-    algorithms.fst.save_transducer(lexicon_left.transducer,
-                                   shared.filenames['lexicon-tr'])
-    compute_rule_domsizes(lexicon_left, shared.filenames['rules'])
+    logging.getLogger('main').info('Computing rule domain sizes...')
+    compute_rule_domsizes(shared.filenames['lexicon-tr'], 
+                          shared.filenames['rules'])
 
 ### MAIN FUNCTIONS ###
 
