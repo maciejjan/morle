@@ -98,7 +98,8 @@ def build_fastss_cascade(lexicon_tr_file, max_word_len=20):
     p.stdin.write('push T\n')
     p.stdin.write('rotate stack\n')
 #     p.stdin.write('lookup-optimize\n')
-    p.stdin.write('save stack {}\n'.format(full_path('fastss.fsm')))
+    fastss_tr_path = full_path(shared.filenames['fastss-tr'])
+    p.stdin.write('save stack {}\n'.format(fastss_tr_path))
     p.stdin.write('quit\n')
     p.stdin.close()
     p.wait()
@@ -107,7 +108,8 @@ def build_fastss_cascade(lexicon_tr_file, max_word_len=20):
 #     remove_file(delfilter_file)
 
 def similar_words_with_lookup(words, transducer_path):
-    cmd = ['hfst-lookup', '-i', transducer_path, '-C', 'composition']
+    cmd = ['hfst-lookup', '-i', full_path(transducer_path),  
+           '-C', 'composition']
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=subprocess.DEVNULL, universal_newlines=True,
                          bufsize=1)

@@ -26,6 +26,7 @@ filenames = {\
     'eval.graph' : 'graph.testing',
     'eval.wordlist' : 'input.testing',
     'eval.report' : 'eval.txt',
+    'fastss-tr' : 'fastss.fsm',
     'graph' : 'graph.txt',
     'analyze.graph' : 'graph.analyze',
     'graph-modsel' : 'graph-modsel.txt',

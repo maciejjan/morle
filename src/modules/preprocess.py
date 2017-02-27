@@ -134,16 +134,6 @@ def filter_rules(graph_file):
 #    rename_file(graph_file, graph_file + '.orig')
     rename_file(graph_file + '.filtered', graph_file)
 
-
-# TODO deprecated
-# def build_graph(lexicon, graph_file):
-#     with open_to_write(graph_file) as fp:
-#         for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
-#             rule = algorithms.align.extract_rule(n1, n2)
-#             if rule is not None:
-#                 write_line(fp, (str(n1), str(n2), str(rule)))
-#                 write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
-
 def build_graph_allrules(lexicon, graph_file):
     with open_to_write(graph_file) as fp:
         for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
@@ -154,7 +144,6 @@ def build_graph_allrules(lexicon, graph_file):
 
 
 def build_graph_fstfastss(lexicon, lexicon_tr_file, graph_file):
-    transducer_path = os.path.join(shared.options['working_dir'], 'fastss.fsm')
     logging.getLogger('main').info('Building the FastSS cascade...')
     max_word_len = max([len(n.seq()) for n in lexicon.iter_nodes()])
     algorithms.fstfastss.build_fastss_cascade(lexicon_tr_file,
@@ -174,6 +163,7 @@ def build_graph_fstfastss(lexicon, lexicon_tr_file, graph_file):
 
     logging.getLogger('main').info('Building the graph...')
     words = sorted(list(lexicon.keys()))
+    transducer_path = shared.filenames['fastss-tr']
     processes, outfiles = [], []
 #     progressbar = tqdm.tqdm(total=len(words))
     for p_id, (i, j) in\
@@ -205,16 +195,6 @@ def build_graph_bipartite_fastss(lexicon_left, lexicon_right, graph_file):
     # but: build left and right transducers, because we need them
     # goal: integrate into normal preprocess
     raise NotImplementedError() # TODO
-
-# TODO deprecated
-# def build_graph_allrules_fil(lexicon, graph_file, filters):
-#     with open_to_write(graph_file) as fp:
-#         for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
-#             for rule in algorithms.align.extract_all_rules(n1, n2):
-#                 if all(f.check(n1, n2) for f in filters):
-#                     write_line(fp, (str(n1), str(n2), str(rule)))
-#                 if all(f.check(n2, n1) for f in filters):
-#                     write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
 
 def build_graph_from_training_edges(lexicon, training_file, graph_file):
     with open_to_write(graph_file) as fp:
@@ -339,74 +319,4 @@ def cleanup():
     remove_file_if_exists(shared.filenames['rules'])
     remove_file_if_exists(shared.filenames['lexicon-tr'])
     remove_file_if_exists(shared.filenames['graph'])
-
-# TODO deprecated
-# def evaluate():
-#     print('\nSurface rules: nothing to evaluate.\n')
-# 
-# def import_from_db():
-#     utils.db.connect()
-#     print('Importing wordlist...')
-#     utils.db.pull_table(settings.WORDS_TABLE, ('word', 'freq'),\
-#         settings.FILES['training.wordlist'])
-#     print('Importing surface rules...')
-#     utils.db.pull_table(settings.S_RUL_TABLE, ('rule', 'freq', 'prob'),\
-#         settings.FILES['surface.rules'])
-#     # pull graph
-#     print('Importing graph...')
-#     with open_to_write(settings.FILES['surface.graph']) as fp:
-#         for word_1, word_2, rule in utils.db.query_fetch_results('''
-#             SELECT w1.word, w2.word, r.rule FROM graph g 
-#                 JOIN words w1 ON g.w1_id = w1.w_id
-#                 JOIN words w2 ON g.w2_id = w2.w_id
-#                 JOIN s_rul r ON g.r_id = r.r_id
-#             ;'''):
-#             write_line(fp, (word_1, word_2, rule))
-#     # pull surface rules co-occurrences
-#     print('Importing surface rules co-occurrences...')
-#     with open_to_write(settings.FILES['surface.rules.cooc']) as fp:
-#         for rule_1, rule_2, freq, sig in utils.db.query_fetch_results('''
-#             SELECT r1.rule, r2.rule, c.freq, c.sig FROM s_rul_co c
-#                 JOIN s_rul r1 ON c.r1_id = r1.r_id
-#                 JOIN s_rul r2 ON c.r2_id = r2.r_id
-#             ;'''):
-#             write_line(fp, (rule_1, rule_2, freq, sig))
-#     utils.db.close_connection()
-# 
-# def export_to_db():
-#     # words <- insert ID
-#     print('Converting wordlist...')
-#     word_ids = utils.db.insert_id(settings.FILES['training.wordlist'],\
-#         settings.FILES['wordlist.db'])
-#     # surface rules <- insert ID
-#     print('Converting surface rules...')
-#     s_rule_ids = utils.db.insert_id(settings.FILES['surface.rules'],\
-#         settings.FILES['surface.rules.db'])
-#     # graph <- replace words and surface rules with their ID
-#     print('Converting graph...')
-#     utils.db.replace_values_with_ids(settings.FILES['surface.graph'],\
-#         settings.FILES['surface.graph.db'],\
-#         (word_ids, word_ids, s_rule_ids))
-#     # surface_rules_cooc <- replace rules with ID
-#     print('Converting surface rules co-occurrences...')
-#     utils.db.replace_values_with_ids(settings.FILES['surface.rules.cooc'],\
-#         settings.FILES['surface.rules.cooc.db'],\
-#         (s_rule_ids, s_rule_ids, None, None))
-#     # load tables into DB
-#     utils.db.connect()
-#     print('Exporting wordlist...')
-#     utils.db.push_table(settings.WORDS_TABLE, settings.FILES['wordlist.db'])
-#     print('Exporting surface rules...')
-#     utils.db.push_table(settings.S_RUL_TABLE, settings.FILES['surface.rules.db'])
-#     print('Exporting graph...')
-#     utils.db.push_table(settings.GRAPH_TABLE, settings.FILES['surface.graph.db'])
-#     print('Exporting surface rules co-occurrences...')
-#     utils.db.push_table(settings.S_RUL_CO_TABLE,\
-#         settings.FILES['surface.rules.cooc.db'])
-#     utils.db.close_connection()
-#     # delete temporary files
-#     remove_file(settings.FILES['wordlist.db'])
-#     remove_file(settings.FILES['surface.rules.db'])
-#     remove_file(settings.FILES['surface.graph.db'])
-#     remove_file(settings.FILES['surface.rules.cooc.db'])
 

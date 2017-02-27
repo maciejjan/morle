@@ -1,3 +1,4 @@
+from utils.files import full_path
 from utils.printer import progress_printer
 
 import hfst
@@ -275,7 +276,7 @@ def load_transducer(filename):
 
 def load_cascade(filename):
     transducers = []
-    istr = hfst.HfstInputStream(filename)
+    istr = hfst.HfstInputStream(full_path(filename))
     while not istr.is_eof():
         transducers.append(istr.read())
     istr.close()
