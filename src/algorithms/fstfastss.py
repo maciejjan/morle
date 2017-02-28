@@ -211,6 +211,8 @@ def similar_words_with_block_composition(words, transducer_path):
         count += block_size
         if progressbar is not None:
             progressbar.update(len(block))
+    if progressbar is not None:
+        progressbar.close()
 
 def similar_words(words, transducer_path):
     method = shared.config['preprocess'].get('method')
