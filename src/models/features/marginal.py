@@ -159,6 +159,7 @@ class MarginalGaussianInverseChiSquaredFeature(MarginalFeature):
         return kappa, mu, nu, var
 
     def cost_with_parameters(self, kappa, mu, nu, var):
+        # TODO optimize - a vector of coordinate costs, sum at the end
         def coordinate_cost(kappa, mu, nu, var, kappa_0, mu_0, nu_0, var_0):
             return -gammaln(nu/2)+gammaln(nu_0/2) - 0.5*np.log(kappa_0) +\
                 0.5*np.log(kappa) - 0.5*nu_0*np.log(nu_0*var_0) +\
