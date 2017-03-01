@@ -1,9 +1,9 @@
 import algorithms.align
-import algorithms.fastss
-import algorithms.fst
+# import algorithms.fastss
+# import algorithms.fst
 import algorithms.fstfastss
 # import algorithms.splrules # TODO deprecated
-from datastruct.lexicon import normalize_seq, tokenize_word, Lexicon
+from datastruct.lexicon import normalize_word, Lexicon
 from datastruct.rules import *
 # from models.point import *
 from utils.files import *
@@ -19,8 +19,7 @@ import tqdm
 def load_normalized_wordlist(filename):
     results = []
     for (word,) in read_tsv_file(filename):
-        word, tag, disamb = tokenize_word(word)
-        results.append(''.join(normalize_seq(word+tag)))
+        results.append(normalize_word(word))
     return results
 
 # input file: wordlist
@@ -52,9 +51,10 @@ def parallel_execute(function, data, num=1, additional_args=()):
     step = len(data) // num
     processes = []
     for i in range(num):
+        # account for rounding error while processing the last chunk
+        data_chunk = data[i*step:(i+1)*step] if i < num-1 else data[i*step:]
         p = multiprocessing.Process(target=function, 
-                                    args=(i, data[i*step:(i+1)*step]) +\
-                                         additional_args)
+                                    args=(i, data_chunk) + additional_args)
         processes.append(p)
     for p in processes:
         p.start()

@@ -1,4 +1,4 @@
-from datastruct.lexicon import *
+from datastruct.lexicon import Lexicon, LexiconEdge, normalize_word
 from datastruct.rules import *
 from models.marginal import MarginalModel
 from utils.files import *
@@ -18,7 +18,9 @@ def prepare_marginal_model():
     logging.getLogger('main').info('Loading edges...')
     edges = []
     for w1, w2, r in read_tsv_file(shared.filenames['graph']):
-        edges.append(LexiconEdge(lexicon[w1], lexicon[w2], rules[r]))
+        edges.append(LexiconEdge(lexicon[normalize_word(w1)], 
+                                 lexicon[normalize_word(w2)], 
+                                 rules[r]))
     model = MarginalModel(lexicon, None)
     model.fit_ruledist(set(rules.values()))
     for rule, domsize in rule_domsizes.items():

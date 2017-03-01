@@ -21,38 +21,6 @@ def get_wordlist_format():
             lambda x: np.array(list(map(float, x.split(shared.format['vector_sep'])))))
     return tuple(result)
 
-# def normalize_word(string):
-#     # deal with capital letters
-#     if string.isupper():
-#         string = '{ALLCAPS}' + string.lower()
-#     else:
-#         new_string_chars = []
-#         for c in string:
-#             new_string_chars.append('{CAP}' + c.lower() if c.isupper() else c)
-#         string = ''.join(new_string_chars)
-#     # perform substritutions
-#     for subst_from, subst_to in shared.normalization_substitutions:
-#         string = string.replace(subst_from, subst_to)
-#     return string
-# 
-# def unnormalize_word(string):
-#     # perform substritutions
-#     for subst_from, subst_to in shared.normalization_substitutions:
-#         string = string.replace(subst_to, subst_from)
-#     # deal with capital letters
-#     if string.startswith('{ALLCAPS}'):
-#         return string[9:].upper()
-#     else:
-#         new_string_chars = []
-#         while string:
-#             if string.startswith('{CAP}'):
-#                 new_string_chars.append(string[5].upper())
-#                 string = string[6:]
-#             else:
-#                 new_string_chars.append(string[0])
-#                 string = string[1:]
-#         return ''.join(new_string_chars)
-
 def normalize_seq(seq):
     result = []
     allcaps = True
@@ -89,6 +57,10 @@ def tokenize_word(string):
            tuple(re.findall(shared.compiled_patterns['tag'], m.group('tag'))),\
            m.group('disamb')
 
+def normalize_word(string):
+    word, tag, disamb = tokenize_word(string)
+    return ''.join(normalize_seq(word + tag))
+
 class LexiconEdge:
     def __init__(self, source, target, rule, cost=0.0):
         self.source = source
@@ -107,11 +79,11 @@ class LexiconNode:
         self.literal = word
         self.word, self.tag, self.disamb = tokenize_word(word)
         self.word = normalize_seq(self.word)
-# TODO deprecated
         self.key = ''.join(self.word + self.tag) +\
                    ((shared.format['word_disamb_sep'] + self.disamb)\
                      if self.disamb else '')
-#         self.word_tag_str = ''.join(self.word + self.tag)
+        # TODO needed by AlergiaStringFeature, but should be removed?
+        self.word_tag_str = ''.join(self.word + self.tag)
         if shared.config['Features'].getfloat('word_freq_weight') > 0:
             self.freq = freq
             self.logfreq = math.log(self.freq)
