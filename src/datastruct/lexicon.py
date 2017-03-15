@@ -11,8 +11,14 @@ import math
 import logging
 from typing import Callable, List, Tuple
 
-def get_wordlist_format() -> Tuple:
-    result = [str]  # type: List[Callable]
+# TODO: new classes
+# Vocabulary -- a set of lexicon entries
+# VocabularyItem -- a word with features etc.
+# Branching -- a set of lexicon edges conforming to well-formedness conditions
+# EdgeSet? -- a set of lexicon edges
+
+def get_wordlist_format() -> List[Callable[[Any], Any]]:
+    result = [str]  # type: List[Callable[[Any], Any]]
     if shared.config['General'].getboolean('supervised'):
         result.append(str)
     if shared.config['Features'].getfloat('word_freq_weight') > 0:
@@ -20,7 +26,7 @@ def get_wordlist_format() -> Tuple:
     if shared.config['Features'].getfloat('word_vec_weight') > 0:
         result.append(\
             lambda x: np.array(list(map(float, x.split(shared.format['vector_sep'])))))
-    return tuple(result)
+    return result
 
 def normalize_seq(seq):
     result = []
@@ -61,6 +67,11 @@ def tokenize_word(string):
 def normalize_word(string):
     word, tag, disamb = tokenize_word(string)
     return ''.join(normalize_seq(word + tag))
+
+class LexiconEntry:
+    # TODO entry contains what's inside a node: word, tag, seq, features etc.
+    # TODO node contains entry + graph structure information
+    pass
 
 class LexiconEdge:
     def __init__(self, source, target, rule, cost=0.0):

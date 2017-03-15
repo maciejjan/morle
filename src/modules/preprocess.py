@@ -1,13 +1,8 @@
 import algorithms.align
-# import algorithms.fastss
-# import algorithms.fst
 import algorithms.fstfastss
-# import algorithms.splrules # TODO deprecated
 from datastruct.lexicon import normalize_word, Lexicon
 from datastruct.rules import *
-# from models.point import *
 from utils.files import file_exists, read_tsv_file
-# from utils.printer import *
 
 import logging
 import multiprocessing
@@ -15,7 +10,6 @@ import os.path
 import subprocess
 import tqdm
 from typing import Any, Callable, Iterable, List, Tuple
-# import threading
 
 
 def load_normalized_wordlist(filename :str) -> Iterable[str]:
@@ -28,27 +22,22 @@ def load_normalized_wordlist(filename :str) -> Iterable[str]:
 # input file: wordlist
 # output file: transducer file
 def compile_lexicon_transducer(
-        lexicon :Lexicon = None, 
-        output_file :str = None, 
-        node_keys :Iterable[str] = None) -> None:
+        entries :Container[VocabularyItem],
+        output_file :str = None) -> None:
 
-    mandatory_args = (lexicon, output_file)
-    assert not any(arg is None for arg in mandatory_args)
+    assert output_file is not None
 
-    nodes = list(lexicon.iter_nodes())\
-                if node_keys is None \
-                else list(lexicon[key] for key in node_keys)
     lex_file = output_file + '.lex'
     tags = set()
-    for node in nodes:
-        for t in node.tag:
+    for entry in entries:
+        for t in entry.tag:
             tags.add(t)
     with open_to_write(lex_file) as lexfp:
         lexfp.write('Multichar_Symbols ' + 
                     ' '.join(shared.multichar_symbols + list(tags)) + '\n\n')
         lexfp.write('LEXICON Root\n')
-        for node in nodes:
-            lexfp.write('\t' + ''.join(node.word + node.tag) + ' # ;\n')
+        for entry in entries:
+            lexfp.write('\t' + ''.join(entry.word + entry.tag) + ' # ;\n')
     # compile the lexc file
     cmd = ['hfst-lexc', full_path(lex_file), '-o', full_path(output_file)]
     subprocess.run(cmd)
@@ -80,6 +69,7 @@ def parallel_execute(
     for p in processes:
         p.join()
 
+
 def expand_graph(graph_file :str) -> None:
     '''Annotate graph with additional information needed for filtering:
        currently rule frequencies.'''
@@ -95,6 +85,7 @@ def expand_graph(graph_file :str) -> None:
     rename_file(graph_file + '.tmp', graph_file)
     update_file_size(graph_file)
 
+
 def contract_graph(graph_file :str) -> None:
     '''Remove any additional information needed for filtering.'''
     with open_to_write(graph_file + '.tmp') as graph_tmp_fp:
@@ -102,6 +93,7 @@ def contract_graph(graph_file :str) -> None:
                 print_progress=True, print_msg='Contracting the graph...'):
             write_line(graph_tmp_fp, (w1, w2, rule))
     rename_file(graph_file + '.tmp', graph_file)
+
 
 def filter_max_num_rules(graph_file :str) -> None:
     logging.getLogger('main').info('filter_max_num_rules')
@@ -121,6 +113,7 @@ def filter_max_num_rules(graph_file :str) -> None:
     rename_file(graph_file + '.tmp', graph_file)
     update_file_size(graph_file)
 
+
 def filter_max_edges_per_wordpair(graph_file :str) -> None:
     sort_files(graph_file, stable=True, key=(1, 2))
     max_edges_per_wordpair = \
@@ -135,6 +128,7 @@ def filter_max_edges_per_wordpair(graph_file :str) -> None:
     sort_files(graph_file, stable=True, numeric=True, reverse=True, key=4)
     update_file_size(graph_file)
 
+
 # again, because after other filters some frequencies have decreased
 def filter_min_rule_freq(graph_file :str) -> None:
     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
@@ -146,12 +140,14 @@ def filter_min_rule_freq(graph_file :str) -> None:
     rename_file(graph_file + '.tmp', graph_file)
     update_file_size(graph_file)
 
+
 def run_filters(graph_file :str) -> None:
     expand_graph(graph_file)
     filter_max_num_rules(graph_file)
     filter_max_edges_per_wordpair(graph_file)
     filter_min_rule_freq(graph_file)
     contract_graph(graph_file)
+
 
 def filter_rules(graph_file :str) -> None:
     '''Filter rules according to frequency.'''
@@ -167,6 +163,7 @@ def filter_rules(graph_file :str) -> None:
 #    rename_file(graph_file, graph_file + '.orig')
     rename_file(graph_file + '.filtered', graph_file)
 
+
 def build_graph_allrules(lexicon :Lexicon, graph_file :str) -> None:
     with open_to_write(graph_file) as fp:
         for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
@@ -175,7 +172,13 @@ def build_graph_allrules(lexicon :Lexicon, graph_file :str) -> None:
                 write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
     sort_files(graph_file, key=3)
 
-def build_graph_fstfastss(lexicon, lex_tr_file, graph_file, node_keys=None):
+
+def build_graph_fstfastss(
+        lexicon :Lexicon,
+        lex_tr_file :str,
+        graph_file :str,
+        node_keys :Iterable[str] = None) -> None:
+
     logging.getLogger('main').info('Building the FastSS cascade...')
     max_word_len = max([len(n.word) for n in lexicon.iter_nodes()])
     algorithms.fstfastss.build_fastss_cascade(lex_tr_file,
@@ -258,7 +261,8 @@ def run_standard():
     logging.getLogger('main').info('Loading lexicon...')
     lexicon = Lexicon.init_from_wordlist(shared.filenames['wordlist'])
     logging.getLogger('main').info('Building the lexicon transducer...')
-    compile_lexicon_transducer(lexicon, shared.filenames['lexicon-tr'])
+    compile_lexicon_transducer(lexicon.iter_nodes(),
+                               shared.filenames['lexicon-tr'])
 
     if shared.config['General'].getboolean('supervised'):
         logging.getLogger('main').info('Building graph...')
@@ -290,8 +294,8 @@ def run_bipartite():
     wordlist_right = load_normalized_wordlist(
                          shared.filenames['wordlist.right'])
     logging.getLogger('main').info('Building the lexicon transducers...')
-    compile_lexicon_transducer(lexicon, shared.filenames['left-tr'],\
-                               node_keys=wordlist_left)
+    compile_lexicon_transducer(list(lexicon[word] for word in wordlist_left),
+                               shared.filenames['left-tr'])
     compile_lexicon_transducer(lexicon, shared.filenames['right-tr'],\
                                node_keys=wordlist_right)
 
