@@ -59,6 +59,9 @@ class FrequencyAutomaton:
         self[self.next_state_id] = FreqencyAutomatonState(self.next_state_id)
         self.next_state_id += 1
 
+    def delete_state(self, state_id):
+        del self.states[state_id]
+
     def add_transition(self, source_state, symbol, target_state, freq):
         tr = FrequencyAutomatonTransition(source_state, symbol, 
                                           target_state, freq)
