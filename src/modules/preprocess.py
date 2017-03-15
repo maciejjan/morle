@@ -123,10 +123,12 @@ def filter_max_num_rules(graph_file :str) -> None:
 
 def filter_max_edges_per_wordpair(graph_file :str) -> None:
     sort_files(graph_file, stable=True, key=(1, 2))
+    max_edges_per_wordpair = \
+        shared.config['preprocess'].getint('max_edges_per_wordpair')
     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
         for (word_1, word_2), edges in read_tsv_file_by_key(graph_file, (1, 2),
                 print_progress=True, print_msg='filter_max_edges_per_wordpair'):
-            for rule, freq in edges[:shared.config['preprocess'].getint('max_edges_per_wordpair')]:
+            for rule, freq in edges[:max_edges_per_wordpair]:
                 write_line(graph_fil_fp, (word_1, word_2, rule, freq))
     rename_file(graph_file + '.tmp', graph_file)
     sort_files(graph_file, key=3)
