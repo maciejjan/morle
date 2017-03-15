@@ -9,9 +9,10 @@ import itertools
 import re
 import math
 import logging
+from typing import Callable, List, Tuple
 
-def get_wordlist_format():
-    result = [str]
+def get_wordlist_format() -> Tuple:
+    result = [str]  # type: List[Callable]
     if shared.config['General'].getboolean('supervised'):
         result.append(str)
     if shared.config['Features'].getfloat('word_freq_weight') > 0:

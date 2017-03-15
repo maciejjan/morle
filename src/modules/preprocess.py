@@ -6,25 +6,35 @@ import algorithms.fstfastss
 from datastruct.lexicon import normalize_word, Lexicon
 from datastruct.rules import *
 # from models.point import *
-from utils.files import *
-from utils.printer import *
+from utils.files import file_exists, read_tsv_file
+# from utils.printer import *
 
 import logging
 import multiprocessing
 import os.path
 import subprocess
 import tqdm
+from typing import Any, Callable, Iterable, List, Tuple
 # import threading
 
-def load_normalized_wordlist(filename):
+
+def load_normalized_wordlist(filename :str) -> Iterable[str]:
     results = []
     for (word,) in read_tsv_file(filename):
         results.append(normalize_word(word))
     return results
 
+
 # input file: wordlist
 # output file: transducer file
-def compile_lexicon_transducer(lexicon, output_file, node_keys=None):
+def compile_lexicon_transducer(
+        lexicon :Lexicon = None, 
+        output_file :str = None, 
+        node_keys :Iterable[str] = None) -> None:
+
+    mandatory_args = (lexicon, output_file)
+    assert not any(arg is None for arg in mandatory_args)
+
     nodes = list(lexicon.iter_nodes())\
                 if node_keys is None \
                 else list(lexicon[key] for key in node_keys)
@@ -44,7 +54,16 @@ def compile_lexicon_transducer(lexicon, output_file, node_keys=None):
     subprocess.run(cmd)
     remove_file(lex_file)
 
-def parallel_execute(function, data, num=1, additional_args=()):
+
+def parallel_execute(
+        function :Callable[..., None] = None,
+        data :List[Any] = None,
+        num :int = 1,
+        additional_args :Tuple = ()) -> None:
+
+    mandatory_args = (function, data, num, additional_args)
+    assert not any(arg is None for arg in mandatory_args)
+
     # data -- partitioned equally among processes
     # function gets the following arguments: p_id, data, *args
     count = 0
@@ -61,7 +80,7 @@ def parallel_execute(function, data, num=1, additional_args=()):
     for p in processes:
         p.join()
 
-def expand_graph(graph_file):
+def expand_graph(graph_file :str) -> None:
     '''Annotate graph with additional information needed for filtering:
        currently rule frequencies.'''
     min_freq = shared.config['preprocess'].getint('min_rule_freq')
@@ -76,7 +95,7 @@ def expand_graph(graph_file):
     rename_file(graph_file + '.tmp', graph_file)
     update_file_size(graph_file)
 
-def contract_graph(graph_file):
+def contract_graph(graph_file :str) -> None:
     '''Remove any additional information needed for filtering.'''
     with open_to_write(graph_file + '.tmp') as graph_tmp_fp:
         for w1, w2, rule, freq in read_tsv_file(graph_file,
@@ -84,7 +103,7 @@ def contract_graph(graph_file):
             write_line(graph_tmp_fp, (w1, w2, rule))
     rename_file(graph_file + '.tmp', graph_file)
 
-def filter_max_num_rules(graph_file):
+def filter_max_num_rules(graph_file :str) -> None:
     logging.getLogger('main').info('filter_max_num_rules')
     sort_files(graph_file, stable=True, numeric=True, reverse=True, key=4)
     pp = progress_printer(shared.config['preprocess'].getint('max_num_rules'))
@@ -102,7 +121,7 @@ def filter_max_num_rules(graph_file):
     rename_file(graph_file + '.tmp', graph_file)
     update_file_size(graph_file)
 
-def filter_max_edges_per_wordpair(graph_file):
+def filter_max_edges_per_wordpair(graph_file :str) -> None:
     sort_files(graph_file, stable=True, key=(1, 2))
     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
         for (word_1, word_2), edges in read_tsv_file_by_key(graph_file, (1, 2),
@@ -115,7 +134,7 @@ def filter_max_edges_per_wordpair(graph_file):
     update_file_size(graph_file)
 
 # again, because after other filters some frequencies have decreased
-def filter_min_rule_freq(graph_file):
+def filter_min_rule_freq(graph_file :str) -> None:
     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
         for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file, (3, 4),
                 print_progress=True, print_msg='filter_min_rule_freq'):
@@ -125,14 +144,14 @@ def filter_min_rule_freq(graph_file):
     rename_file(graph_file + '.tmp', graph_file)
     update_file_size(graph_file)
 
-def run_filters(graph_file):
+def run_filters(graph_file :str) -> None:
     expand_graph(graph_file)
     filter_max_num_rules(graph_file)
     filter_max_edges_per_wordpair(graph_file)
     filter_min_rule_freq(graph_file)
     contract_graph(graph_file)
 
-def filter_rules(graph_file):
+def filter_rules(graph_file :str) -> None:
     '''Filter rules according to frequency.'''
     # Annotate graph with rule frequency
     # format: w1 w2 rule -> w1 w2 rule freq
@@ -146,7 +165,7 @@ def filter_rules(graph_file):
 #    rename_file(graph_file, graph_file + '.orig')
     rename_file(graph_file + '.filtered', graph_file)
 
-def build_graph_allrules(lexicon, graph_file):
+def build_graph_allrules(lexicon :Lexicon, graph_file :str) -> None:
     with open_to_write(graph_file) as fp:
         for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
             for rule in algorithms.align.extract_all_rules(n1, n2):
@@ -178,7 +197,8 @@ def build_graph_fstfastss(lexicon, lex_tr_file, graph_file, node_keys=None):
         node_keys = sorted(list(lexicon.keys()))
     transducer_path = shared.filenames['fastss-tr']
     num_processes = shared.config['preprocess'].getint('num_processes')
-    parallel_execute(_extract_candidate_edges, node_keys, num=num_processes,
+    parallel_execute(function=_extract_candidate_edges,
+                     data=node_keys, num=num_processes,
                      additional_args=(lexicon, transducer_path, graph_file))
     outfiles = ['.'.join((graph_file, str(p_id)))\
                 for p_id in range(num_processes)]

@@ -1,4 +1,6 @@
+from configparser import ConfigParser
 import re
+from typing import Any, Dict
 
 # shared
 # .config -- saved in a configuration file in the working dir
@@ -8,7 +10,7 @@ import re
 
 # configuration and working directory -- set at runtime by the 'main' module
 
-config = None
+config = None       # type: ConfigParser
 
 options = {\
     'quiet' : False,
@@ -61,7 +63,7 @@ format = {\
     'rule_tag_sep' : '___'
 }
 
-patterns = {}
+patterns = {}   # type: Dict[str, str]
 patterns['symbol'] = '(?:[\w\-\.]|\{[A-Z0-9]+\})'
 patterns['tag'] = '(?:<[A-Z0-9]+>)'
 patterns['disamb'] = '[0-9]+'
@@ -83,7 +85,7 @@ patterns['rule'] = '^(?P<subst>%s(%s)*)(?:%s(?P<tag_subst>%s))?$' %\
 patterns['rule_named_tag_subst'] = '(?P<x>%s*)%s(?P<y>%s*)' %\
                                (patterns['tag'], format['rule_subst_sep'], patterns['tag'])
 
-compiled_patterns = {}
+compiled_patterns = {}  # type: Dict[str, Any]
 for key, val in patterns.items():
     compiled_patterns[key] = re.compile(val)
 
