@@ -22,7 +22,7 @@ def load_normalized_wordlist(filename :str) -> Iterable[str]:
 # input file: wordlist
 # output file: transducer file
 def compile_lexicon_transducer(
-        entries :Container[VocabularyItem],
+        entries :List[VocabularyItem],
         output_file :str = None) -> None:
 
     assert output_file is not None
