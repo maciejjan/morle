@@ -1,6 +1,6 @@
 import shared
 import argparse
-import configparser
+# import configparser
 import logging
 import os
 import os.path
@@ -12,7 +12,7 @@ def process_config():
        the default configuration and save it in the working directory.'''
 
     def load_config(path):
-        shared.config = configparser.ConfigParser()
+#         shared.config = configparser.ConfigParser()
         shared.config.read(path)
 
     def save_config(path):

@@ -2,7 +2,10 @@
 
 from algorithms.alergia import *
 
+import unittest
+
 # TODO 
 
 class AlergiaTest(unittest.TestCase):
-    raise NotImplementedError()
+    pass
+#     raise NotImplementedError()

@@ -1,6 +1,6 @@
 import algorithms.align
 import algorithms.fstfastss
-from datastruct.lexicon import normalize_word, Lexicon
+from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import *
 from utils.files import file_exists, read_tsv_file
 
@@ -15,14 +15,14 @@ from typing import Any, Callable, Iterable, List, Tuple
 def load_normalized_wordlist(filename :str) -> Iterable[str]:
     results = []
     for (word,) in read_tsv_file(filename):
-        results.append(normalize_word(word))
+        results.append(LexiconEntry(word).literal)
     return results
 
 
 # input file: wordlist
 # output file: transducer file
 def compile_lexicon_transducer(
-        entries :List[VocabularyItem],
+        entries :List[LexiconEntry],
         output_file :str = None) -> None:
 
     assert output_file is not None
@@ -37,7 +37,7 @@ def compile_lexicon_transducer(
                     ' '.join(shared.multichar_symbols + list(tags)) + '\n\n')
         lexfp.write('LEXICON Root\n')
         for entry in entries:
-            lexfp.write('\t' + ''.join(entry.word + entry.tag) + ' # ;\n')
+            lexfp.write('\t' + entry.symstr + ' # ;\n')
     # compile the lexc file
     cmd = ['hfst-lexc', full_path(lex_file), '-o', full_path(output_file)]
     subprocess.run(cmd)
@@ -164,20 +164,21 @@ def filter_rules(graph_file :str) -> None:
     rename_file(graph_file + '.filtered', graph_file)
 
 
-def build_graph_allrules(lexicon :Lexicon, graph_file :str) -> None:
-    with open_to_write(graph_file) as fp:
-        for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
-            for rule in algorithms.align.extract_all_rules(n1, n2):
-                write_line(fp, (str(n1), str(n2), str(rule)))
-                write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
-    sort_files(graph_file, key=3)
-
+# TODO deprecated -- use fstfastss
+# def build_graph_allrules(lexicon :Lexicon, graph_file :str) -> None:
+#     with open_to_write(graph_file) as fp:
+#         for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
+#             for rule in algorithms.align.extract_all_rules(n1, n2):
+#                 write_line(fp, (str(n1), str(n2), str(rule)))
+#                 write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
+#     sort_files(graph_file, key=3)
+# 
 
 def build_graph_fstfastss(
         lexicon :Lexicon,
         lex_tr_file :str,
         graph_file :str,
-        node_keys :Iterable[str] = None) -> None:
+        words :Iterable[str] = None) -> None:
 
     logging.getLogger('main').info('Building the FastSS cascade...')
     max_word_len = max([len(n.word) for n in lexicon.iter_nodes()])
@@ -198,12 +199,12 @@ def build_graph_fstfastss(
 #                                            rule.reverse().to_string()))
 
     logging.getLogger('main').info('Building the graph...')
-    if node_keys is None:
-        node_keys = sorted(list(lexicon.keys()))
+    if words is None:
+        words = sorted(list(lexicon.keys()))
     transducer_path = shared.filenames['fastss-tr']
     num_processes = shared.config['preprocess'].getint('num_processes')
     parallel_execute(function=_extract_candidate_edges,
-                     data=node_keys, num=num_processes,
+                     data=words, num=num_processes,
                      additional_args=(lexicon, transducer_path, graph_file))
     outfiles = ['.'.join((graph_file, str(p_id)))\
                 for p_id in range(num_processes)]
@@ -259,7 +260,7 @@ def compute_rule_domsizes(lexicon_tr_file, rules_file):
 
 def run_standard():
     logging.getLogger('main').info('Loading lexicon...')
-    lexicon = Lexicon.init_from_wordlist(shared.filenames['wordlist'])
+    lexicon = Lexicon(filename=shared.filenames['wordlist'])
     logging.getLogger('main').info('Building the lexicon transducer...')
     compile_lexicon_transducer(lexicon.iter_nodes(),
                                shared.filenames['lexicon-tr'])

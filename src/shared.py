@@ -1,4 +1,4 @@
-from configparser import ConfigParser
+import configparser
 import re
 from typing import Any, Dict
 
@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 # configuration and working directory -- set at runtime by the 'main' module
 
-config = None       # type: ConfigParser
+config = configparser.ConfigParser()
 
 options = {\
     'quiet' : False,

@@ -1,5 +1,5 @@
 from utils.files import full_path
-from utils.printer import progress_printer
+# from utils.printer import progress_printer
 
 import hfst
 import os.path

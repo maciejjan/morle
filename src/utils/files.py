@@ -1,49 +1,67 @@
 import shared
-import utils.printer
+# import utils.printer
+import csv
 import logging
 import numpy as np
 import os
 import os.path
+import tqdm
+from typing import Any, Iterable, List, Tuple, Union
+from typing.io import TextIO
 
-def full_path(filename):
+
+def full_path(filename :str) -> str:
     return os.path.join(shared.options['working_dir'], filename)
 
-def read_tsv_file(filename, types=None, print_progress=False, print_msg=None):
-    pp = None
-    if print_progress:
-        if print_msg:
-            logging.getLogger('main').info(print_msg)
-        pp = utils.printer.progress_printer(get_file_size(filename))
-    encoding = shared.config['General'].get('encoding')
-    with open(full_path(filename), 'r', encoding=encoding) as fp:
-        for line in fp:
-            row = line.rstrip().split('\t')
-            if isinstance(types, tuple):
-                row_converted = []
-                i = 0
-                for t in types:
-                    if callable(t):
-                        row_converted.append(t(row[i]))    # t is a conversion function
-                        i += 1
-                        if i >= len(row): break
-                    else:
-                        row_converted.append(t)            # t is a value
-                row = row_converted
-            yield tuple(row)
-            if print_progress:
-                next(pp)
 
-def read_tsv_file_by_key(filename, key=1, types=None,\
-        print_progress=False, print_msg=None):
+def read_tsv_file(filename :str,
+                  types :Iterable = None,
+                  show_progressbar=False) -> Iterable[List[Any]]:
+
+    progressbar = None
+    if show_progressbar:
+        progressbar = tqdm.tqdm(total=get_file_size(filename))
+    encoding = shared.config['General'].get('encoding')
+    converter = (lambda row: [t(row[i]) for i, t in enumerate(types) \
+                                        if callable(t)]) \
+                if types is not None \
+                else lambda row: row
+
+    with open(full_path(filename), 'r', encoding=encoding, newline='') as fp:
+        reader = csv.reader(fp, delimiter='\t')
+        for row in reader:
+            yield converter(row)
+            if show_progressbar:
+                progressbar.update()
+    if show_progressbar:
+        progressbar.close()
+
+def read_tsv_file_by_key(filename :str,
+                         key :Union[int, Iterable[int]] = 1,
+                         types :Iterable = None,
+                         show_progressbar :bool = False) \
+    -> Iterable[Tuple[Any, List[List[Any]]]]:
+
+    key_and_entry_maker = None, None
+    if isinstance(key, int):
+        key_and_entry_maker = lambda row: row[key], row[:key]+row[key+1:]
+    elif hasattr(key, '__contains__') and hasattr(key, '__iter__'):
+        key_and_entry_maker = \
+            lambda row: [row[i] for i in key], \
+                        [row[i] for i in range(len(row)) if i not in key]
+    else:
+        raise RuntimeError('Invalid key: %s' % str(key))
+
     current_key, entries = None, []
-    for row in read_tsv_file(filename, types, print_progress, print_msg):
-        key_, entry = None, None
-        if isinstance(key, tuple):
-            key_ = tuple([row[i-1] for i in key])
-            entry = tuple([row[i] for i in range(0, len(row)) if not i+1 in key])
-        elif isinstance(key, int):
-            key_ = row[key-1]
-            entry = tuple([row[i] for i in range(0, len(row)) if i+1 != key])
+    for row in read_tsv_file(filename, types, show_progressbar):
+        key_, entry = key_and_entry_maker(row)
+#         key_, entry = None, None
+#         if isinstance(key, tuple):
+#             key_ = tuple([row[i-1] for i in key])
+#             entry = tuple([row[i] for i in range(0, len(row)) if not i+1 in key])
+#         elif isinstance(key, int):
+#             key_ = row[key-1]
+#             entry = tuple([row[i] for i in range(0, len(row)) if i+1 != key])
         if key_ != current_key:
             if entries:
                 yield current_key, entries
@@ -52,7 +70,7 @@ def read_tsv_file_by_key(filename, key=1, types=None,\
     if entries:
         yield current_key, entries
 
-def open_to_write(filename, mode='w+'):
+def open_to_write(filename :str, mode :str = 'w+') -> TextIO:
     encoding = shared.config['General'].get('encoding')
     return open(full_path(filename), mode, encoding=encoding)
 
@@ -139,7 +157,7 @@ def sort_files(infiles, outfile=None, key=None, reverse=False, numeric=False,
             sort_call.append('-t \'	\'')
         elif isinstance(key, int):
             sort_call.append('-k%d,%d' % (key, key))
-            sort_call.append('-t \'	\'')
+            sort_call.append('-t \'    \'')
     if reverse:
         sort_call.append('-r')
     if numeric:
