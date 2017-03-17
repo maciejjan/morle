@@ -5,7 +5,8 @@ from datastruct.rules import Rule
 from utils.files import aggregate_file, file_exists, full_path, \
                         open_to_write, read_tsv_file, read_tsv_file_by_key, \
                         remove_file, remove_file_if_exists, rename_file, \
-                        sort_files, update_file_size, write_line
+                        sort_files, update_file_size, write_line, \
+                        write_tsv_file
 import shared
 
 from hfst import HfstTransducer
@@ -30,6 +31,7 @@ def load_normalized_wordlist(filename :str) -> Iterable[str]:
 
 # input file: wordlist
 # output file: transducer file
+# TODO return the transducer instead of saving it
 def compile_lexicon_transducer(entries :List[LexiconEntry],
                                output_file :str) -> None:
     lex_file = output_file + '.lex'
@@ -52,7 +54,7 @@ def compile_lexicon_transducer(entries :List[LexiconEntry],
 def parallel_execute(function :Callable[..., None] = None,
                      data :List[Any] = None,
                      num :int = 1,
-                     additional_args :Tuple = ()) -> None:
+                     additional_args :Tuple = ()) -> Iterable:
 
     mandatory_args = (function, data, num, additional_args)
     assert not any(arg is None for arg in mandatory_args)
@@ -61,17 +63,27 @@ def parallel_execute(function :Callable[..., None] = None,
     # function gets the following arguments: p_id, data, *args
     count = 0
     step = len(data) // num
-    processes = []
+    queue = multiprocessing.Queue()
+    processes, joined = [], []
     for i in range(num):
         # account for rounding error while processing the last chunk
         data_chunk = data[i*step:(i+1)*step] if i < num-1 else data[i*step:]
-        p = multiprocessing.Process(target=function, 
-                                    args=(i, data_chunk) + additional_args)
-        processes.append(p)
-    for p in processes:
+        p = multiprocessing.Process(target=function,
+                                    args=(data_chunk, queue) + additional_args)
         p.start()
-    for p in processes:
-        p.join()
+        processes.append(p)
+        joined.append(False)
+    while not all(joined):
+        while not queue.empty():
+            yield queue.get()
+        for i, p in enumerate(processes):
+            if not p.is_alive():
+                p.join()
+                joined[i] = True
+#     for p in processes:
+#         p.start()
+#     for p in processes:
+#         p.join()
 
 
 def expand_graph(graph_file :str) -> None:
@@ -189,41 +201,42 @@ def filter_rules(graph_file :str) -> None:
 def build_graph_fstfastss(
         lexicon :Lexicon,
         lex_tr_file :str,
-        graph_file :str,
-        words :List[str] = None) -> None:
+        words :List[str] = None) -> Iterable:
 
     logging.getLogger('main').info('Building the FastSS cascade...')
     max_word_len = max([len(e.word) for e in lexicon.entries()])
     algorithms.fstfastss.build_fastss_cascade(lex_tr_file,
                                               max_word_len=max_word_len)
 
-    def _extract_candidate_edges(p_id :int, words :Iterable[str],
-                                 lexicon :Lexicon, transducer_path :str,
-                                 output_file :str) -> None:
+    def _extract_candidate_edges(words :Iterable[str],
+                                 queue :multiprocessing.Queue,
+                                 lexicon :Lexicon,
+                                 transducer_path :str) -> None:
         sw = algorithms.fstfastss.similar_words(words, transducer_path)
-        with open_to_write(output_file + '.' + str(p_id)) as outfp:
-            for word_1, word_2 in sw:
-                if word_1 != word_2:
-                    for v1 in lexicon.get_by_symstr(word_1):
-                        for v2 in lexicon.get_by_symstr(word_2):
-                            rules = algorithms.align.extract_all_rules(v1, v2)
-                            for rule in rules:
-                                write_line(outfp, (v1.literal, v2.literal, 
-                                                   str(rule)))
+#         with open_to_write(output_file + '.' + str(p_id)) as outfp:
+        for word_1, word_2 in sw:
+            if word_1 != word_2:
+                for v1 in lexicon.get_by_symstr(word_1):
+                    for v2 in lexicon.get_by_symstr(word_2):
+                        rules = algorithms.align.extract_all_rules(v1, v2)
+                        for rule in rules:
+                            queue.put((v1.literal, v2.literal, str(rule)))
 
-    logging.getLogger('main').info('Building the graph...')
+#     logging.getLogger('main').info('Building the graph...')
     if words is None:
         words = sorted(list(set(e.symstr for e in lexicon.entries())))
     transducer_path = shared.filenames['fastss-tr']
     num_processes = shared.config['preprocess'].getint('num_processes')
-    parallel_execute(function=_extract_candidate_edges,
-                     data=words, num=num_processes,
-                     additional_args=(lexicon, transducer_path, graph_file))
-    outfiles = ['.'.join((graph_file, str(p_id)))\
-                for p_id in range(num_processes)]
-    sort_files(outfiles, outfile=graph_file, key=3, parallel=num_processes)
-    for outfile in outfiles:
-        remove_file(outfile)
+    return parallel_execute(function=_extract_candidate_edges,
+                            data=words, num=num_processes,
+                            additional_args=(lexicon, transducer_path))
+    # TODO sort the resulting file
+
+#     outfiles = ['.'.join((graph_file, str(p_id)))\
+#                 for p_id in range(num_processes)]
+#     sort_files(outfiles, outfile=graph_file, key=3, parallel=num_processes)
+#     for outfile in outfiles:
+#         remove_file(outfile)
 
 
 # TODO refactor
@@ -294,8 +307,10 @@ def run_standard() -> None:
     else:
         logging.getLogger('main').info('Building graph...')
 #         build_graph_allrules(lexicon, shared.filenames['graph'])
-        build_graph_fstfastss(lexicon, shared.filenames['lexicon-tr'], 
-                              shared.filenames['graph'])
+        write_tsv_file(shared.filenames['graph'],
+                       build_graph_fstfastss(lexicon, 
+                                             shared.filenames['lexicon-tr']))
+        sort_file(shared.filenames['graph'], key=3)
 
     update_file_size(shared.filenames['graph'])
     run_filters(shared.filenames['graph'])

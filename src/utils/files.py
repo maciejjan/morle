@@ -78,6 +78,13 @@ def write_line(fp, line, count_bytes=False):
         return len(bytes(line))
 
 
+def write_tsv_file(filename :str, row_iter :Iterable) -> None:
+    with open(full_path(filename), 'w+', newline='') as fp:
+        writer = csv.writer(fp, delimiter='\t')
+        for row in row_iter:
+            writer.writerow(row)
+
+
 FILE_SIZES = {} # type: Dict[str, int]
 
 
@@ -149,13 +156,13 @@ def remove_file_if_exists(filename :str) -> None:
 
 
 # sort file using the unix command
-def sort_files(infiles, outfile=None, key=None, reverse=False, numeric=False, 
-               stable=False, unique=False, parallel=None):
+def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False, 
+              stable=False, unique=False, parallel=None):
     sort_call = ['sort']
-    if isinstance(infiles, str):
-        sort_call.append(full_path(infiles))
-    elif isinstance(infiles, list):
-        sort_call.extend([full_path(infile) for infile in infiles])
+#     if isinstance(infiles, str):
+    sort_call.append(full_path(infile))
+#     elif isinstance(infiles, list):
+#         sort_call.extend([full_path(infile) for infile in infiles])
     else:
         raise RuntimeError('sort: wrong input type!')
     sort_call += ['-T', shared.options['working_dir']]
@@ -166,6 +173,8 @@ def sort_files(infiles, outfile=None, key=None, reverse=False, numeric=False,
         elif isinstance(key, int):
             sort_call.append('-k%d,%d' % (key, key))
             sort_call.append('-t \'	\'')
+        else:
+            raise RuntimeError('Wrong key type.')
     if reverse:
         sort_call.append('-r')
     if numeric:
@@ -181,24 +190,24 @@ def sort_files(infiles, outfile=None, key=None, reverse=False, numeric=False,
     if outfile:
         sort_call.append(full_path(outfile))
     else:
-        if isinstance(infiles, str):
-            sort_call.append(full_path(infiles) + '.sorted')
-        elif isinstance(infiles, list):
-            sort_call.append(full_path(infiles[0]) + '.sorted')
-        else:
-            raise RuntimeError('sort: wrong input type!')
+#         if isinstance(infiles, str):
+        sort_call.append(full_path(infile) + '.sorted')
+#         elif isinstance(infiles, list):
+#             sort_call.append(full_path(infiles[0]) + '.sorted')
+#         else:
+#             raise RuntimeError('sort: wrong input type!')
     logging.getLogger('main').debug(' '.join(sort_call))
     os.system(' '.join(sort_call))
     if outfile is None:
-        if isinstance(infiles, str):
-            remove_file(infiles)
-            rename_file(infiles + '.sorted', infiles)
-        elif isinstance(infiles, list):
-            for infile in infiles:
-                remove_file(infile)
-            rename_file(infiles[0] + '.sorted', infiles[0])
-        else:
-            raise RuntimeError('sort: wrong input type!')
+#         if isinstance(infiles, str):
+        remove_file(infiles)
+        rename_file(infiles + '.sorted', infiles)
+#         elif isinstance(infiles, list):
+#             for infile in infiles:
+#                 remove_file(infile)
+#             rename_file(infiles[0] + '.sorted', infiles[0])
+#         else:
+#             raise RuntimeError('sort: wrong input type!')
 
 
 def aggregate_file(infile, outfile=None, key=1):
