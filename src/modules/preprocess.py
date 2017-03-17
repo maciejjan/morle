@@ -15,7 +15,7 @@ from typing import Any, Callable, Iterable, List, Tuple
 def load_normalized_wordlist(filename :str) -> Iterable[str]:
     results = []
     for (word,) in read_tsv_file(filename):
-        results.append(LexiconEntry(word).literal)
+        results.append(LexiconEntry(word).normalized)
     return results
 
 

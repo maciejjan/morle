@@ -81,6 +81,9 @@ class LexiconEntry:
         self.word = normalize_seq(self.word)
         # string of symbols -- does not include disambiguation ID
         self.symstr = ''.join(self.word + self.tag)
+        self.normalized = ''.join(self.word + self.tag) +\
+                          ((shared.format['word_disamb_sep'] + self.disamb) \
+                           if self.disamb is not None else '')
         if shared.config['Features'].getfloat('word_freq_weight') > 0:
             self.freq = freq
             self.logfreq = math.log(self.freq)
