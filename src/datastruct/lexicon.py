@@ -116,7 +116,8 @@ class LexiconEntry:
 
 class Lexicon:
     def __init__(self, filename :str = None) -> None:
-        self.items = {} # type: Dict[str, LexiconEntry]
+        self.items = {}           # type: Dict[str, LexiconEntry]
+        self.items_by_symstr = {} # type: Dict[str, List[LexiconEntry]]
         if filename is not None:
             self.load_from_file(filename)
 
@@ -128,19 +129,37 @@ class Lexicon:
     def __getitem__(self, key :str) -> LexiconEntry:
         return self.items[key]
 
+    def get_by_symstr(self, key :str) -> List[LexiconEntry]:
+        return self.items_by_symstr[key]
+
     def __len__(self) -> int:
         return len(self.items)
+
+    def keys(self) -> Iterable[str]:
+        return self.items.keys()
+
+    def symstrs(self) -> Iterable[str]:
+        return self.items_by_symstr.keys()
+
+    def entries(self) -> Iterable[LexiconEntry]:
+        return self.items.values()
 
     def add(self, item :LexiconEntry) -> None:
         if str(item) in self.items:
             raise ValueError('{} already in vocabulary'.format(str(item)))
+        if not item.symstr in self.items_by_symstr:
+            self.items_by_symstr[item.symstr] = []
         self.items[str(item)] = item
+        self.items_by_symstr[item.symstr].append(item)
 
     def remove(self, item :LexiconEntry) -> None:
-        key = str(item)
-        if key not in self.items:
-            raise KeyError(key)
-        del self.items[key]
+        if str(item) not in self.items:
+            raise KeyError(str(item))
+        del self.items[str(item)]
+        if item.symstr in self.items_by_symstr:
+            self.items_by_symstr[item.symstr].remove(item)
+            if not self.items_by_symstr[item.symstr]:
+                del self.items_by_symstr[item.symstr]
 
     def load_from_file(self, filename :str) -> None:
         for row in read_tsv_file(filename, get_wordlist_format()):

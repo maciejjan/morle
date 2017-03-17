@@ -1,15 +1,24 @@
 import algorithms.align
 import algorithms.fstfastss
 from datastruct.lexicon import Lexicon, LexiconEntry
-from datastruct.rules import *
-from utils.files import file_exists, read_tsv_file
+from datastruct.rules import Rule
+from utils.files import aggregate_file, file_exists, full_path, \
+                        open_to_write, read_tsv_file, read_tsv_file_by_key, \
+                        remove_file, remove_file_if_exists, rename_file, \
+                        sort_files, update_file_size, write_line
+import shared
 
+from hfst import HfstTransducer
 import logging
 import multiprocessing
 import os.path
 import subprocess
 import tqdm
 from typing import Any, Callable, Iterable, List, Tuple
+from typing.io import TextIO
+
+# TODO operate on streams instead of files
+#      -- file operations at the very top
 
 
 def load_normalized_wordlist(filename :str) -> Iterable[str]:
@@ -21,12 +30,8 @@ def load_normalized_wordlist(filename :str) -> Iterable[str]:
 
 # input file: wordlist
 # output file: transducer file
-def compile_lexicon_transducer(
-        entries :List[LexiconEntry],
-        output_file :str = None) -> None:
-
-    assert output_file is not None
-
+def compile_lexicon_transducer(entries :List[LexiconEntry],
+                               output_file :str) -> None:
     lex_file = output_file + '.lex'
     tags = set()
     for entry in entries:
@@ -44,11 +49,10 @@ def compile_lexicon_transducer(
     remove_file(lex_file)
 
 
-def parallel_execute(
-        function :Callable[..., None] = None,
-        data :List[Any] = None,
-        num :int = 1,
-        additional_args :Tuple = ()) -> None:
+def parallel_execute(function :Callable[..., None] = None,
+                     data :List[Any] = None,
+                     num :int = 1,
+                     additional_args :Tuple = ()) -> None:
 
     mandatory_args = (function, data, num, additional_args)
     assert not any(arg is None for arg in mandatory_args)
@@ -75,9 +79,9 @@ def expand_graph(graph_file :str) -> None:
        currently rule frequencies.'''
     min_freq = shared.config['preprocess'].getint('min_rule_freq')
     with open_to_write(graph_file + '.tmp') as graph_tmp_fp:
+        logging.getLogger('main').info('Expanding the graph for filtering...')
         for rule, wordpairs in read_tsv_file_by_key(graph_file, 3, 
-                print_progress=True,
-                print_msg='Expanding the graph for filtering...'):
+                                                    show_progressbar=True):
             freq = len(wordpairs)
             if freq >= min_freq:
                 for w1, w2 in wordpairs:
@@ -89,8 +93,9 @@ def expand_graph(graph_file :str) -> None:
 def contract_graph(graph_file :str) -> None:
     '''Remove any additional information needed for filtering.'''
     with open_to_write(graph_file + '.tmp') as graph_tmp_fp:
+        logging.getLogger('main').info('Contracting the graph...')
         for w1, w2, rule, freq in read_tsv_file(graph_file,
-                print_progress=True, print_msg='Contracting the graph...'):
+                                                show_progressbar=True):
             write_line(graph_tmp_fp, (w1, w2, rule))
     rename_file(graph_file + '.tmp', graph_file)
 
@@ -98,29 +103,34 @@ def contract_graph(graph_file :str) -> None:
 def filter_max_num_rules(graph_file :str) -> None:
     logging.getLogger('main').info('filter_max_num_rules')
     sort_files(graph_file, stable=True, numeric=True, reverse=True, key=4)
-    pp = progress_printer(shared.config['preprocess'].getint('max_num_rules'))
+    max_num_rules = shared.config['preprocess'].getint('max_num_rules')
+    min_rule_freq = shared.config['preprocess'].getint('min_rule_freq')
+    progressbar = tqdm.tqdm(total=max_num_rules)
     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
         num_rules = 0
-        for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file, (3, 4)):
-            try:
-                next(pp)
-            except StopIteration:
-                break
-            if int(freq) >= shared.config['preprocess'].getint('min_rule_freq'):
-                for w1, w2 in wordpairs:
-                    write_line(graph_fil_fp, (w1, w2, rule, freq))
+        for key, wordpairs in read_tsv_file_by_key(graph_file, (3, 4)):
+            rule, freq = key
             num_rules += 1
+            progressbar.update()
+            if int(freq) >= min_rule_freq:
+                for wordpair in wordpairs:
+                    w1, w2 = wordpair
+                    write_line(graph_fil_fp, (w1, w2, rule, freq))
+            if num_rules >= max_num_rules:
+                break
+    progressbar.close()
     rename_file(graph_file + '.tmp', graph_file)
     update_file_size(graph_file)
 
 
 def filter_max_edges_per_wordpair(graph_file :str) -> None:
+    logging.getLogger('main').info('filter_max_edges_per_wordpair')
     sort_files(graph_file, stable=True, key=(1, 2))
     max_edges_per_wordpair = \
         shared.config['preprocess'].getint('max_edges_per_wordpair')
     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
         for (word_1, word_2), edges in read_tsv_file_by_key(graph_file, (1, 2),
-                print_progress=True, print_msg='filter_max_edges_per_wordpair'):
+                show_progressbar=True):
             for rule, freq in edges[:max_edges_per_wordpair]:
                 write_line(graph_fil_fp, (word_1, word_2, rule, freq))
     rename_file(graph_file + '.tmp', graph_file)
@@ -131,10 +141,12 @@ def filter_max_edges_per_wordpair(graph_file :str) -> None:
 
 # again, because after other filters some frequencies have decreased
 def filter_min_rule_freq(graph_file :str) -> None:
+    logging.getLogger('main').info('filter_min_rule_freq')
+    min_rule_freq = shared.config['preprocess'].getint('min_rule_freq')
     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
         for (rule, freq), wordpairs in read_tsv_file_by_key(graph_file, (3, 4),
-                print_progress=True, print_msg='filter_min_rule_freq'):
-            if len(wordpairs) >= shared.config['preprocess'].getint('min_rule_freq'):
+                show_progressbar=True):
+            if len(wordpairs) >= min_rule_freq:
                 for word_1, word_2 in wordpairs:
                     write_line(graph_fil_fp, (word_1, word_2, rule, freq))
     rename_file(graph_file + '.tmp', graph_file)
@@ -156,9 +168,9 @@ def filter_rules(graph_file :str) -> None:
     # truncate the graph file to most frequent rules
     # sort edges according to wordpair
     sort_files(graph_file + '.filtered', key=3)
-    sort_files(graph_file + '.filtered', stable=True, numeric=True, reverse=True, key=4)
+    sort_files(graph_file + '.filtered', stable=True,
+               numeric=True, reverse=True, key=4)
     remove_file(graph_file)
-    remove_file(graph_file + '.tmp2')
     # cleanup files
 #    rename_file(graph_file, graph_file + '.orig')
     rename_file(graph_file + '.filtered', graph_file)
@@ -178,29 +190,30 @@ def build_graph_fstfastss(
         lexicon :Lexicon,
         lex_tr_file :str,
         graph_file :str,
-        words :Iterable[str] = None) -> None:
+        words :List[str] = None) -> None:
 
     logging.getLogger('main').info('Building the FastSS cascade...')
-    max_word_len = max([len(n.word) for n in lexicon.iter_nodes()])
+    max_word_len = max([len(e.word) for e in lexicon.entries()])
     algorithms.fstfastss.build_fastss_cascade(lex_tr_file,
                                               max_word_len=max_word_len)
 
-    def _extract_candidate_edges(p_id, words, lexicon, transducer_path,\
-                                 output_file):
+    def _extract_candidate_edges(p_id :int, words :Iterable[str],
+                                 lexicon :Lexicon, transducer_path :str,
+                                 output_file :str) -> None:
         sw = algorithms.fstfastss.similar_words(words, transducer_path)
         with open_to_write(output_file + '.' + str(p_id)) as outfp:
             for word_1, word_2 in sw:
                 if word_1 != word_2:
-                    n1, n2 = lexicon[word_1], lexicon[word_2]
-                    rules = algorithms.align.extract_all_rules(n1, n2)
-                    for rule in rules:
-                        write_line(outfp, (n1.literal, n2.literal, str(rule)))
-#                         write_line(outfp, (n2.literal, n1.literal, 
-#                                            rule.reverse().to_string()))
+                    for v1 in lexicon.get_by_symstr(word_1):
+                        for v2 in lexicon.get_by_symstr(word_2):
+                            rules = algorithms.align.extract_all_rules(v1, v2)
+                            for rule in rules:
+                                write_line(outfp, (v1.literal, v2.literal, 
+                                                   str(rule)))
 
     logging.getLogger('main').info('Building the graph...')
     if words is None:
-        words = sorted(list(lexicon.keys()))
+        words = sorted(list(set(e.symstr for e in lexicon.entries())))
     transducer_path = shared.filenames['fastss-tr']
     num_processes = shared.config['preprocess'].getint('num_processes')
     parallel_execute(function=_extract_candidate_edges,
@@ -212,6 +225,8 @@ def build_graph_fstfastss(
     for outfile in outfiles:
         remove_file(outfile)
 
+
+# TODO refactor
 def build_graph_from_training_edges(lexicon, training_file, graph_file):
     with open_to_write(graph_file) as fp:
         for word_1, word_2 in read_tsv_file(training_file, (str, str)):
@@ -224,15 +239,20 @@ def build_graph_from_training_edges(lexicon, training_file, graph_file):
                     if word_1 not in lexicon:
                         logging.getLogger('main').warning('%s not in lexicon' % word_1)
 
-def compute_rule_domsizes(lexicon_tr_file, rules_file):
+
+def compute_rule_domsizes(lexicon_tr_file :str, rules_file :str) -> None:
     
-    def _compute_domsizes(p_id, rules, lexicon_tr, outlck, outfp):
+    def _compute_domsizes(p_id :int, 
+                          rules_with_freqs :Iterable[Tuple[str, int]], 
+                          lexicon_tr :HfstTransducer, 
+                          outlck :multiprocessing.Lock, 
+                          outfp :TextIO) -> None:
         results = []
         # compute domsizes
         progressbar = None
         if shared.config['preprocess'].getint('num_processes') == 1:
             progressbar = tqdm.tqdm(total=len(rules))
-        for rule_str, freq in rules:
+        for rule_str, freq in rules_with_freqs:
             rule = Rule.from_string(rule_str)
             domsize = rule.compute_domsize(lexicon_tr)
             results.append((rule_str, freq, domsize))
@@ -258,11 +278,12 @@ def compute_rule_domsizes(lexicon_tr_file, rules_file):
     rename_file(output_file, rules_file)
     sort_files(rules_file, reverse=True, numeric=True, key=2)
 
-def run_standard():
+
+def run_standard() -> None:
     logging.getLogger('main').info('Loading lexicon...')
     lexicon = Lexicon(filename=shared.filenames['wordlist'])
     logging.getLogger('main').info('Building the lexicon transducer...')
-    compile_lexicon_transducer(lexicon.iter_nodes(),
+    compile_lexicon_transducer(lexicon.entries(),
                                shared.filenames['lexicon-tr'])
 
     if shared.config['General'].getboolean('supervised'):
@@ -287,9 +308,10 @@ def run_standard():
     compute_rule_domsizes(shared.filenames['lexicon-tr'], 
                           shared.filenames['rules'])
 
-def run_bipartite():
+
+def run_bipartite() -> None:
     logging.getLogger('main').info('Loading lexicon...')
-    lexicon = Lexicon.init_from_wordlist(shared.filenames['wordlist'])
+    lexicon = Lexicon(filename=shared.filenames['wordlist'])
     wordlist_left = load_normalized_wordlist(
                         shared.filenames['wordlist.left'])
     wordlist_right = load_normalized_wordlist(
@@ -318,7 +340,7 @@ def run_bipartite():
 
 ### MAIN FUNCTIONS ###
 
-def run():
+def run() -> None:
     if file_exists(shared.filenames['wordlist.left']) and\
        file_exists(shared.filenames['wordlist.right']):
         run_bipartite()
@@ -327,7 +349,8 @@ def run():
     else:
         raise RuntimeError('No input file supplied!')
 
-def cleanup():
+
+def cleanup() -> None:
     remove_file_if_exists(shared.filenames['rules'])
     remove_file_if_exists(shared.filenames['lexicon-tr'])
     remove_file_if_exists(shared.filenames['graph'])

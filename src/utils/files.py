@@ -1,12 +1,12 @@
 import shared
-# import utils.printer
+
 import csv
 import logging
 import numpy as np
 import os
 import os.path
 import tqdm
-from typing import Any, Iterable, List, Tuple, Union
+from typing import Any, Dict, Iterable, List, Tuple, Union
 from typing.io import TextIO
 
 
@@ -36,32 +36,26 @@ def read_tsv_file(filename :str,
     if show_progressbar:
         progressbar.close()
 
+
 def read_tsv_file_by_key(filename :str,
                          key :Union[int, Iterable[int]] = 1,
                          types :Iterable = None,
                          show_progressbar :bool = False) \
     -> Iterable[Tuple[Any, List[List[Any]]]]:
 
-    key_and_entry_maker = None, None
+    key_and_entry_maker = None
     if isinstance(key, int):
-        key_and_entry_maker = lambda row: row[key], row[:key]+row[key+1:]
+        key_and_entry_maker = lambda x: (x[key-1], x[:key-1]+x[key:])
     elif hasattr(key, '__contains__') and hasattr(key, '__iter__'):
         key_and_entry_maker = \
-            lambda row: [row[i] for i in key], \
-                        [row[i] for i in range(len(row)) if i not in key]
+            lambda x: ([x[i-1] for i in key], \
+                       [x[i] for i in range(len(x)) if i+1 not in key])
     else:
         raise RuntimeError('Invalid key: %s' % str(key))
 
     current_key, entries = None, []
     for row in read_tsv_file(filename, types, show_progressbar):
         key_, entry = key_and_entry_maker(row)
-#         key_, entry = None, None
-#         if isinstance(key, tuple):
-#             key_ = tuple([row[i-1] for i in key])
-#             entry = tuple([row[i] for i in range(0, len(row)) if not i+1 in key])
-#         elif isinstance(key, int):
-#             key_ = row[key-1]
-#             entry = tuple([row[i] for i in range(0, len(row)) if i+1 != key])
         if key_ != current_key:
             if entries:
                 yield current_key, entries
@@ -70,9 +64,11 @@ def read_tsv_file_by_key(filename :str,
     if entries:
         yield current_key, entries
 
+
 def open_to_write(filename :str, mode :str = 'w+') -> TextIO:
     encoding = shared.config['General'].get('encoding')
     return open(full_path(filename), mode, encoding=encoding)
+
 
 # if count_bytes set to true, returns the number of bytes written
 def write_line(fp, line, count_bytes=False):
@@ -81,9 +77,11 @@ def write_line(fp, line, count_bytes=False):
     if count_bytes:
         return len(bytes(line))
 
-FILE_SIZES = {}
 
-def count_lines(filename):
+FILE_SIZES = {} # type: Dict[str, int]
+
+
+def count_lines(filename :str) -> int:
     num = 0
     encoding = shared.config['General'].get('encoding')
     with open(full_path(filename), 'r', encoding=encoding) as fp:
@@ -91,7 +89,8 @@ def count_lines(filename):
             num += 1
     return num
 
-def get_file_size(filename):
+
+def get_file_size(filename :str) -> int:
     global FILE_SIZES
     if filename in FILE_SIZES:
         return FILE_SIZES[filename]
@@ -104,41 +103,50 @@ def get_file_size(filename):
             set_file_size(filename, size)
             return size
 
-def read_index_file():
+
+def read_index_file() -> None:
     global FILE_SIZES
     if os.path.isfile(full_path(shared.filenames['index'])):
         for filename, size in read_tsv_file(shared.filenames['index']):
             if filename not in FILE_SIZES:
                 FILE_SIZES[filename] = int(size)
 
-def set_file_size(filename, size):
+
+def set_file_size(filename :str, size :int) -> None:
     global FILE_SIZES
     FILE_SIZES[filename] = size
     update_index_file()
 
-def update_file_size(filename):
+
+def update_file_size(filename :str) -> None:
     set_file_size(filename, count_lines(filename))
 
-def update_index_file():
+
+def update_index_file() -> None:
     global FILE_SIZES
     read_index_file()
     with open_to_write(shared.filenames['index']) as fp:
         for filename, size in FILE_SIZES.items():
             write_line(fp, (filename, size))
 
-def file_exists(filename):
+
+def file_exists(filename :str) -> bool:
     return os.path.isfile(full_path(filename))
 
-def rename_file(old, new):
+
+def rename_file(old :str, new :str) -> None:
     os.rename(full_path(old), full_path(new))
 
-def remove_file(filename):
+
+def remove_file(filename :str) -> None:
     os.remove(full_path(filename))
 
-def remove_file_if_exists(filename):
+
+def remove_file_if_exists(filename :str) -> None:
     path = full_path(filename)
     if os.path.isfile(path):
         os.remove(path)
+
 
 # sort file using the unix command
 def sort_files(infiles, outfile=None, key=None, reverse=False, numeric=False, 
@@ -157,7 +165,7 @@ def sort_files(infiles, outfile=None, key=None, reverse=False, numeric=False,
             sort_call.append('-t \'	\'')
         elif isinstance(key, int):
             sort_call.append('-k%d,%d' % (key, key))
-            sort_call.append('-t \'    \'')
+            sort_call.append('-t \'	\'')
     if reverse:
         sort_call.append('-r')
     if numeric:
@@ -191,6 +199,7 @@ def sort_files(infiles, outfile=None, key=None, reverse=False, numeric=False,
             rename_file(infiles[0] + '.sorted', infiles[0])
         else:
             raise RuntimeError('sort: wrong input type!')
+
 
 def aggregate_file(infile, outfile=None, key=1):
     if outfile is None:
