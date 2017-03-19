@@ -163,8 +163,8 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False,
     sort_call.append(full_path(infile))
 #     elif isinstance(infiles, list):
 #         sort_call.extend([full_path(infile) for infile in infiles])
-    else:
-        raise RuntimeError('sort: wrong input type!')
+#     else:
+#         raise RuntimeError('sort: wrong input type!')
     sort_call += ['-T', shared.options['working_dir']]
     if key:
         if isinstance(key, tuple) and len(key) == 2:

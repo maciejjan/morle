@@ -5,7 +5,7 @@ from datastruct.rules import Rule
 from utils.files import aggregate_file, file_exists, full_path, \
                         open_to_write, read_tsv_file, read_tsv_file_by_key, \
                         remove_file, remove_file_if_exists, rename_file, \
-                        sort_files, update_file_size, write_line, \
+                        sort_file, update_file_size, write_line, \
                         write_tsv_file
 import shared
 
@@ -54,32 +54,49 @@ def compile_lexicon_transducer(entries :List[LexiconEntry],
 def parallel_execute(function :Callable[..., None] = None,
                      data :List[Any] = None,
                      num :int = 1,
-                     additional_args :Tuple = ()) -> Iterable:
+                     additional_args :Tuple = (),
+                     show_progressbar :bool = False) -> Iterable:
 
     mandatory_args = (function, data, num, additional_args)
     assert not any(arg is None for arg in mandatory_args)
 
-    # data -- partitioned equally among processes
-    # function gets the following arguments: p_id, data, *args
-    count = 0
+    # partition the data into chunks for each process
     step = len(data) // num
+    data_chunks = []
+    i = 0
+    while (i+1)*step < len(data):
+        data_chunks.append(data[i*step:(i+1)*step])
+        i += 1
+    # account for rounding error while processing the last chunk
+    data_chunks.append(data[i*step:])
+
     queue = multiprocessing.Queue()
     processes, joined = [], []
     for i in range(num):
-        # account for rounding error while processing the last chunk
-        data_chunk = data[i*step:(i+1)*step] if i < num-1 else data[i*step:]
+        output_fun = lambda x: queue.put((i,) + x)
         p = multiprocessing.Process(target=function,
-                                    args=(data_chunk, queue) + additional_args)
+                                    args=(data_chunks[i], output_fun) +\
+                                         additional_args)
         p.start()
         processes.append(p)
         joined.append(False)
+
+    progressbar = None
+    if show_progressbar:
+        progressbar = tqdm.tqdm(total=len(data))
     while not all(joined):
         while not queue.empty():
-            yield queue.get()
+            p_id, *row = queue.get()
+            if show_progressbar:
+                while data_chunks[state[p_id]] != row[0]:
+                    state[p_id] += 1
+                    progressbar.update()
         for i, p in enumerate(processes):
             if not p.is_alive():
                 p.join()
                 joined[i] = True
+    if show_progressbar:
+        progressbar.close()
 #     for p in processes:
 #         p.start()
 #     for p in processes:
@@ -209,7 +226,7 @@ def build_graph_fstfastss(
                                               max_word_len=max_word_len)
 
     def _extract_candidate_edges(words :Iterable[str],
-                                 queue :multiprocessing.Queue,
+                                 output_fun :Callable[Tuple],
                                  lexicon :Lexicon,
                                  transducer_path :str) -> None:
         sw = algorithms.fstfastss.similar_words(words, transducer_path)
@@ -220,7 +237,8 @@ def build_graph_fstfastss(
                     for v2 in lexicon.get_by_symstr(word_2):
                         rules = algorithms.align.extract_all_rules(v1, v2)
                         for rule in rules:
-                            queue.put((v1.literal, v2.literal, str(rule)))
+                            output_fun((v1.literal, v2.literal, str(rule)))
+#                             queue.put((v1.literal, v2.literal, str(rule)))
 
 #     logging.getLogger('main').info('Building the graph...')
     if words is None:
