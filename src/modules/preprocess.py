@@ -14,6 +14,7 @@ import logging
 import multiprocessing
 import os.path
 import subprocess
+import time
 import tqdm
 from typing import Any, Callable, Iterable, List, Tuple
 from typing.io import TextIO
@@ -65,15 +66,15 @@ def parallel_execute(function :Callable[..., None] = None,
     data_chunks = []
     i = 0
     while (i+1)*step < len(data):
-        data_chunks.append(data[i*step:(i+1)*step])
+        data_chunks.append(sorted(data[i*step:(i+1)*step]))
         i += 1
     # account for rounding error while processing the last chunk
     data_chunks.append(data[i*step:])
 
-    queue = multiprocessing.Queue()
+    queue = multiprocessing.Queue(10000)
     processes, joined = [], []
     for i in range(num):
-        output_fun = lambda x: queue.put((i,) + x)
+        output_fun = lambda x: queue.put(x)
         p = multiprocessing.Process(target=function,
                                     args=(data_chunks[i], output_fun) +\
                                          additional_args)
@@ -81,20 +82,22 @@ def parallel_execute(function :Callable[..., None] = None,
         processes.append(p)
         joined.append(False)
 
-    progressbar = None
+    progressbar, state = None, None
     if show_progressbar:
         progressbar = tqdm.tqdm(total=len(data))
     while not all(joined):
+        count = 0
         while not queue.empty():
-            p_id, *row = queue.get()
-            if show_progressbar:
-                while data_chunks[state[p_id]] != row[0]:
-                    state[p_id] += 1
-                    progressbar.update()
-        for i, p in enumerate(processes):
-            if not p.is_alive():
-                p.join()
-                joined[i] = True
+            output_data = queue.get()
+            yield output_data
+            count += 1
+        if show_progressbar:
+            progressbar.update(count)
+        if queue.empty():
+            for i, p in enumerate(processes):
+                if not p.is_alive():
+                    p.join()
+                    joined[i] = True
     if show_progressbar:
         progressbar.close()
 #     for p in processes:
@@ -226,28 +229,35 @@ def build_graph_fstfastss(
                                               max_word_len=max_word_len)
 
     def _extract_candidate_edges(words :Iterable[str],
-                                 output_fun :Callable[Tuple],
+                                 output_fun :Callable[..., None],
                                  lexicon :Lexicon,
                                  transducer_path :str) -> None:
         sw = algorithms.fstfastss.similar_words(words, transducer_path)
 #         with open_to_write(output_file + '.' + str(p_id)) as outfp:
-        for word_1, word_2 in sw:
-            if word_1 != word_2:
-                for v1 in lexicon.get_by_symstr(word_1):
+        for word_1, simwords in sw:
+            v1_list = lexicon.get_by_symstr(word_1)
+            for v1 in v1_list:
+                results_for_v1 = []
+                for word_2 in simwords:
                     for v2 in lexicon.get_by_symstr(word_2):
-                        rules = algorithms.align.extract_all_rules(v1, v2)
-                        for rule in rules:
-                            output_fun((v1.literal, v2.literal, str(rule)))
-#                             queue.put((v1.literal, v2.literal, str(rule)))
+                        if v1 != v2:
+                            rules = algorithms.align.extract_all_rules(v1, v2)
+                            for rule in rules:
+                                results_for_v1.append((v2.literal, str(rule)))
+                output_fun((v1.literal, results_for_v1))
 
 #     logging.getLogger('main').info('Building the graph...')
     if words is None:
         words = sorted(list(set(e.symstr for e in lexicon.entries())))
     transducer_path = shared.filenames['fastss-tr']
     num_processes = shared.config['preprocess'].getint('num_processes')
-    return parallel_execute(function=_extract_candidate_edges,
-                            data=words, num=num_processes,
-                            additional_args=(lexicon, transducer_path))
+    extractor = parallel_execute(function=_extract_candidate_edges,
+                                 data=words, num=num_processes,
+                                 additional_args=(lexicon, transducer_path),
+                                 show_progressbar=True)
+    for word_1, edges in extractor:
+        for word_2, rule_str in edges:
+            yield (word_1, word_2, rule_str)
     # TODO sort the resulting file
 
 #     outfiles = ['.'.join((graph_file, str(p_id)))\

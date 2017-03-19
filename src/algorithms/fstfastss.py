@@ -3,6 +3,7 @@ from utils.files import full_path, remove_file
 import shared
 
 import hfst
+from operator import itemgetter
 import subprocess
 import sys
 import tqdm
@@ -192,7 +193,13 @@ def similar_words_with_block_composition(words, transducer_path):
                         current_io_pairs[target_state].add(
                             (str_in+sym_in, str_out+sym_out))
             previous_io_pairs = current_io_pairs
-        return results
+        # convert the results to a dict
+        results_dict = {}
+        for word_1, word_2 in results:
+            if word_1 not in results_dict:
+                results_dict[word_1] = []
+            results_dict[word_1].append(word_2)
+        return results_dict
 
     delenv, right_tr = load_cascade(transducer_path)
     tok = hfst.HfstTokenizer()
@@ -206,8 +213,11 @@ def similar_words_with_block_composition(words, transducer_path):
     while count < len(words):
         block = words[count:count+block_size]
         tr = _compose_block(block, delenv, right_tr, tok)
-        for word_1, word_2 in _extract_unique_io_pairs(tr):
-            yield (word_1, word_2)
+#         for word_1, word_2 in _extract_unique_io_pairs(tr):
+#         for word_1, word_2 in sorted(_extract_unique_io_pairs(tr), key=itemgetter(0)):
+#             yield (word_1, word_2)
+        for word, simwords in _extract_unique_io_pairs(tr).items():
+            yield (word, simwords)
         count += block_size
         if progressbar is not None:
             progressbar.update(len(block))
