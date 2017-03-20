@@ -5,6 +5,7 @@ import logging
 import numpy as np
 import os
 import os.path
+import subprocess
 import tqdm
 from typing import Any, Dict, Iterable, List, Tuple, Union
 from typing.io import TextIO
@@ -166,20 +167,24 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False,
 #     else:
 #         raise RuntimeError('sort: wrong input type!')
     sort_call += ['-T', shared.options['working_dir']]
+    env = os.environ.copy()
     if key:
         if isinstance(key, tuple) and len(key) == 2:
             sort_call.append('-k%d,%d' % key)
-            sort_call.append('-t \'	\'')
+#             sort_call.append('-t')
+#             sort_call.append('\'	\'')
         elif isinstance(key, int):
             sort_call.append('-k%d,%d' % (key, key))
-            sort_call.append('-t \'	\'')
+#             sort_call.append('-t')
+#             sort_call.append('\'	\'')
         else:
             raise RuntimeError('Wrong key type.')
     if reverse:
         sort_call.append('-r')
     if numeric:
         sort_call.append('-g')
-        sort_call.insert(0, 'LC_NUMERIC=us_EN.UTF-8')
+#         sort_call.insert(0, 'LC_NUMERIC=us_EN.UTF-8')
+        env['LC_NUMERIC'] = 'en_US.UTF-8'
     if stable:
         sort_call.append('-s')
     if unique:
@@ -197,17 +202,11 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False,
 #         else:
 #             raise RuntimeError('sort: wrong input type!')
     logging.getLogger('main').debug(' '.join(sort_call))
-    os.system(' '.join(sort_call))
+    p = subprocess.Popen(sort_call, env=env)
+    p.wait()
     if outfile is None:
-#         if isinstance(infiles, str):
-        remove_file(infiles)
-        rename_file(infiles + '.sorted', infiles)
-#         elif isinstance(infiles, list):
-#             for infile in infiles:
-#                 remove_file(infile)
-#             rename_file(infiles[0] + '.sorted', infiles[0])
-#         else:
-#             raise RuntimeError('sort: wrong input type!')
+        remove_file(infile)
+        rename_file(infile + '.sorted', infile)
 
 
 def aggregate_file(infile, outfile=None, key=1):

@@ -14,13 +14,10 @@ import logging
 import multiprocessing
 import os.path
 import subprocess
-import time
+# import time
 import tqdm
 from typing import Any, Callable, Iterable, List, Tuple
 from typing.io import TextIO
-
-# TODO operate on streams instead of files
-#      -- file operations at the very top
 
 
 def load_normalized_wordlist(filename :str) -> Iterable[str]:
@@ -72,11 +69,18 @@ def parallel_execute(function :Callable[..., None] = None,
     data_chunks.append(data[i*step:])
 
     queue = multiprocessing.Queue(10000)
+    queue_lock = multiprocessing.Lock()
+
+    def _output_fun(x):
+        queue_lock.acquire()
+        queue.put(x)
+        queue_lock.release()
+
     processes, joined = [], []
     for i in range(num):
-        output_fun = lambda x: queue.put(x)
+#         output_fun = lambda x: queue.put(x)
         p = multiprocessing.Process(target=function,
-                                    args=(data_chunks[i], output_fun) +\
+                                    args=(data_chunks[i], _output_fun) +\
                                          additional_args)
         p.start()
         processes.append(p)
@@ -87,17 +91,17 @@ def parallel_execute(function :Callable[..., None] = None,
         progressbar = tqdm.tqdm(total=len(data))
     while not all(joined):
         count = 0
+        queue_lock.acquire()
         while not queue.empty():
-            output_data = queue.get()
-            yield output_data
+            yield queue.get()
             count += 1
+        queue_lock.release()
         if show_progressbar:
             progressbar.update(count)
-        if queue.empty():
-            for i, p in enumerate(processes):
-                if not p.is_alive():
-                    p.join()
-                    joined[i] = True
+        for i, p in enumerate(processes):
+            if not p.is_alive():
+                p.join()
+                joined[i] = True
     if show_progressbar:
         progressbar.close()
 #     for p in processes:
@@ -134,7 +138,7 @@ def contract_graph(graph_file :str) -> None:
 
 def filter_max_num_rules(graph_file :str) -> None:
     logging.getLogger('main').info('filter_max_num_rules')
-    sort_files(graph_file, stable=True, numeric=True, reverse=True, key=4)
+    sort_file(graph_file, stable=True, numeric=True, reverse=True, key=4)
     max_num_rules = shared.config['preprocess'].getint('max_num_rules')
     min_rule_freq = shared.config['preprocess'].getint('min_rule_freq')
     progressbar = tqdm.tqdm(total=max_num_rules)
@@ -157,7 +161,7 @@ def filter_max_num_rules(graph_file :str) -> None:
 
 def filter_max_edges_per_wordpair(graph_file :str) -> None:
     logging.getLogger('main').info('filter_max_edges_per_wordpair')
-    sort_files(graph_file, stable=True, key=(1, 2))
+    sort_file(graph_file, stable=True, key=(1, 2))
     max_edges_per_wordpair = \
         shared.config['preprocess'].getint('max_edges_per_wordpair')
     with open_to_write(graph_file + '.tmp') as graph_fil_fp:
@@ -166,8 +170,8 @@ def filter_max_edges_per_wordpair(graph_file :str) -> None:
             for rule, freq in edges[:max_edges_per_wordpair]:
                 write_line(graph_fil_fp, (word_1, word_2, rule, freq))
     rename_file(graph_file + '.tmp', graph_file)
-    sort_files(graph_file, key=3)
-    sort_files(graph_file, stable=True, numeric=True, reverse=True, key=4)
+    sort_file(graph_file, key=3)
+    sort_file(graph_file, stable=True, numeric=True, reverse=True, key=4)
     update_file_size(graph_file)
 
 
@@ -199,9 +203,9 @@ def filter_rules(graph_file :str) -> None:
     # format: w1 w2 rule -> w1 w2 rule freq
     # truncate the graph file to most frequent rules
     # sort edges according to wordpair
-    sort_files(graph_file + '.filtered', key=3)
-    sort_files(graph_file + '.filtered', stable=True,
-               numeric=True, reverse=True, key=4)
+    sort_file(graph_file + '.filtered', key=3)
+    sort_file(graph_file + '.filtered', stable=True,
+              numeric=True, reverse=True, key=4)
     remove_file(graph_file)
     # cleanup files
 #    rename_file(graph_file, graph_file + '.orig')
@@ -221,7 +225,7 @@ def filter_rules(graph_file :str) -> None:
 def build_graph_fstfastss(
         lexicon :Lexicon,
         lex_tr_file :str,
-        words :List[str] = None) -> Iterable:
+        words :List[str] = None) -> Iterable[Tuple[str, str, str]]:
 
     logging.getLogger('main').info('Building the FastSS cascade...')
     max_word_len = max([len(e.word) for e in lexicon.entries()])
@@ -317,7 +321,7 @@ def compute_rule_domsizes(lexicon_tr_file :str, rules_file :str) -> None:
         parallel_execute(_compute_domsizes, rules, num=num_processes,
                          additional_args=(lexicon_tr, outlck, outfp))
     rename_file(output_file, rules_file)
-    sort_files(rules_file, reverse=True, numeric=True, key=2)
+    sort_file(rules_file, reverse=True, numeric=True, key=2)
 
 
 def run_standard() -> None:
@@ -347,9 +351,10 @@ def run_standard() -> None:
                    shared.filenames['rules'], 3)
     update_file_size(shared.filenames['rules'])
 
-    logging.getLogger('main').info('Computing rule domain sizes...')
-    compute_rule_domsizes(shared.filenames['lexicon-tr'], 
-                          shared.filenames['rules'])
+    # TODO compute rule domain sizes
+#     logging.getLogger('main').info('Computing rule domain sizes...')
+#     compute_rule_domsizes(shared.filenames['lexicon-tr'], 
+#                           shared.filenames['rules'])
 
 
 def run_bipartite() -> None:

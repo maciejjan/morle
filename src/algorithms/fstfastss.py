@@ -6,7 +6,6 @@ import hfst
 from operator import itemgetter
 import subprocess
 import sys
-import tqdm
 
 def write_delenv_transducer(filename, max_affix_size, max_infix_size,\
                             max_infix_slots):
@@ -143,6 +142,7 @@ def similar_words_with_lookup(words, transducer_path):
     p.stdin.close()
     p.wait()
 
+# TODO also give empty results for words, for which there are no similar words
 def similar_words_with_block_composition(words, transducer_path):
     def _compose_block(block, delenv, right_tr, tokenizer):
 #         tr = hfst.fst(block)    # TODO tokenize?
@@ -207,22 +207,19 @@ def similar_words_with_block_composition(words, transducer_path):
         tok.add_multichar_symbol(sym)
     block_size = shared.config['preprocess'].getint('block_size')
     count = 0
-    progressbar = None
-    if shared.config['preprocess'].getint('num_processes') == 1:
-        progressbar = tqdm.tqdm(total=len(words))
     while count < len(words):
         block = words[count:count+block_size]
         tr = _compose_block(block, delenv, right_tr, tok)
 #         for word_1, word_2 in _extract_unique_io_pairs(tr):
 #         for word_1, word_2 in sorted(_extract_unique_io_pairs(tr), key=itemgetter(0)):
 #             yield (word_1, word_2)
-        for word, simwords in _extract_unique_io_pairs(tr).items():
-            yield (word, simwords)
+        similar_words_for_word = _extract_unique_io_pairs(tr)
+        for word in block:
+            if word in similar_words_for_word:
+                yield (word, similar_words_for_word[word])
+            else:
+                yield (word, [])
         count += block_size
-        if progressbar is not None:
-            progressbar.update(len(block))
-    if progressbar is not None:
-        progressbar.close()
 
 def similar_words(words, transducer_path):
     method = shared.config['preprocess'].get('method')
