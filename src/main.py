@@ -73,7 +73,8 @@ def setup():
 #     ap.add_argument('mode', type=str, help='import, export, eval, run')
     ap.add_argument('modules', type=str, help='preprocess, modsel, fit')
     # optional arguments
-    ap.add_argument('-d', action='store', dest='workdir', help='working directory')
+    ap.add_argument('-d', action='store', dest='workdir',
+                    help='working directory (default: current directory)')
 #     ap.add_argument('-s', action='store_true', dest='supervised', help='supervised learning')
 #     ap.add_argument('-t', action='store_true', dest='use_tags', help='use POS-tags')
     ap.add_argument('-q', action='store_true', dest='quiet',
