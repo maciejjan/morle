@@ -9,12 +9,13 @@ from utils.files import aggregate_file, file_exists, full_path, \
                         write_tsv_file
 import shared
 
-from hfst import HfstTransducer
+from hfst import HfstTransducer, compile_lexc_file
 import logging
 import multiprocessing
 import os.path
+# import queue
 import subprocess
-# import time
+import time
 import tqdm
 from typing import Any, Callable, Iterable, List, Tuple
 from typing.io import TextIO
@@ -30,23 +31,24 @@ def load_normalized_wordlist(filename :str) -> Iterable[str]:
 # input file: wordlist
 # output file: transducer file
 # TODO return the transducer instead of saving it
-def compile_lexicon_transducer(entries :List[LexiconEntry],
-                               output_file :str) -> None:
-    lex_file = output_file + '.lex'
+def compile_lexicon_transducer(entries :List[LexiconEntry]) -> HfstTransducer:
+    lexc_file = shared.filenames['lexicon-tr'] + '.lex'
     tags = set()
     for entry in entries:
         for t in entry.tag:
             tags.add(t)
-    with open_to_write(lex_file) as lexfp:
+    with open_to_write(lexc_file) as lexfp:
         lexfp.write('Multichar_Symbols ' + 
                     ' '.join(shared.multichar_symbols + list(tags)) + '\n\n')
         lexfp.write('LEXICON Root\n')
         for entry in entries:
             lexfp.write('\t' + entry.symstr + ' # ;\n')
     # compile the lexc file
-    cmd = ['hfst-lexc', full_path(lex_file), '-o', full_path(output_file)]
-    subprocess.run(cmd)
-    remove_file(lex_file)
+#     cmd = ['hfst-lexc', full_path(lex_file), '-o', full_path(output_file)]
+#     subprocess.run(cmd)
+    transducer = compile_lexc_file(lexc_file)
+    remove_file(lexc_file)
+    return transducer
 
 
 def parallel_execute(function :Callable[..., None] = None,
@@ -62,8 +64,8 @@ def parallel_execute(function :Callable[..., None] = None,
     step = len(data) // num
     data_chunks = []
     i = 0
-    while (i+1)*step < len(data):
-        data_chunks.append(sorted(data[i*step:(i+1)*step]))
+    while i < num-1:
+        data_chunks.append(data[i*step:(i+1)*step])
         i += 1
     # account for rounding error while processing the last chunk
     data_chunks.append(data[i*step:])
@@ -72,13 +74,21 @@ def parallel_execute(function :Callable[..., None] = None,
     queue_lock = multiprocessing.Lock()
 
     def _output_fun(x):
+        successful = False
         queue_lock.acquire()
-        queue.put(x)
-        queue_lock.release()
+        try:
+            queue.put_nowait(x)
+            successful = True
+        except Exception:
+            successful = False
+        finally:
+            queue_lock.release()
+        if not successful:
+            time.sleep(1)       # wait for the queue to be emptied
+            _output_fun(x)
 
     processes, joined = [], []
     for i in range(num):
-#         output_fun = lambda x: queue.put(x)
         p = multiprocessing.Process(target=function,
                                     args=(data_chunks[i], _output_fun) +\
                                          additional_args)
@@ -92,10 +102,12 @@ def parallel_execute(function :Callable[..., None] = None,
     while not all(joined):
         count = 0
         queue_lock.acquire()
-        while not queue.empty():
-            yield queue.get()
-            count += 1
-        queue_lock.release()
+        try:
+            while not queue.empty():
+                yield queue.get()
+                count += 1
+        finally:
+            queue_lock.release()
         if show_progressbar:
             progressbar.update(count)
         for i, p in enumerate(processes):
@@ -104,10 +116,6 @@ def parallel_execute(function :Callable[..., None] = None,
                 joined[i] = True
     if show_progressbar:
         progressbar.close()
-#     for p in processes:
-#         p.start()
-#     for p in processes:
-#         p.join()
 
 
 def expand_graph(graph_file :str) -> None:
@@ -212,16 +220,6 @@ def filter_rules(graph_file :str) -> None:
     rename_file(graph_file + '.filtered', graph_file)
 
 
-# TODO deprecated -- use fstfastss
-# def build_graph_allrules(lexicon :Lexicon, graph_file :str) -> None:
-#     with open_to_write(graph_file) as fp:
-#         for n1, n2 in algorithms.fastss.similar_words(lexicon, print_progress=True):
-#             for rule in algorithms.align.extract_all_rules(n1, n2):
-#                 write_line(fp, (str(n1), str(n2), str(rule)))
-#                 write_line(fp, (str(n2), str(n1), rule.reverse().to_string()))
-#     sort_files(graph_file, key=3)
-# 
-
 def build_graph_fstfastss(
         lexicon :Lexicon,
         lex_tr_file :str,
@@ -285,51 +283,31 @@ def build_graph_from_training_edges(lexicon, training_file, graph_file):
                         logging.getLogger('main').warning('%s not in lexicon' % word_1)
 
 
-def compute_rule_domsizes(lexicon_tr_file :str, rules_file :str) -> None:
+def compute_rule_domsizes(lexicon_tr :HfstTransducer,
+                          rules :Iterable[Rule]) -> Iterable[Tuple[Rule, int]]:
     
-    def _compute_domsizes(p_id :int, 
-                          rules_with_freqs :Iterable[Tuple[str, int]], 
-                          lexicon_tr :HfstTransducer, 
-                          outlck :multiprocessing.Lock, 
-                          outfp :TextIO) -> None:
-        results = []
-        # compute domsizes
-        progressbar = None
-        if shared.config['preprocess'].getint('num_processes') == 1:
-            progressbar = tqdm.tqdm(total=len(rules))
-        for rule_str, freq in rules_with_freqs:
-            rule = Rule.from_string(rule_str)
-            domsize = rule.compute_domsize(lexicon_tr)
-            results.append((rule_str, freq, domsize))
-            if progressbar is not None:
-                progressbar.update()
-        if progressbar is not None:
-            progressbar.close()
-        # write the results to the output file
-        with outlck:
-            for rule_str, freq, domsize in results:
-                write_line(outfp, (rule_str, freq, domsize))
-            outfp.flush()
+    def _compute_domsizes(rules :Iterable[Rule], 
+                          output_fun :Callable[..., None],
+                          lexicon_tr :HfstTransducer) -> None:
+        for rule in rules:
+            output_fun((rule, rule.compute_domsize(lexicon_tr)))
 
-    lexicon_tr = algorithms.fst.load_transducer(lexicon_tr_file)
-    rules = [(rule_str, freq) for rule_str, freq in \
-                                  read_tsv_file(rules_file, (str, int))]
-    outlck = multiprocessing.Lock()
-    output_file = rules_file + '.tmp'
     num_processes = shared.config['preprocess'].getint('num_processes')
-    with open_to_write(output_file) as outfp:
-        parallel_execute(_compute_domsizes, rules, num=num_processes,
-                         additional_args=(lexicon_tr, outlck, outfp))
-    rename_file(output_file, rules_file)
-    sort_file(rules_file, reverse=True, numeric=True, key=2)
+    results = parallel_execute(_compute_domsizes, rules, num=num_processes,
+                               additional_args=(lexicon_tr,),
+                               show_progressbar=True)
+    for rule, domsize in results:
+        yield rule, domsize
+#     rename_file(output_file, rules_file)
+#     sort_file(rules_file, reverse=True, numeric=True, key=2)
 
 
 def run_standard() -> None:
     logging.getLogger('main').info('Loading lexicon...')
     lexicon = Lexicon(filename=shared.filenames['wordlist'])
     logging.getLogger('main').info('Building the lexicon transducer...')
-    compile_lexicon_transducer(lexicon.entries(),
-                               shared.filenames['lexicon-tr'])
+    lexicon_tr = compile_lexicon_transducer(lexicon.entries())
+    algorithms.fst.save_transducer(lexicon_tr, shared.filenames['lexicon-tr'])
 
     if shared.config['General'].getboolean('supervised'):
         logging.getLogger('main').info('Building graph...')
@@ -351,10 +329,19 @@ def run_standard() -> None:
                    shared.filenames['rules'], 3)
     update_file_size(shared.filenames['rules'])
 
-    # TODO compute rule domain sizes
-#     logging.getLogger('main').info('Computing rule domain sizes...')
-#     compute_rule_domsizes(shared.filenames['lexicon-tr'], 
-#                           shared.filenames['rules'])
+    # write rules file
+    logging.getLogger('main').info('Computing rule frequencies...')
+    rules = []
+    rule_freq = {}
+    for rule_str, edges in read_tsv_file_by_key(shared.filenames['graph'], 
+                                                key=3, show_progressbar=True):
+        rule_freq[rule_str] = len(edges)
+        rules.append(Rule.from_string(rule_str))
+    logging.getLogger('main').info('Computing rule domain sizes...')
+    write_tsv_file(shared.filenames['rules'],
+                   ((str(rule), rule_freq[str(rule)], domsize)\
+                    for rule, domsize in \
+                        compute_rule_domsizes(lexicon_tr, rules)))
 
 
 def run_bipartite() -> None:

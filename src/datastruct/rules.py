@@ -12,7 +12,7 @@ class Rule:
     def __init__(self, subst, tag_subst=None, string=None):
         self.subst = subst
         self.tag_subst = tag_subst
-        self.transducer = None
+#         self.transducer = None
         if string is None:
             self.string = self.to_string()
         else:
@@ -23,6 +23,9 @@ class Rule:
         pattern = 'X'.join(''.join(s[0]) for s in self.subst) +\
             (''.join(self.tag_subst[0]) if self.tag_subst else '')
         return other.lmatch_string(pattern)
+
+    def __lt__(self, other):
+        return self.string < other.string
     
     def __eq__(self, other):
         return self.subst == other.subst and self.tag_subst == other.tag_subst
@@ -36,14 +39,14 @@ class Rule:
     def copy(self):
         return Rule(self.subst, self.tag_subst)
     
-    def apply(self, node):
-        if self.transducer is None:
-            self.build_transducer()
-        t = algorithms.fst.seq_to_transducer(node.seq())
-        t.compose(self.transducer)
-        t.determinize()
-        t.minimize()
-        return list(map(itemgetter(0), sum(t.extract_paths().values(), [])))
+#     def apply(self, node):
+#         if self.transducer is None:
+#             self.build_transducer()
+#         t = algorithms.fst.seq_to_transducer(node.seq())
+#         t.compose(self.transducer)
+#         t.determinize()
+#         t.minimize()
+#         return list(map(itemgetter(0), sum(t.extract_paths().values(), [])))
     
     # TODO more meaningful name
     def check(self, max_affix_length, max_infix_length, infix_slots):
@@ -61,48 +64,17 @@ class Rule:
         return True
     
     def compute_domsize(self, lexicon_tr):
-# TODO deprecated
-#         if lexicon.transducer is None:
-#             lexicon.build_transducer()
-        self.build_transducer(alphabet=lexicon_tr.get_alphabet())
-        t = hfst.HfstTransducer(lexicon_tr)
-        t.compose(self.transducer)
+        # instead of computing T_L .o. T_r, compute:
+        #   inv(T_L .o. T_r) = inv(T_r) .o. inv(T_L) = inv(T_r) .o. T_L
+        t = self.build_transducer()
+        t.invert()
+        t.compose(lexicon_tr)
         t.determinize()
         t.minimize()
         if t.is_cyclic():
-            print('Warning: cyclic transducer for %s' % self.__str__())
-#        return t.number_of_states()
+            logging.getLogger('main').warning('cyclic transducer for %s' %\
+                                              self.__str__())
         return algorithms.fst.number_of_paths(t)
-#        return len(list(map(itemgetter(0), sum(t.extract_paths(max_cycles=1).values(), []))))
-
-#    def compute_domsize_2(self, lexicon):
-#        if lexicon.transducer is None:
-#            lexicon.build_transducer()
-#        self.build_transducer(alphabet=lexicon.alphabet)
-#        t = hfst.HfstTransducer(lexicon.transducer)
-#        t.compose(self.transducer)
-#        t.determinize()
-#        t.minimize()
-##        t.lookup_optimize()
-##        for node in lexicon.iter_nodes():
-##            print(t.lookup(node.key))
-##            break
-#        return sum(len(t.lookup(node.key)) for node in lexicon.iter_nodes())
-
-# TODO deprecated
-#     def get_trigrams(self):
-#         trigrams = []
-#         for tr in generate_n_grams(('^',)+self.subst[0][0]+(hfst.IDENTITY,), 3):
-#             if len(tr) == 3:
-#                 trigrams.append(tr)
-#         for alt in self.subst[1:-1]:
-#             for tr in generate_n_grams((hfst.IDENTITY,)+alt[0]+(hfst.IDENTITY,), 3):
-#                 if len(tr) == 3:
-#                     trigrams.append(tr)
-#         for tr in generate_n_grams((hfst.IDENTITY,)+self.subst[-1][0]+('$',), 3):
-#             if len(tr) == 3:
-#                 trigrams.append(tr)
-#         return trigrams
 
     def seq(self):
         x_seq, y_seq = [], []
@@ -130,10 +102,6 @@ class Rule:
         if self.tag_subst:
             seq.extend(self.tag_subst[0])
         return tuple(seq)
-    
-#   TODO deprecated
-#     def ngrams(self):
-#         pass
     
     @staticmethod
     def from_seq(seq, tag_subst):
@@ -166,9 +134,8 @@ class Rule:
              ''.join(self.tag_subst[1]) if self.tag_subst else '')
     
     def build_transducer(self, weight=0, alphabet=None):
-        self.transducer =\
-            algorithms.fst.seq_to_transducer(\
-                self.seq(), weight=weight, alphabet=alphabet)
+        return algorithms.fst.seq_to_transducer(self.seq(), weight=weight, 
+                                                alphabet=alphabet)
     
     def lmatch(self, lexicon):
         if lexicon.transducer is None:
