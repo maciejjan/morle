@@ -97,15 +97,15 @@ def build_fastss_cascade(lexicon_tr_file, max_word_len=20):
     p.stdin.write('invert\n')
     p.stdin.write('push T\n')
     p.stdin.write('rotate stack\n')
-#     p.stdin.write('lookup-optimize\n')
     fastss_tr_path = full_path(shared.filenames['fastss-tr'])
     p.stdin.write('save stack {}\n'.format(fastss_tr_path))
     p.stdin.write('quit\n')
     p.stdin.close()
     p.wait()
     
-#     remove_file(delenv_file)
-#     remove_file(delfilter_file)
+    # cleanup
+    remove_file(delenv_file)
+    remove_file(delfilter_file)
 
 def similar_words_with_lookup(words, transducer_path):
     cmd = ['hfst-lookup', '-i', full_path(transducer_path),  
@@ -142,19 +142,15 @@ def similar_words_with_lookup(words, transducer_path):
     p.stdin.close()
     p.wait()
 
-# TODO also give empty results for words, for which there are no similar words
 def similar_words_with_block_composition(words, transducer_path):
     def _compose_block(block, delenv, right_tr, tokenizer):
-#         tr = hfst.fst(block)    # TODO tokenize?
         tr = hfst.empty_fst()
         for word in block:
             tr.disjunct(hfst.tokenized_fst(tokenizer.tokenize(word)))
         tr.minimize()
         tr.convert(hfst.ImplementationType.SFST_TYPE)
-#         print(tr.number_of_states(), tr.number_of_arcs())
         tr.compose(delenv)
         tr.minimize()
-#         print(tr.number_of_states(), tr.number_of_arcs())
         tr.compose(right_tr)
         tr.minimize()
         return tr
@@ -210,9 +206,6 @@ def similar_words_with_block_composition(words, transducer_path):
     while count < len(words):
         block = words[count:count+block_size]
         tr = _compose_block(block, delenv, right_tr, tok)
-#         for word_1, word_2 in _extract_unique_io_pairs(tr):
-#         for word_1, word_2 in sorted(_extract_unique_io_pairs(tr), key=itemgetter(0)):
-#             yield (word_1, word_2)
         similar_words_for_word = _extract_unique_io_pairs(tr)
         for word in block:
             if word in similar_words_for_word:
