@@ -205,20 +205,21 @@ def run_filters(graph_file :str) -> None:
     contract_graph(graph_file)
 
 
-def filter_rules(graph_file :str) -> None:
-    '''Filter rules according to frequency.'''
-    # Annotate graph with rule frequency
-    # format: w1 w2 rule -> w1 w2 rule freq
-    # truncate the graph file to most frequent rules
-    # sort edges according to wordpair
-    sort_file(graph_file + '.filtered', key=3)
-    sort_file(graph_file + '.filtered', stable=True,
-              numeric=True, reverse=True, key=4)
-    remove_file(graph_file)
-    # cleanup files
-#    rename_file(graph_file, graph_file + '.orig')
-    rename_file(graph_file + '.filtered', graph_file)
-
+# TODO deprecated
+# def filter_rules(graph_file :str) -> None:
+#     '''Filter rules according to frequency.'''
+#     # Annotate graph with rule frequency
+#     # format: w1 w2 rule -> w1 w2 rule freq
+#     # truncate the graph file to most frequent rules
+#     # sort edges according to wordpair
+#     sort_file(graph_file + '.filtered', key=3)
+#     sort_file(graph_file + '.filtered', stable=True,
+#               numeric=True, reverse=True, key=4)
+#     remove_file(graph_file)
+#     # cleanup files
+# #    rename_file(graph_file, graph_file + '.orig')
+#     rename_file(graph_file + '.filtered', graph_file)
+# 
 
 def build_graph_fstfastss(
         lexicon :Lexicon,
@@ -385,8 +386,9 @@ def run() -> None:
         raise RuntimeError('No input file supplied!')
 
 
-def cleanup() -> None:
-    remove_file_if_exists(shared.filenames['rules'])
-    remove_file_if_exists(shared.filenames['lexicon-tr'])
-    remove_file_if_exists(shared.filenames['graph'])
+# TODO deprecated
+# def cleanup() -> None:
+#     remove_file_if_exists(shared.filenames['rules'])
+#     remove_file_if_exists(shared.filenames['lexicon-tr'])
+#     remove_file_if_exists(shared.filenames['graph'])
 
