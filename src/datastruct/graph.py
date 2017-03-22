@@ -1,6 +1,24 @@
 from datastruct.lexicon import Lexicon, LexiconEntry
+from datastruct.rules import Rule
+from utils.files import read_tsv_file
 
 import networkx as nx
+from typing import Dict, Iterable
+
+
+class GraphEdge:
+    def __init__(self, 
+                 source :LexiconEntry,
+                 target :LexiconEntry, 
+                 rule :Rule,
+                 **kwargs) -> None:
+        self.source = source
+        self.target = target
+        self.rule = rule
+        self.attr = kwargs
+
+    def to_tuple(self):
+        return (self.source, self.target, self.rule, self.attr)
 
 
 class Branching(nx.DiGraph):
@@ -18,20 +36,36 @@ class Branching(nx.DiGraph):
 
 class FullGraph(nx.MultiDiGraph):
     # TODO immutable, loaded from file
-    def __init__(self, filename :str = None, lexicon :Lexicon = None) -> None:
+    def __init__(self, 
+                 lexicon :Lexicon = None, 
+                 ruleset :Dict[str, Rule] = None) -> None:
+
+        assert lexicon is not None and ruleset is not None
         nx.MultiDiGraph.__init__(self)
         self.edges_list = []
+        self.lexicon = lexicon
+        self.ruleset = ruleset
         for entry in lexicon.entries():
             self.add_node(entry)
-        for w1, w2, rule_str in read_tsv_file(filename):
-            self.add_edge(lexicon[w1], lexicon[w2], rule_str)
-            self.edges_list.append((lexicon[w1], lexicon[w2], rule_str))
 
-    def random_edge(self):
+    def load_edges_from_file(self, filename :str) -> None:
+        starting_id = len(self.edges_list) + 1
+        for cur_id, (w1, w2, rule_str) in enumerate(read_tsv_file(filename),\
+                                                    starting_id):
+            v1, v2 = self.lexicon[w1], self.lexicon[w2]
+            rule = self.ruleset[rule_str]
+            edge = GraphEdge(v1, v2, rule, id=cur_id)
+            self.add_edge(*edge.to_tuple())
+            self.edges_list.append(edge)
+
+    def get_edge_by_id(self, id) -> GraphEdge:
+        return self.edges[id-1]
+
+    def random_edge(self) -> GraphEdge:
         # choose an edge with uniform probability
-        raise NotImplementedError()
+        return random.choice(self.edges)
 
-    def random_branching(self):
+    def random_branching(self) -> Branching:
         # choose some edges randomly and compose a branching out of them
         raise NotImplementedError()
 

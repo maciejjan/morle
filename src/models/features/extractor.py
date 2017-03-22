@@ -15,7 +15,7 @@ class FeatureValueExtractor:
 #         features.append(list(algorithms.ngrams.generate_n_grams(\
 #             node.word + node.tag + ('#',), self.rootdist_n)\
 #                 for node in nodes))
-        features.append([node.word_tag_str for node in nodes])
+        features.append([node.symstr for node in nodes])
         if self.use_word_freq:
             features.append(list(node.logfreq for node in nodes))
         if self.use_word_vec:
@@ -49,9 +49,11 @@ class FeatureValueExtractor:
         return tuple(features)
 
     def extract_feature_values_from_rules(self, rules):
-        ngrams = []
-        for rule in rules:
-            ngrams.append(list(algorithms.ngrams.generate_n_grams(\
-                rule.seq() + ('#',), 1)))
-        return (tuple(ngrams),)
+        return (rule.seq(),)
+#     TODO: deprecated
+#         ngrams = []
+#         for rule in rules:
+#             ngrams.append(list(algorithms.ngrams.generate_n_grams(\
+#                 rule.seq() + ('#',), 1)))
+#         return (tuple(ngrams),)
 

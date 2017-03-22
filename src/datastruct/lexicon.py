@@ -79,7 +79,7 @@ class LexiconEntry:
         self.literal = word
         self.word, self.tag, self.disamb = tokenize_word(word)
         self.word = normalize_seq(self.word)
-        # string of symbols -- does not include disambiguation ID
+        # string of printable symbols -- does not include disambiguation IDs
         self.symstr = ''.join(self.word + self.tag)
         self.normalized = ''.join(self.word + self.tag) +\
                           ((shared.format['word_disamb_sep'] + self.disamb) \

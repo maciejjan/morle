@@ -115,23 +115,26 @@ class AlergiaStringFeature(Feature):
         for val in values:
             word, tag, disamb = tokenize_word(val)
 #             print(word, tag, disamb)
-            word_seqs.append((word, 1))
-            tag_seqs.append((tag, 1))
+            word_seqs.append(word)
+            tag_seqs.append(tag)
 #         word_seqs = [(val.word, 1) for val in values]
 #         tag_seqs = [(val.tag, 1) for val in values]
 
-        word_pta = algorithms.alergia.prefix_tree_acceptor(word_seqs)
+#         word_pta = algorithms.alergia.prefix_tree_acceptor(word_seqs)
         alpha = shared.config['compile'].getfloat('alergia_alpha')
         freq_threshold = shared.config['compile'].getint('alergia_freq_threshold')
-        automaton = algorithms.alergia.alergia(word_pta, alpha=alpha, 
-                                               freq_threshold=freq_threshold)
+        self.automaton = \
+            algorithms.alergia.alergia(word_seqs, alpha=alpha, 
+                                       freq_threshold=freq_threshold)
 
-        tag_automaton = hfst.HfstTransducer(
-                          algorithms.alergia.normalize_weights(
-                            algorithms.alergia.prefix_tree_acceptor(tag_seqs)))
+#         tag_automaton = hfst.HfstTransducer(
+#                           algorithms.alergia.normalize_weights(
+#                             algorithms.alergia.prefix_tree_acceptor(tag_seqs)))
+        tag_automaton = \
+            algorithms.alergia.prefix_tree_acceptor(tag_seqs).to_hfst()
         tag_automaton.minimize()
 
-        self.automaton = hfst.HfstTransducer(automaton)
+#         self.automaton = hfst.HfstTransducer(automaton)
         self.automaton.concatenate(tag_automaton)
         self.automaton.remove_epsilons()
 #         self.automaton.minimize()

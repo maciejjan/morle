@@ -1,8 +1,9 @@
-from datastruct.lexicon import Lexicon, LexiconEdge, normalize_word
-from datastruct.rules import *
+from datastruct.lexicon import Lexicon
+from datastruct.rules import Rule, load_ruleset
+from datastruct.graph import FullGraph
 from models.marginal import MarginalModel
-from utils.files import *
-import algorithms.mcmc
+# from utils.files import *
+# import algorithms.mcmc
 import shared
 import logging
 
@@ -11,8 +12,16 @@ import logging
 # - arguments for inference: model, graph (lexicon implicit)
 
 def run() -> None:
-    lexicon = Lexicon(filename=shared.filenames['wordlist'])
-    full_graph = FullGraph(filename=shared.filenames['graph'], lexicon=lexicon)
+    logging.getLogger('main').info('Loading lexicon...')
+    lexicon = Lexicon(shared.filenames['wordlist'])
+    logging.getLogger('main').info('Loading ruleset...')
+    ruleset = load_ruleset(shared.filenames['rules'])   # type: Dict[str, Rule]
+    logging.getLogger('main').info('Loading full graph...')
+    full_graph = FullGraph(lexicon, ruleset)
+    full_graph.load_edges_from_file(shared.filenames['graph'])
+    model = MarginalModel()
+    model.fit_rootdist(lexicon.entries())
+    model.fit_ruledist(ruleset.values())
     # TODO initialize MarginalModel
     # TODO fit_ruledist
     # TODO add rules
