@@ -125,7 +125,7 @@ class AlergiaStringFeature(Feature):
         freq_threshold = shared.config['compile'].getint('alergia_freq_threshold')
         self.automaton = \
             algorithms.alergia.alergia(word_seqs, alpha=alpha, 
-                                       freq_threshold=freq_threshold)
+                                       freq_threshold=freq_threshold).to_hfst()
 
 #         tag_automaton = hfst.HfstTransducer(
 #                           algorithms.alergia.normalize_weights(

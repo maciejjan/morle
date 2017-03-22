@@ -175,18 +175,18 @@ def prefix_tree_acceptor(seqs :Iterable[Iterable[str]]) -> FrequencyAutomaton:
 
 def alergia(seqs :Iterable[Iterable[str]], 
             alpha :float = 0.05, 
-            freq_threshold :int = 1) -> hfst.HfstTransducer:
+            freq_threshold :int = 1) -> FrequencyAutomaton:
 
     automaton = prefix_tree_acceptor(seqs)
     automaton.rename_states_to_topological_ordering()
 
-    def _test(f1, n1, f2, n2):
+    def _test(f1 :int, n1 :int, f2 :int, n2 :int) -> bool:
         diff = abs(f1/n1 - f2/n2)
         threshold = (1/math.sqrt(n1) + 1/math.sqrt(n2)) *\
                     math.sqrt(0.5*math.log(2/alpha))
         return diff < threshold
 
-    def _compatible(state_1_id, state_2_id):
+    def _compatible(state_1_id :int, state_2_id :int) -> bool:
         n1 = automaton[state_1_id].get_total_freq()
         n2 = automaton[state_2_id].get_total_freq()
         for key in set(automaton[state_1_id].transitions.keys()) |\
@@ -221,5 +221,5 @@ def alergia(seqs :Iterable[Iterable[str]],
                       } -\
                       red_states
 
-    return automaton.to_hfst()
+    return automaton
 

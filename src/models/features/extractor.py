@@ -49,11 +49,8 @@ class FeatureValueExtractor:
         return tuple(features)
 
     def extract_feature_values_from_rules(self, rules):
-        return (rule.seq(),)
-#     TODO: deprecated
-#         ngrams = []
-#         for rule in rules:
-#             ngrams.append(list(algorithms.ngrams.generate_n_grams(\
-#                 rule.seq() + ('#',), 1)))
-#         return (tuple(ngrams),)
+        seqs = []
+        for rule in rules:
+            seqs.append(rule.seq())
+        return (seqs,)
 
