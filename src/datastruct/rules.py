@@ -17,7 +17,7 @@ class Rule:
             self.string = self.to_string()
         else:
             self.string = string
-        self.left_pattern = None
+#         self.left_pattern = None
         
     def __le__(self, other):
         pattern = 'X'.join(''.join(s[0]) for s in self.subst) +\
@@ -66,7 +66,7 @@ class Rule:
     def compute_domsize(self, lexicon_tr):
         # instead of computing T_L .o. T_r, compute:
         #   inv(T_L .o. T_r) = inv(T_r) .o. inv(T_L) = inv(T_r) .o. T_L
-        t = self.build_transducer()
+        t = self.to_fst()
         t.invert()
         t.compose(lexicon_tr)
         t.determinize()
@@ -133,45 +133,47 @@ class Rule:
              shared.format['rule_subst_sep']+\
              ''.join(self.tag_subst[1]) if self.tag_subst else '')
     
-    def build_transducer(self, weight=0, alphabet=None):
+    def to_fst(self, weight=0, alphabet=None):
         return algorithms.fst.seq_to_transducer(self.seq(), weight=weight, 
                                                 alphabet=alphabet)
     
-    def lmatch(self, lexicon):
-        if lexicon.transducer is None:
-            lexicon.build_transducer()
-        if self.transducer is None:
-            self.build_transducer()
-        t = hfst.HfstTransducer(lexicon.transducer)
-        t.compose(self.transducer)
-        t.input_project()
-        t.determinize()
-        t.minimize()
-        return tuple(t.extract_paths().keys())
+#    TODO deprecated
+#     def lmatch(self, lexicon):
+#         if lexicon.transducer is None:
+#             lexicon.build_transducer()
+#         if self.transducer is None:
+#             self.build_transducer()
+#         t = hfst.HfstTransducer(lexicon.transducer)
+#         t.compose(self.transducer)
+#         t.input_project()
+#         t.determinize()
+#         t.minimize()
+#         return tuple(t.extract_paths().keys())
+#     
+#     def rmatch(self, lexicon):
+#         if lexicon.transducer is None:
+#             lexicon.build_transducer()
+#         if self.transducer is None:
+#             self.build_transducer()
+#         t = hfst.HfstTransducer(self.transducer)
+#         t.compose(lexicon.transducer)
+#         t.output_project()
+#         t.determinize()
+#         t.minimize()
+#         return tuple(t.extract_paths().keys())
     
-    def rmatch(self, lexicon):
-        if lexicon.transducer is None:
-            lexicon.build_transducer()
-        if self.transducer is None:
-            self.build_transducer()
-        t = hfst.HfstTransducer(self.transducer)
-        t.compose(lexicon.transducer)
-        t.output_project()
-        t.determinize()
-        t.minimize()
-        return tuple(t.extract_paths().keys())
-    
-    def lmatch_node(self, node):
-        return self.lmatch_string(node.key())
+#     TODO deprecated
+#     def lmatch_node(self, node):
+#         return self.lmatch_string(node.key())
 
-    def lmatch_string(self, string):
-        if not self.left_pattern:
-            pattern = '.+'.join(''.join(s[0]) for s in self.subst)
-            if self.tag_subst and self.tag_subst[0]:
-                pattern += ''.join(self.tag_subst[0])
-#            print(pattern)
-            self.left_pattern = re.compile(pattern)
-        return True if self.left_pattern.match(string) else False
+#     def lmatch_string(self, string):
+#         if not self.left_pattern:
+#             pattern = '.+'.join(''.join(s[0]) for s in self.subst)
+#             if self.tag_subst and self.tag_subst[0]:
+#                 pattern += ''.join(self.tag_subst[0])
+# #            print(pattern)
+#             self.left_pattern = re.compile(pattern)
+#         return True if self.left_pattern.match(string) else False
 
 #        if self.transducer is None:
 #            self.build_transducer()

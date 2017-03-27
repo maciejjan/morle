@@ -3,7 +3,7 @@ from datastruct.rules import Rule
 from utils.files import read_tsv_file
 
 import networkx as nx
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Tuple
 
 
 class GraphEdge:
@@ -17,7 +17,7 @@ class GraphEdge:
         self.rule = rule
         self.attr = kwargs
 
-    def to_tuple(self):
+    def to_tuple(self) -> Tuple[LexiconEntry, LexiconEntry, Rule, Dict]:
         return (self.source, self.target, self.rule, self.attr)
 
 
@@ -58,8 +58,8 @@ class FullGraph(nx.MultiDiGraph):
             self.add_edge(*edge.to_tuple())
             self.edges_list.append(edge)
 
-    def get_edge_by_id(self, id) -> GraphEdge:
-        return self.edges[id-1]
+    def iter_edges(self) -> Iterator[GraphEdge]:
+        return iter(self.edges_list)
 
     def random_edge(self) -> GraphEdge:
         # choose an edge with uniform probability
@@ -67,6 +67,9 @@ class FullGraph(nx.MultiDiGraph):
 
     def random_branching(self) -> Branching:
         # choose some edges randomly and compose a branching out of them
+        raise NotImplementedError()
+
+    def restriction_to_ruleset(self, ruleset :Set[Rule]) -> FullGraph:
         raise NotImplementedError()
 
 # class Lexicon:

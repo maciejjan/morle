@@ -7,8 +7,10 @@ from datastruct.rules import Rule
 #from models.features.generic import StringFeature
 from models.features.extractor import FeatureValueExtractor
 from models.features.factory import FeatureSetFactory
+from models.features.generic import FeatureSet
 #from models.features.marginal import *
 #from models.generic import Model
+from utils.files import read_tsv_file, write_tsv_file
 #
 #from operator import itemgetter
 from collections import defaultdict
@@ -17,13 +19,19 @@ from typing import Iterable
 
 class Model:
 
-    def __init__(self):
+    def __init__(self) -> None:
         if not hasattr(self, 'model_type'):
             self.model_type = 'generic'
         self.extractor = FeatureValueExtractor()
-        self.rule_features = {}
+        self.rule_features = {}     # type: Dict[Rule, FeatureSet]
         self.rootdist = FeatureSetFactory.new_root_feature_set(self.model_type)
         self.ruledist = FeatureSetFactory.new_rule_feature_set(self.model_type)
+
+    def iter_rules(self) -> Iterator[Rule]:
+        return iter(self.rule_features.keys())
+
+    def num_rules(self) -> int:
+        return len(self.rule_features)
 
     def fit_rootdist(self, roots :Iterable[LexiconEntry]) -> None:
         self.rootdist[0].fit(\
@@ -33,11 +41,24 @@ class Model:
         self.ruledist[0].fit(\
             self.extractor.extract_feature_values_from_rules(rules)[0])
 
-    def cost_of_change(self, edges_to_add, edges_to_remove):
-        raise NotImplementedError()
+#     def cost_of_change(self, edges_to_add, edges_to_remove):
+#         raise NotImplementedError()
+# 
+#     def apply_change(self, edges_to_add, edges_to_remove):
+#         raise NotImplementedError()
 
-    def apply_change(self, edges_to_add, edges_to_remove):
-        raise NotImplementedError()
+    def load_rules_from_file(self, filename :str) -> None:
+        for rule_str, domsize in read_tsv_file(filename, (str, int)):
+            rule = Rule.from_string(rule_str)
+            self.rule_features[rule] = \
+                FeatureSetFactory.new_edge_feature_set(
+                    self.model_type, domsize)
+
+    def save_rules_to_file(self, filename :str) -> None:
+        rows = (str(rule_str), features[0].trials) \
+               for rule, features in self.rule_features.items()
+        write_tsv_file(filename, rows)
+
 
 
 # class Model:

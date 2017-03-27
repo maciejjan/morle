@@ -13,7 +13,6 @@ from hfst import HfstTransducer, compile_lexc_file
 import logging
 import multiprocessing
 import os.path
-# import queue
 import subprocess
 import time
 import tqdm
@@ -28,9 +27,6 @@ def load_normalized_wordlist(filename :str) -> Iterable[str]:
     return results
 
 
-# input file: wordlist
-# output file: transducer file
-# TODO return the transducer instead of saving it
 def compile_lexicon_transducer(entries :List[LexiconEntry]) -> HfstTransducer:
     lexc_file = shared.filenames['lexicon-tr'] + '.lex'
     tags = set()
@@ -43,9 +39,6 @@ def compile_lexicon_transducer(entries :List[LexiconEntry]) -> HfstTransducer:
         lexfp.write('LEXICON Root\n')
         for entry in entries:
             lexfp.write('\t' + entry.symstr + ' # ;\n')
-    # compile the lexc file
-#     cmd = ['hfst-lexc', full_path(lex_file), '-o', full_path(output_file)]
-#     subprocess.run(cmd)
     transducer = compile_lexc_file(lexc_file)
     remove_file(lexc_file)
     return transducer
@@ -53,18 +46,18 @@ def compile_lexicon_transducer(entries :List[LexiconEntry]) -> HfstTransducer:
 
 def parallel_execute(function :Callable[..., None] = None,
                      data :List[Any] = None,
-                     num :int = 1,
+                     num_processes :int = 1,
                      additional_args :Tuple = (),
                      show_progressbar :bool = False) -> Iterable:
 
-    mandatory_args = (function, data, num, additional_args)
+    mandatory_args = (function, data, num_processes, additional_args)
     assert not any(arg is None for arg in mandatory_args)
 
     # partition the data into chunks for each process
-    step = len(data) // num
+    step = len(data) // num_processes
     data_chunks = []
     i = 0
-    while i < num-1:
+    while i < num_processes-1:
         data_chunks.append(data[i*step:(i+1)*step])
         i += 1
     # account for rounding error while processing the last chunk
@@ -84,11 +77,12 @@ def parallel_execute(function :Callable[..., None] = None,
         finally:
             queue_lock.release()
         if not successful:
-            time.sleep(1)       # wait for the queue to be emptied
+            # wait for the queue to be emptied and try again
+            time.sleep(1)
             _output_fun(x)
 
     processes, joined = [], []
-    for i in range(num):
+    for i in range(num_processes):
         p = multiprocessing.Process(target=function,
                                     args=(data_chunks[i], _output_fun) +\
                                          additional_args)
@@ -255,7 +249,7 @@ def build_graph_fstfastss(
     transducer_path = shared.filenames['fastss-tr']
     num_processes = shared.config['preprocess'].getint('num_processes')
     extractor = parallel_execute(function=_extract_candidate_edges,
-                                 data=words, num=num_processes,
+                                 data=words, num_processes=num_processes,
                                  additional_args=(lexicon, transducer_path),
                                  show_progressbar=True)
     for word_1, edges in extractor:
@@ -294,9 +288,9 @@ def compute_rule_domsizes(lexicon_tr :HfstTransducer,
             output_fun((rule, rule.compute_domsize(lexicon_tr)))
 
     num_processes = shared.config['preprocess'].getint('num_processes')
-    results = parallel_execute(_compute_domsizes, rules, num=num_processes,
-                               additional_args=(lexicon_tr,),
-                               show_progressbar=True)
+    results = parallel_execute(
+                  _compute_domsizes, rules, num_processes=num_processes,
+                  additional_args=(lexicon_tr,), show_progressbar=True)
     for rule, domsize in results:
         yield rule, domsize
 #     rename_file(output_file, rules_file)
@@ -326,23 +320,27 @@ def run_standard() -> None:
     update_file_size(shared.filenames['graph'])
     run_filters(shared.filenames['graph'])
     update_file_size(shared.filenames['graph'])
-    aggregate_file(shared.filenames['graph'],\
-                   shared.filenames['rules'], 3)
-    update_file_size(shared.filenames['rules'])
+#     aggregate_file(shared.filenames['graph'],\
+#                    shared.filenames['rules'], 3)
+#     update_file_size(shared.filenames['rules'])
 
     # write rules file
-    logging.getLogger('main').info('Computing rule frequencies...')
+#     logging.getLogger('main').info('Computing rule frequencies...')
     rules = []
-    rule_freq = {}
+#     rule_freq = {}
     for rule_str, edges in read_tsv_file_by_key(shared.filenames['graph'], 
-                                                key=3, show_progressbar=True):
-        rule_freq[rule_str] = len(edges)
+                                                key=3, show_progressbar=False):
+#         rule_freq[rule_str] = len(edges)
         rules.append(Rule.from_string(rule_str))
     logging.getLogger('main').info('Computing rule domain sizes...')
     write_tsv_file(shared.filenames['rules'],
-                   ((str(rule), rule_freq[str(rule)], domsize)\
+                   ((str(rule), domsize)\
                     for rule, domsize in \
                         compute_rule_domsizes(lexicon_tr, rules)))
+#     write_tsv_file(shared.filenames['rules'],
+#                    ((str(rule), rule_freq[str(rule)], domsize)\
+#                     for rule, domsize in \
+#                         compute_rule_domsizes(lexicon_tr, rules)))
 
 
 def run_bipartite() -> None:

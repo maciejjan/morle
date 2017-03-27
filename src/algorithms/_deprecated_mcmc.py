@@ -15,67 +15,96 @@ from utils.files import *
 from utils.printer import *
 import shared
 
-# from pympler import asizeof
-
-# Beta distribution parameters
-#ALPHA = 1
-#BETA = 1
-#
-#NUM_WARMUP_ITERATIONS = 1000000
-#NUM_ITERATIONS = 10000000
-#NUM_RULE_ITERATIONS = 10000
-#ANNEALING_TEMPERATURE = 50
+# TODO split into smaller modules?
+# - index
+# - statistics
+# - samplers
+# - inference
 
 class ImpossibleMoveException(Exception):
+    pass
+
+### INDICES ###
+
+class Index:
+    def __init__(self) -> None:
+        pass
+
+    def __getitem__(self, key :Any) -> None:
+        pass
+
+class EdgeIndex:
+    pass
+
+class RuleIndex:
+    pass
+
+class WordpairIndex:
     pass
 
 ### STATISTICS ###
 
 class MCMCStatistic:
-    def __init__(self, sampler):        raise NotImplementedError()
-    def reset(self, sampler):            raise NotImplementedError()
-    def update(self, sampler):            raise NotImplementedError()
-    def edge_added(self, sampler):        raise NotImplementedError()
-    def edge_removed(self, sampler):    raise NotImplementedError()
-    def next_iter(self, sampler):        raise NotImplementedError()
+    def __init__(self) -> None:
+        self.reset()
+    
+    def reset(self) -> None:
+        self.iter_num = 0
+
+    def update(self) -> None:
+        pass
+
+    def edge_added(self, edge :GraphEdge) -> None:
+        pass
+
+    def edge_removed(self, edge :GraphEdge) -> None:
+        pass
+
+    def next_iter(self) -> None:
+        self.iter_num += 1
 
 
 class ScalarStatistic(MCMCStatistic):
-    def __init__(self, sampler):
-        self.reset(sampler)
+    def __init__(self) -> None:
+        super().__init__()
+        self.reset()
     
-    def reset(self, sampler):
-        self.val = 0
-        self.last_modified = 0
+    def reset(self) -> None:
+        super().reset()
+        self.val = 0                # type: float
+        self.last_modified = 0      # type: int
 
-    def update(self, sampler):
-        raise Exception('Not implemented!')
+    def update(self) -> None:
+        raise NotImplementedError()
 
-    def edge_added(self, sampler, idx, edge):
-        raise Exception('Not implemented!')
+    def edge_added(self, edge :GraphEdge) -> None:
+        raise NotImplementedError()
 
-    def edge_removed(self, sampler, idx, edge):
-        raise Exception('Not implemented!')
+    def edge_removed(self, edge :GraphEdge) -> None:
+        raise NotImplementedError()
 
-    def next_iter(self, sampler):
-        pass
-    
-    def value(self):
+    def value(self) -> float:
         return self.val
 
 
 class ExpectedCostStatistic(ScalarStatistic):
-    def update(self, sampler):
+    def __init__(self, model :Model) -> None:
+        super().__init__()
+        self.model = model
+
+    def update(self) -> None:
         pass
     
-    def edge_added(self, sampler, idx, edge):
+    def edge_added(self, edge :GraphEdge) -> None:
         pass
 
-    def edge_removed(self, sampler, idx, edge):
+    def edge_removed(self, edge :GraphEdge) -> None:
         pass
     
-    def next_iter(self, sampler):
-        self.val = (self.val * (sampler.num-1) + sampler.model.cost()) / sampler.num
+    def next_iter(self):
+        super().next_iter()
+        self.val = \
+            (self.val * (self.iter_num-1) + self.model.cost()) / self.iter_num
 
 
 class TimeStatistic(ScalarStatistic):
@@ -403,12 +432,12 @@ class RuleFrequencyStatistic(RuleStatistic):
         self.update_rule(edge.rule, sampler)
 
 
-# TODO
+# TODO include rule cost
 class RuleExpectedContributionStatistic(RuleStatistic):
     def update_rule(self, rule, sampler):
         if self.last_modified[rule] < sampler.num:
             edges = sampler.lexicon.edges_by_rule[rule]
-            new_value = sampler.model.cost_of_change([], edges)
+            new_value = sampler.model.cost_of_change([], edges) #TODO + rule_cost
             self.values[rule] = \
                 (self.values[rule] * self.last_modified[rule] +\
                  new_value * (sampler.num - self.last_modified[rule])) /\
@@ -812,45 +841,54 @@ class MCMCGraphSamplerFactory:
 
 
 class RuleSetProposalDistribution:
-    def __init__(self, rule_contrib, rule_costs, temperature):
-        self.rule_prob = {}
-        for rule in rule_costs:
-            rule_score = -rule_costs[rule] +\
-                (rule_contrib[rule] if rule in rule_contrib else 0)
-            self.rule_prob[rule] =\
-                expit(rule_score * temperature)
+    def __init__(self, rule_scores :Dict[Rule, float], 
+                 temperature :float) -> None:
+        self.rule_prob = {}     # type: Dict[Rule, float]
+        for rule, score in rule_scores.items():
+#             rule_score = -rule_costs[rule] +\
+#                 (rule_contrib[rule] if rule in rule_contrib else 0)
+            self.rule_prob[rule] = expit(score * temperature)
 
-    def propose(self):
-        next_ruleset = set()
+    def propose(self) -> Set[Rule]:
+        next_ruleset = set()        # type: Set[Rule]
         for rule, prob in self.rule_prob.items():
             if random.random() < prob:
                 next_ruleset.add(rule)
         return next_ruleset
 
-    def proposal_logprob(self, ruleset):
-        return sum(\
-                   (np.log(prob) if rule in ruleset else np.log(1-prob)) \
+    def proposal_logprob(self, ruleset :Set[Rule]) -> float:
+        return sum((np.log(prob) if rule in ruleset else np.log(1-prob)) \
                    for rule, prob in self.rule_prob.items())
 
 
-class MCMCAnnealingRuleSampler:
-    def __init__(self, model, lexicon, edges, warmup_iter, sampl_iter):
-        self.num = 0
+class MCMCRuleOptimizer:
+    def __init__(self, model :Model, full_graph :FullGraph,
+                 warmup_iter :int = 0, sampl_iter: int = 0, 
+                 alpha :float = 1, beta :float = 0.01) -> None:
+        self.iter_num = 0
         self.model = model
-        self.lexicon = lexicon
-        self.edges = edges
-        self.full_ruleset = set(model.rule_features)
-        self.ruleset = self.full_ruleset
-        self.rule_domsize = {}
-        self.rule_costs = {}
+        self.full_graph = full_graph
+#         self.lexicon = lexicon
+#         self.edges = edges
+#         self.full_ruleset = set(model.rule_features)
+#         self.full_ruleset = self.model.ruleset
+#         self.current_ruleset = self.full_ruleset
+#         self.full_model = self.model
+        self.current_ruleset = set(self.model.rule_features.keys())
+        self.rule_domsize = {}      # type: Dict[Rule, int]
+#         self.rule_costs = {}        # type: Dict[Rule, float]
         self.warmup_iter = warmup_iter
         self.sampl_iter = sampl_iter
+        self.alpha = alpha
+        self.beta = beta
         self.update_temperature()
-        for rule in self.full_ruleset:
-            self.rule_domsize[rule] = self.model.rule_features[rule][0].trials
-            self.rule_costs[rule] = self.model.rule_cost(rule, self.rule_domsize[rule])
+        for rule in self.current_ruleset:
+            self.rule_domsize[rule] = \
+                self.model.rule_features[rule][0].trials
+#             self.rule_costs[rule] = \
+#                 self.model.rule_cost(rule, self.rule_domsize[rule])
         self.cost, self.proposal_dist = \
-            self.evaluate_proposal(self.ruleset)
+            self.evaluate_proposal(self.current_ruleset)
 
     def next(self):
         logging.getLogger('main').debug('temperature = %f' % self.temperature)
@@ -869,25 +907,31 @@ class MCMCAnnealingRuleSampler:
             logging.getLogger('main').debug('accepted')
         else:
             logging.getLogger('main').debug('rejected')
-        self.num += 1
+        self.iter_num += 1
         self.update_temperature()
 
-    def evaluate_proposal(self, ruleset):
+    def evaluate_proposal(self, ruleset :Set[Rule]) \
+                         -> Tuple[float, RuleSetProposalDistribution]:
 #        self.model.reset()
-        new_model = MarginalModel(None, None)
+        new_model = MarginalModel()
         new_model.rootdist = self.model.rootdist
         new_model.ruledist = self.model.ruledist
 #        new_model.roots_cost = self.model.roots_cost
         for rule in ruleset:
             new_model.add_rule(rule, self.rule_domsize[rule])
-        self.lexicon.reset()
-        new_model.reset()
-        new_model.add_lexicon(self.lexicon)
+#         self.lexicon.reset()
+#         new_model.reset()
+#         new_model.add_lexicon(self.lexicon)
 #        print(new_model.roots_cost, new_model.rules_cost, new_model.edges_cost, new_model.cost())
 
-        graph_sampler = MCMCGraphSamplerFactory.new(new_model, self.lexicon,\
-            [edge for edge in self.edges if edge.rule in ruleset],\
-            self.warmup_iter, self.sampl_iter)
+#         graph_sampler = MCMCGraphSamplerFactory.new(new_model, self.lexicon,\
+#             [edge for edge in self.edges if edge.rule in ruleset],\
+#             self.warmup_iter, self.sampl_iter)
+        graph_sampler = MCMCGraphSamplerFactory.new(
+                            new_model, 
+                            self.full_graph.restriction_to_ruleset(ruleset),
+                            warmup_iter=self.warmup_iter,
+                            sampling_iter=self.sampling_iter)
         graph_sampler.add_stat('cost', ExpectedCostStatistic(graph_sampler))
         graph_sampler.add_stat('acc_rate', AcceptanceRateStatistic(graph_sampler))
         graph_sampler.add_stat('contrib', RuleExpectedContributionStatistic(graph_sampler))
@@ -904,7 +948,7 @@ class MCMCAnnealingRuleSampler:
             self.model.remove_rule(rule)
         for rule in new_ruleset - self.ruleset:
             self.model.add_rule(rule, self.rule_domsize[rule])
-        self.ruleset = new_ruleset
+        self.current_ruleset = new_ruleset
 
     def print_proposal(self, new_ruleset):
         for rule in self.ruleset - new_ruleset:
@@ -913,21 +957,21 @@ class MCMCAnnealingRuleSampler:
             print('restore: %s' % str(rule))
 
     def update_temperature(self):
-        alpha = shared.config['modsel'].getfloat('annealing_alpha')
-        beta = shared.config['modsel'].getfloat('annealing_beta')
-        self.temperature = (self.num + alpha) * beta
+        self.temperature = (self.iter_num + self.alpha) * self.beta
 
-    def save_rules(self):
-        # save rules
-        with open_to_write(shared.filenames['rules-modsel']) as outfp:
-            for rule, freq, domsize in read_tsv_file(shared.filenames['rules']):
-                if Rule.from_string(rule) in self.model.rule_features:
-                    write_line(outfp, (rule, freq, domsize))
-        # save graph (TODO rename the function?)
-        with open_to_write(shared.filenames['graph-modsel']) as outfp:
-            for w1, w2, rule in read_tsv_file(shared.filenames['graph']):
-                if Rule.from_string(rule) in self.model.rule_features:
-                    write_line(outfp, (w1, w2, rule))
+    def save_rules(self, filename):
+        self.model.save_rules_to_file(filename)
+#         with open_to_write(filename) as outfp:
+#             for rule, freq, domsize in read_tsv_file(shared.filenames['rules']):
+#                 if Rule.from_string(rule) in self.model.rule_features:
+#                     write_line(outfp, (rule, freq, domsize))
+
+    def save_graph(self, filename):
+        raise NotImplementedError()
+#         with open_to_write(filename) as outfp:
+#             for w1, w2, rule in read_tsv_file(shared.filenames['graph']):
+#                 if Rule.from_string(rule) in self.model.rule_features:
+#                     write_line(outfp, (w1, w2, rule))
 
 
 #### AUXILIARY FUNCTIONS ###
@@ -944,17 +988,24 @@ def load_edges(filename):
 #             write_line(fp, (rule, len(ints), ' '.join([str(i) for i in ints])))
 
 
-def mcmc_inference(lexicon, model, edges):
+def mcmc_inference(model :Model, full_graph :FullGraph) -> None:
+    # initialize the rule sampler
+    warmup_iter = shared.config['modsel'].getint('warmup_iterations')
+    sampling_iter = shared.config['modsel'].getint('sampling_iterations')
+    alpha = shared.config['modsel'].getfloat('annealing_alpha')
+    beta = shared.config['modsel'].getfloat('annealing_beta')
+    rule_sampler = MCMCAnnealingRuleSampler(
+                       model, full_graph, warmup_iter=warmup_iter,
+                       sampling_iter=sampling_iter, alpha=alpha, beta=beta)
+    # main loop -- perfom the inference
     iter_num = 0
-    rule_sampler = MCMCAnnealingRuleSampler(model, lexicon, edges,
-            shared.config['modsel'].getint('warmup_iterations'),
-            shared.config['modsel'].getint('sampling_iterations'))
     while iter_num < shared.config['modsel'].getint('iterations'):
         iter_num += 1
         logging.getLogger('main').info('Iteration %d' % iter_num)
         logging.getLogger('main').info(\
             'num_rules = %d' % rule_sampler.model.num_rules())
         logging.getLogger('main').info('cost = %f' % rule_sampler.cost)
-        rule_sampler.next()
-        rule_sampler.save_rules()
+#         rule_sampler.next()
+        rule_sampler.save_rules(shared.filenames['rules-modsel'])
+        rule_sampler.save_graph(shared.filenames['graph-modsel'])
 
