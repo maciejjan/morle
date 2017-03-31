@@ -1,6 +1,6 @@
+from datastruct.graph import FullGraph
 from datastruct.lexicon import Lexicon
 from datastruct.rules import Rule
-from datastruct.graph import FullGraph
 from models.marginal import MarginalModel
 import algorithms.mcmc
 import shared
