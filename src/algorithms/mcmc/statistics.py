@@ -1,12 +1,16 @@
+from algorithms.mcmc.samplers import MCMCGraphSampler
+from datastruct.graph import GraphEdge
+
 
 class MCMCStatistic:
-    def __init__(self) -> None:
+    def __init__(self, sampler :MCMCGraphSampler) -> None:
+        self.sampler = sampler
         self.reset()
     
     def reset(self) -> None:
-        self.iter_num = 0
+        pass
 
-    def update(self) -> None:
+    def update(self, sampler :MCMCGraphSampler) -> None:
         pass
 
     def edge_added(self, edge :GraphEdge) -> None:
@@ -16,20 +20,19 @@ class MCMCStatistic:
         pass
 
     def next_iter(self) -> None:
-        self.iter_num += 1
+        pass
 
 
 class ScalarStatistic(MCMCStatistic):
-    def __init__(self) -> None:
-        super().__init__()
-        self.reset()
+    def __init__(self, sampler :MCMCGraphSampler) -> None:
+        super().__init__(sampler)
     
     def reset(self) -> None:
         super().reset()
         self.val = 0                # type: float
         self.last_modified = 0      # type: int
 
-    def update(self) -> None:
+    def update(self, sampler :MCMCGraphSampler) -> None:
         raise NotImplementedError()
 
     def edge_added(self, edge :GraphEdge) -> None:
@@ -43,11 +46,10 @@ class ScalarStatistic(MCMCStatistic):
 
 
 class ExpectedCostStatistic(ScalarStatistic):
-    def __init__(self, model :Model) -> None:
-        super().__init__()
-        self.model = model
+    def __init__(self, sampler :MCMCGraphSampler) -> None:
+        super().__init__(sampler)
 
-    def update(self) -> None:
+    def update(self, sampler :MCMCGraphSampler) -> None:
         pass
     
     def edge_added(self, edge :GraphEdge) -> None:
@@ -57,25 +59,26 @@ class ExpectedCostStatistic(ScalarStatistic):
         pass
     
     def next_iter(self):
-        super().next_iter()
         self.val = \
             (self.val * (self.iter_num-1) + self.model.cost()) / self.iter_num
 
 
 class TimeStatistic(ScalarStatistic):
-    def reset(self, sampler):
+    def reset(self, sampler :MCMCGraphSampler) -> None:
         self.started = time.time()
         self.val = 0
     
-    def update(self, sampler):
+    def update(self, sampler :MCMCGraphSampler):
         self.val = time.time() - self.started
     
-    def edge_added(self, sampler, idx, edge):
+    def edge_added(self, edge :GraphEdge) -> None:
         pass
 
-    def edge_removed(self, sampler, idx, edge):
+    def edge_removed(self, edge :GraphEdge) -> None:
         pass
-
+    
+    def next_iter(self):
+        pass
 
 # TODO deprecated
 # class GraphsWithoutRuleSetStatistic(ScalarStatistic):
@@ -115,19 +118,19 @@ class TimeStatistic(ScalarStatistic):
 
 
 class AcceptanceRateStatistic(ScalarStatistic):
-    def update(self, sampler):
+    def update(self, sampler :MCMCGraphSampler):
         pass
     
-    def edge_added(self, sampler, idx, edge):
+    def edge_added(self, edge :GraphEdge) -> None:
         self.acceptance(sampler)
 
-    def edge_removed(self, sampler, idx, edge):
+    def edge_removed(self, edge :GraphEdge) -> None:
         self.acceptance(sampler)
 
-    def acceptance(self, sampler):
-        if sampler.num > self.last_modified:
-            self.val = (self.val * self.last_modified + 1) / sampler.num
-            self.last_modified = sampler.num
+    def acceptance(self, sampler :MCMCGraphSampler) -> None:
+        if sampler.iter_num > self.last_modified:
+            self.val = (self.val * self.last_modified + 1) / sampler.iter_num
+            self.last_modified = sampler.iter_num
 
 
 class EdgeStatistic(MCMCStatistic):

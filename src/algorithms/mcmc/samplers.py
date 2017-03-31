@@ -1,25 +1,34 @@
+from datastruct.graph import FullGraph, Branching
+from models.generic import Model
+import shared
+
+import logging
+import tqdm
 
 # TODO monitor the number of moves from each variant and their acceptance rates!
 # TODO refactor
 class MCMCGraphSampler:
-    def __init__(self, model, lexicon, edges, warmup_iter, sampl_iter):
+    def __init__(self, full_graph :FullGraph, 
+                       model :Model, 
+                       warmup_iter :int = 1000,
+                       sampl_iter :int = 100000) -> None:
+        self.full_graph = full_graph
         self.model = model
-        self.lexicon = lexicon
-        self.edges = edges
-        self.edges_hash = defaultdict(lambda: list())
-        self.edges_idx = {}
-        for idx, e in enumerate(edges):
-            self.edges_idx[e] = idx
-            self.edges_hash[(e.source, e.target)].append(e)
-#        for idx, e in enumerate(edges):
-#            self.edges_hash[(e.source, e.target)] = (idx, e)
-        self.len_edges = len(edges)
-        self.num = 0        # iteration number
-        self.stats = {}
         self.warmup_iter = warmup_iter
         self.sampl_iter = sampl_iter
-#         self.tr = tracker.SummaryTracker()
-#        self.accept_all = False
+        self.stats = {}
+        self.iter_num = 0               # type: Dict[str, MCMCStatistic]
+        # TODO indices on edges, rules, wordpairs
+
+# TODO deprecated
+#         self.lexicon = lexicon
+#         self.edges = edges
+#         self.edges_hash = defaultdict(lambda: list())
+#         self.edges_idx = {}
+#         for idx, e in enumerate(edges):
+#             self.edges_idx[e] = idx
+#             self.edges_hash[(e.source, e.target)].append(e)
+#         self.len_edges = len(edges)
     
     def add_stat(self, name, stat):
         if name in self.stats:
@@ -30,28 +39,25 @@ class MCMCGraphSampler:
         return self.model.cost()
 
     def run_sampling(self):
+        self.branching = self.full_graph.random_branching()
+        self.model.fit_to_branching(self.branching)
         logging.getLogger('main').info('Warming up the sampler...')
-        pp = progress_printer(self.warmup_iter)
-        for i in pp:
+#         pp = progress_printer(self.warmup_iter)
+        for i in tqdm.tqdm(range(self.warmup_iter)):
             self.next()
         self.reset()
-        pp = progress_printer(self.sampl_iter)
         logging.getLogger('main').info('Sampling...')
-        for i in pp:
+        for i in tqdm.tqdm(range(self.sampling_iter)):
             self.next()
         self.update_stats()
 
     def next(self):
-#         if self.num % 10000 == 0:
-#             print(asizeof.asized(self, detail=2).format())
-#             for stat_name, stat in self.stats.items():
-#                 print(stat_name, asizeof.asized(stat, detail=2).format())
         # increase the number of iterations
-        self.num += 1
+        self.iter_num += 1
 
         # select an edge randomly
-        edge_idx = random.randrange(self.len_edges)
-        edge = self.edges[edge_idx]
+#         edge_idx = random.randrange(self.len_edges)
+        edge = self.full_graph.random_edge()
 
         # try the move determined by the selected edge
         try:
@@ -65,8 +71,9 @@ class MCMCGraphSampler:
                 stat.next_iter(self)
         # if move impossible -- discard this iteration
         except ImpossibleMoveException:
-            self.num -= 1
+            self.iter_num -= 1
 
+    # TODO fit to the new Branching class
     def determine_move_proposal(self, edge):
         if edge in edge.source.edges:
             return self.propose_deleting_edge(edge)
@@ -174,7 +181,7 @@ class MCMCGraphSampler:
                 stat.edge_added(self, idx, e)
     
     def reset(self):
-        self.num = 0
+        self.iter_num = 0
         for stat in self.stats.values():
             stat.reset(self)
 

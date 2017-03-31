@@ -4,7 +4,7 @@ from models.features.point import *
 
 class FeatureSetFactory:
     @staticmethod
-    def new_edge_feature_set(model_type, domsize):
+    def new_edge_feature_set(model_type, domsize) -> FeatureSet:
         if model_type == 'generic':
             return FeatureSet.new_edge_feature_set(domsize)
         elif model_type == 'point':
@@ -13,7 +13,7 @@ class FeatureSetFactory:
             return MarginalFeatureSet.new_edge_feature_set(domsize)
 
     @staticmethod
-    def new_root_feature_set(model_type):
+    def new_root_feature_set(model_type) -> FeatureSet:
         if model_type == 'generic':
             return FeatureSet.new_root_feature_set()
         elif model_type == 'point':
@@ -22,7 +22,7 @@ class FeatureSetFactory:
             return MarginalFeatureSet.new_root_feature_set()
 
     @staticmethod
-    def new_rule_feature_set(model_type):
+    def new_rule_feature_set(model_type) -> FeatureSet:
         if model_type == 'generic':
             return FeatureSet.new_rule_feature_set()
         elif model_type == 'point':

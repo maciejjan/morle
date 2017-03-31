@@ -3,7 +3,8 @@ from datastruct.rules import Rule
 from utils.files import read_tsv_file
 
 import networkx as nx
-from typing import Dict, Iterable, Tuple
+import random
+from typing import Dict, Iterable, Set, Tuple
 
 
 class GraphEdge:
@@ -17,59 +18,91 @@ class GraphEdge:
         self.rule = rule
         self.attr = kwargs
 
+    def __eq__(self, other) -> bool:
+        return self.to_tuple() == other.to_tuple()
+
     def to_tuple(self) -> Tuple[LexiconEntry, LexiconEntry, Rule, Dict]:
         return (self.source, self.target, self.rule, self.attr)
 
 
-class Branching(nx.DiGraph):
+class Branching(nx.MultiDiGraph):
     # TODO well-formedness conditions etc.
     def __init__(self):
-        raise NotImplementedError()
+        super().__init__()
 
-    def is_edge_possible(self):
-        raise NotImplementedError()
+    def is_edge_possible(self, edge :GraphEdge) -> bool:
+        if self.predecessors(edge.target):
+            return False
+        # check for cycle: whether target is ancestor of source
+        node = edge.source
+        while True:
+            if node == edge.target:
+                return False
+            predecessors = self.predecessors(node)
+            if predecessors:
+                node = predecessors[0]
+            else:
+                break
+        return True
 
-    def add_edge(self):
-        # TODO check if edge possible
-        raise NotImplementedError()
+    def add_edge(self, edge :GraphEdge) -> None:
+        super().add_edge(*edge.to_tuple())
+
+    def remove_edge(self, edge :GraphEdge) -> None:
+        super().remove_edge(edge.source, edge.target)
 
 
 class FullGraph(nx.MultiDiGraph):
     # TODO immutable, loaded from file
-    def __init__(self, 
-                 lexicon :Lexicon = None, 
-                 ruleset :Dict[str, Rule] = None) -> None:
+    def __init__(self, lexicon :Lexicon = None) -> None:
 
-        assert lexicon is not None and ruleset is not None
-        nx.MultiDiGraph.__init__(self)
+        assert lexicon is not None
+        super().__init__()
         self.edges_list = []
         self.lexicon = lexicon
-        self.ruleset = ruleset
+#         self.rules = {}       # type: Dict[str, Rule]
         for entry in lexicon.entries():
             self.add_node(entry)
 
     def load_edges_from_file(self, filename :str) -> None:
         starting_id = len(self.edges_list) + 1
+        rules = {}              # type: Dict[str, Rule]
         for cur_id, (w1, w2, rule_str) in enumerate(read_tsv_file(filename),\
                                                     starting_id):
             v1, v2 = self.lexicon[w1], self.lexicon[w2]
-            rule = self.ruleset[rule_str]
+            if not rule_str in rules:
+                rules[rule_str] = Rule.from_string(rule_str)
+            rule = rules[rule_str]
             edge = GraphEdge(v1, v2, rule, id=cur_id)
             self.add_edge(*edge.to_tuple())
             self.edges_list.append(edge)
 
-    def iter_edges(self) -> Iterator[GraphEdge]:
+    def iter_edges(self) -> Iterable[GraphEdge]:
         return iter(self.edges_list)
 
     def random_edge(self) -> GraphEdge:
         # choose an edge with uniform probability
         return random.choice(self.edges)
 
+    def empty_branching(self) -> Branching:
+        branching = Branching()
+        branching.add_nodes_from(self)
+        return branching
+
     def random_branching(self) -> Branching:
         # choose some edges randomly and compose a branching out of them
-        raise NotImplementedError()
+        edge_indices = list(range(len(self.edges_list)))
+        random.shuffle(edge_indices)
+        edge_indices = edge_indices[:random.randrange(len(edge_indices))]
 
-    def restriction_to_ruleset(self, ruleset :Set[Rule]) -> FullGraph:
+        branching = self.empty_branching()
+        for idx in edge_indices:
+            edge = self.edges_list[idx]
+            if branching.is_edge_possible(edge):
+                branching.add_edge(edge)
+        return branching
+
+    def restriction_to_ruleset(self, ruleset :Set[Rule]) -> 'FullGraph':
         raise NotImplementedError()
 
 # class Lexicon:

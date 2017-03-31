@@ -4,9 +4,11 @@ import shared
 from collections import defaultdict
 import numpy as np
 from scipy.special import betaln, gammaln
+from typing import Any, List
+
 
 class MarginalFeature(Feature):
-    def fit(self, values):
+    def fit(self, values :Any) -> None:
         self.apply_change(values, [])
 
 #class MarginalStringFeature(MarginalFeature, StringFeature):
@@ -38,29 +40,34 @@ class MarginalFeature(Feature):
 #        self.counts = {}
 
 class MarginalBinomialFeature(MarginalFeature):
-    def __init__(self, trials, alpha=1, beta=1):
+    def __init__(self, trials :int, alpha :float = 1, beta :float = 1) -> None:
         self.trials = trials
         self.count = 0
         self.alpha_0 = alpha
         self.beta_0 = beta
         self.reset()
 
-    def null_cost(self):
+    def null_cost(self) -> float:
         return -betaln(\
                        self.alpha_0,\
                        self.trials + self.beta_0
                       ) +\
             betaln(self.alpha_0, self.beta_0)
+
+    def empty(self) -> int:
+        return 0
     
-    def cost(self):
+    def cost(self) -> float:
         return -betaln(\
                        self.count + self.alpha,\
                        self.trials - self.count + self.beta
                       ) +\
             betaln(self.alpha, self.beta)
     
-    def cost_of_change(self, values_to_add, values_to_remove):
-        count_change = len(values_to_add) - len(values_to_remove)
+    def cost_of_change(self, values_to_add :int, 
+                             values_to_remove :int) -> float:
+#         count_change = len(values_to_add) - len(values_to_remove)
+        count_change = values_to_add - values_to_remove
         return -betaln(\
                        self.count + count_change + self.alpha,\
                        self.trials - self.count - count_change + self.beta
@@ -70,20 +77,24 @@ class MarginalBinomialFeature(MarginalFeature):
                        self.trials - self.count + self.beta
                       )
     
-    def apply_change(self, values_to_add, values_to_remove):
-        count_change = len(values_to_add) - len(values_to_remove)
+    def apply_change(self, values_to_add :int, values_to_remove :int) -> None:
+#         count_change = len(values_to_add) - len(values_to_remove)
+        count_change = values_to_add - values_to_remove
         self.count += count_change
 
-    def reset(self):
+    def reset(self) -> None:
         self.alpha = self.alpha_0
         self.beta = self.beta_0
     
-    def update(self, count):
-        self.count = count
+# TODO deprecated
+#     def update(self, count :int) -> None:
+#         self.count = count
+
 
 class MarginalExponentialFeature(MarginalFeature):
     def __init__(self):
         raise NotImplementedError()
+
 
 class MarginalGaussianInverseChiSquaredFeature(MarginalFeature):
     def __init__(self, dim, kappa_0, mu_0, nu_0, var_0):
@@ -182,7 +193,7 @@ class MarginalFeatureSet(FeatureSet):
         return self.features[idx]
     
     @staticmethod
-    def new_edge_feature_set(domsize):
+    def new_edge_feature_set(domsize) -> 'MarginalFeatureSet':
         result = MarginalFeatureSet()
         features = [MarginalBinomialFeature(domsize, alpha=1.1, beta=1.1)]
         weights = [1.0]
@@ -199,7 +210,7 @@ class MarginalFeatureSet(FeatureSet):
         return result
 
     @staticmethod
-    def new_root_feature_set():
+    def new_root_feature_set() -> 'MarginalFeatureSet':
         result = MarginalFeatureSet()
 #        features = [MarginalStringFeature()]
         features = [AlergiaStringFeature()]
@@ -219,40 +230,42 @@ class MarginalFeatureSet(FeatureSet):
         return result
 
     @staticmethod
-    def new_rule_feature_set():
+    def new_rule_feature_set() -> 'MarginalFeatureSet':
         result = MarginalFeatureSet()
-        result.features = (StringFeature(),)
+        result.features = (UnigramSequenceFeature(),)
 #         result.features = (ZeroCostFeature(),)
         result.weights = (1.0,)
         return result
     
-    def cost(self):
-        return sum(w*f.cost() for f, w in\
-            zip(self.features, self.weights))
-
-    def reset(self):
-        for f in self.features:
-            f.reset()
-
-    def cost_of_change(self, values_to_add, values_to_delete):
-        # ensure the right size for empty feature vectors
-        if not values_to_add:
-            values_to_add = ((),) * len(self.features)
-        if not values_to_delete:
-            values_to_delete = ((),) * len(self.features)
-#        print('MarginalFeatureSet.cost_of_change', len(values_to_add), len(values_to_delete))
-#        print('MarginalFeatureSet.cost_of_change', len(values_to_add[0]), len(values_to_delete[0]))
-        # apply the change in every single feature
-        return sum(f.cost_of_change(values_to_add[i], values_to_delete[i])\
-            for i, f in enumerate(self.features))
-
-    def apply_change(self, values_to_add, values_to_delete):
-        # ensure the right size for empty feature vectors
-        if not values_to_add:
-            values_to_add = ((),) * len(self.features)
-        if not values_to_delete:
-            values_to_delete = ((),) * len(self.features)
-        # apply the change in every single feature
-        for i, f in enumerate(self.features):
-            f.apply_change(values_to_add[i], values_to_delete[i])
-    
+#     def cost(self):
+#         return sum(w*f.cost() for f, w in\
+#             zip(self.features, self.weights))
+# 
+#     def reset(self):
+#         for f in self.features:
+#             f.reset()
+# 
+#     def cost_of_change(self, values_to_add :List,
+#                              values_to_delete :List) -> float:
+#         # ensure the right size for empty feature vectors
+#         if not values_to_add:
+#             values_to_add = ((),) * len(self.features)
+#         if not values_to_delete:
+#             values_to_delete = ((),) * len(self.features)
+# #        print('MarginalFeatureSet.cost_of_change', len(values_to_add), len(values_to_delete))
+# #        print('MarginalFeatureSet.cost_of_change', len(values_to_add[0]), len(values_to_delete[0]))
+#         # apply the change in every single feature
+#         return sum(f.cost_of_change(values_to_add[i], values_to_delete[i])\
+#             for i, f in enumerate(self.features))
+# 
+#     def apply_change(self, values_to_add :List,
+#                            values_to_delete :List) -> None:
+#         # ensure the right size for empty feature vectors
+#         if not values_to_add:
+#             values_to_add = ((),) * len(self.features)
+#         if not values_to_delete:
+#             values_to_delete = ((),) * len(self.features)
+#         # apply the change in every single feature
+#         for i, f in enumerate(self.features):
+#             f.apply_change(values_to_add[i], values_to_delete[i])
+#     
