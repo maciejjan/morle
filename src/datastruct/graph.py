@@ -30,19 +30,24 @@ class Branching(nx.MultiDiGraph):
     def __init__(self):
         super().__init__()
 
-    def is_edge_possible(self, edge :GraphEdge) -> bool:
-        if self.predecessors(edge.target):
-            return False
-        # check for cycle: whether target is ancestor of source
-        node = edge.source
+    def has_path(self, source :LexiconEntry, target :LexiconEntry) -> bool:
+        # walk back from target and check whether source is on the way
+        node = target
         while True:
-            if node == edge.target:
-                return False
+            if node == source:
+                return True
             predecessors = self.predecessors(node)
             if predecessors:
                 node = predecessors[0]
             else:
                 break
+        return False
+
+    def is_edge_possible(self, edge :GraphEdge) -> bool:
+        if self.predecessors(edge.target):
+            return False
+        if self.has_path(edge.target, edge.source):
+            return False
         return True
 
     def add_edge(self, edge :GraphEdge) -> None:
@@ -82,7 +87,7 @@ class FullGraph(nx.MultiDiGraph):
 
     def random_edge(self) -> GraphEdge:
         # choose an edge with uniform probability
-        return random.choice(self.edges)
+        return random.choice(self.edges_list)
 
     def empty_branching(self) -> Branching:
         branching = Branching()
