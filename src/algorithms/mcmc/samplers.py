@@ -4,6 +4,8 @@ from models.generic import Model
 import shared
 
 import logging
+import math
+import random
 import tqdm
 from typing import List, Tuple
 
@@ -46,7 +48,8 @@ class MCMCGraphSampler:
         return self.model.cost()
 
     def run_sampling(self) -> None:
-        self.branching = self.full_graph.random_branching()
+#         self.branching = self.full_graph.random_branching()
+        self.branching = self.full_graph.empty_branching()
         self.model.fit_to_branching(self.branching)
         logging.getLogger('main').info('Warming up the sampler...')
 #         pp = progress_printer(self.warmup_iter)
@@ -75,7 +78,7 @@ class MCMCGraphSampler:
             if acc_prob >= 1 or acc_prob >= random.random():
                 self.accept_move(edges_to_add, edges_to_remove)
             for stat in self.stats.values():
-                stat.next_iter(self)
+                stat.next_iter()
         # if move impossible -- discard this iteration
         except ImpossibleMoveException:
             self.iter_num -= 1
@@ -89,9 +92,11 @@ class MCMCGraphSampler:
             return self.propose_deleting_edge(edge)
 #         elif edge.source.has_ancestor(edge.target):
         elif self.branching.has_path(edge.target, edge.source):
+#             raise ImpossibleMoveException()
             return self.propose_flip(edge)
 #         elif edge.target.parent is not None:
         elif self.branching.predecessors(edge.target):
+#             raise ImpossibleMoveException()
             return self.propose_swapping_parent(edge)
         else:
             return self.propose_adding_edge(edge)
@@ -120,9 +125,11 @@ class MCMCGraphSampler:
         if not self.full_graph.has_edge(node_3, node_1):
             raise ImpossibleMoveException()
 
-        edge_3_1 = random.choice(self.edges_hash[(node_3, node_1)])
-        edge_3_2 = self.find_edge_in_lexicon(node_3, node_2)
-        edge_4_1 = self.find_edge_in_lexicon(node_4, node_1)
+        edge_3_1 = random.choice(self.full_graph.find_edges(node_3, node_1))
+        edge_3_2 = self.branching.find_edges(node_3, node_2)[0] \
+                   if self.branching.has_edge(node_3, node_2) else None
+        edge_4_1 = self.branching.find_edges(node_4, node_1)[0] \
+                   if self.branching.has_edge(node_4, node_1) else None
 #         edge_3_1 = random.choice(list(self.full_graph[node_3][node_1].keys()))
 
         if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
@@ -130,8 +137,8 @@ class MCMCGraphSampler:
             edges_to_remove.append(edge_4_1)
         else: raise Exception('!')
         edges_to_add.append(edge_3_1)
-        prop_prob_ratio = (1/len(self.edges_hash[(node_3, node_1)])) /\
-                          (1/len(self.edges_hash[(node_3, node_2)]))
+        prop_prob_ratio = (1/len(self.full_graph.find_edges(node_3, node_1))) /\
+                          (1/len(self.full_graph.find_edges(node_3, node_2)))
 
         return edges_to_add, edges_to_remove, prop_prob_ratio
 
@@ -140,42 +147,50 @@ class MCMCGraphSampler:
         edges_to_add, edges_to_remove = [], []
         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
 
-        if not self.edges_hash[(node_3, node_5)]:
+        if not self.full_graph.has_edge(node_3, node_5):
             raise ImpossibleMoveException()
 
-        edge_2_5 = self.find_edge_in_lexicon(node_2, node_5)
-        edge_3_2 = self.find_edge_in_lexicon(node_3, node_2)
-        edge_3_5 = random.choice(self.edges_hash[(node_3, node_5)])
+        edge_2_5 = self.branching.find_edges(node_2, node_5)[0] \
+                   if self.branching.has_edge(node_2, node_5) else None
+        edge_3_2 = self.branching.find_edges(node_3, node_2)[0] \
+                   if self.branching.has_edge(node_3, node_2) else None
+        edge_3_5 = random.choice(self.full_graph.find_edges(node_3, node_5))
 
         if edge_2_5 is not None:
             edges_to_remove.append(edge_2_5)
         elif node_2 != node_5: raise Exception('!')     # TODO ???
         if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
         edges_to_add.append(edge_3_5)
-        prop_prob_ratio = (1/len(self.edges_hash[(node_3, node_5)])) /\
-                          (1/len(self.edges_hash[(node_3, node_2)]))
+        prop_prob_ratio = (1/len(self.full_graph.find_edges(node_3, node_5))) /\
+                          (1/len(self.full_graph.find_edges(node_3, node_2)))
 
         return edges_to_add, edges_to_remove, prop_prob_ratio
 
     def nodes_for_flip(self, edge :GraphEdge) -> List[LexiconEntry]:
         node_1, node_2 = edge.source, edge.target
-        node_3 = node_2.parent\
-                              if node_2.parent is not None\
-                              else None
-        node_4 = node_1.parent
+        node_3 = self.branching.parent(node_2)
+        node_4 = self.branching.parent(node_1)
         node_5 = node_4
         if node_5 != node_2:
-            while node_5.parent != node_2: 
-                node_5 = node_5.parent
+            while self.branching.parent(node_5) != node_2: 
+                node_5 = self.branching.parent(node_5)
         return [node_1, node_2, node_3, node_4, node_5]
 
     def find_edge_in_full_graph(self, source, target):
         edges = [e for e in source.edges if e.target == target] 
         return edges[0] if edges else None
 
-    def propose_swapping_parent(self, edge):
-        return [edge], [e for e in edge.target.parent.edges\
-                          if e.target == edge.target], 1
+    def propose_swapping_parent(self, edge :GraphEdge) \
+                             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         print('SWAP')
+#         print(edge.to_tuple())
+#         print([e.to_tuple() for e in \
+#                  self.branching.find_edges(edge.source, edge.target)])
+#         print()
+        return [edge], self.branching.find_edges(edge.source, edge.target), 1
+# TODO deprecated
+#         return [edge], [e for e in edge.target.parent.edges\
+#                           if e.target == edge.target], 1
 
     def compute_acc_prob(self, edges_to_add, edges_to_remove, prop_prob_ratio):
         return math.exp(\
@@ -186,27 +201,25 @@ class MCMCGraphSampler:
 #            print('Accepted')
         # remove edges and update stats
         for e in edges_to_remove:
-            idx = self.edges_idx[e]
-            self.lexicon.remove_edge(e)
+            self.branching.remove_edge(e)
             self.model.apply_change([], [e])
             for stat in self.stats.values():
-                stat.edge_removed(self, idx, e)
+                stat.edge_removed(e)
         # add edges and update stats
         for e in edges_to_add:
-            idx = self.edges_idx[e]
-            self.lexicon.add_edge(e)
+            self.branching.add_edge(e)
             self.model.apply_change([e], [])
             for stat in self.stats.values():
-                stat.edge_added(self, idx, e)
+                stat.edge_added(e)
     
     def reset(self):
         self.iter_num = 0
         for stat in self.stats.values():
-            stat.reset(self)
+            stat.reset()
 
     def update_stats(self):
         for stat in self.stats.values():
-            stat.update(self)
+            stat.update()
 
     def print_scalar_stats(self):
         stats, stat_names = [], []

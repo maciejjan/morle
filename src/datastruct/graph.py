@@ -4,7 +4,8 @@ from utils.files import read_tsv_file
 
 import networkx as nx
 import random
-from typing import Dict, Iterable, Set, Tuple
+from typing import Dict, Iterable, List, Set, Tuple
+
 
 
 class GraphEdge:
@@ -25,7 +26,24 @@ class GraphEdge:
         return (self.source, self.target, self.rule, self.attr)
 
 
-class Branching(nx.MultiDiGraph):
+class Graph(nx.MultiDiGraph):
+
+    def add_edge(self, edge :GraphEdge) -> None:
+        super().add_edge(*edge.to_tuple())
+
+    def remove_edge(self, edge :GraphEdge) -> None:
+        super().remove_edge(edge.source, edge.target, edge.rule)
+
+    def find_edges(self, source :LexiconEntry, target :LexiconEntry) \
+                  -> List[GraphEdge]:
+        result = []
+        if source in self and target in self[source]:
+            for rule, attr in self[source][target].items():
+                result.append(GraphEdge(source, target, rule, **attr))
+        return result
+
+
+class Branching(Graph):
     # TODO well-formedness conditions etc.
     def __init__(self):
         super().__init__()
@@ -33,31 +51,31 @@ class Branching(nx.MultiDiGraph):
     def has_path(self, source :LexiconEntry, target :LexiconEntry) -> bool:
         # walk back from target and check whether source is on the way
         node = target
-        while True:
+        while node is not None:
             if node == source:
                 return True
-            predecessors = self.predecessors(node)
-            if predecessors:
-                node = predecessors[0]
-            else:
-                break
+            if self.parent(node) == node:
+                raise Exception('Cycle detected!')
+            node = self.parent(node)
+            if node == target:
+                raise Exception('Cycle detected!')
         return False
 
     def is_edge_possible(self, edge :GraphEdge) -> bool:
-        if self.predecessors(edge.target):
+        if edge.source == edge.target:
+            return False
+        if self.parent(edge.target) is not None:
             return False
         if self.has_path(edge.target, edge.source):
             return False
         return True
 
-    def add_edge(self, edge :GraphEdge) -> None:
-        super().add_edge(*edge.to_tuple())
-
-    def remove_edge(self, edge :GraphEdge) -> None:
-        super().remove_edge(edge.source, edge.target)
+    def parent(self, node :LexiconEntry) -> LexiconEntry:
+        predecessors = self.predecessors(node)
+        return predecessors[0] if predecessors else None
 
 
-class FullGraph(nx.MultiDiGraph):
+class FullGraph(Graph):
     # TODO immutable, loaded from file
     def __init__(self, lexicon :Lexicon = None) -> None:
 
@@ -79,7 +97,7 @@ class FullGraph(nx.MultiDiGraph):
                 rules[rule_str] = Rule.from_string(rule_str)
             rule = rules[rule_str]
             edge = GraphEdge(v1, v2, rule, id=cur_id)
-            self.add_edge(*edge.to_tuple())
+            self.add_edge(edge)
             self.edges_list.append(edge)
 
     def iter_edges(self) -> Iterable[GraphEdge]:

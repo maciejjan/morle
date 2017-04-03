@@ -32,6 +32,9 @@ class Model:
         self.edges_cost = 0.0
         self.rules_cost = 0.0
 
+    def cost(self):
+        return self.roots_cost + self.rules_cost + self.edges_cost
+
     def iter_rules(self) -> Iterable[Rule]:
         return iter(self.rule_features.keys())
 

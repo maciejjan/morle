@@ -60,7 +60,8 @@ class ExpectedCostStatistic(ScalarStatistic):
     
     def next_iter(self):
         self.val = \
-            (self.val * (self.iter_num-1) + self.model.cost()) / self.iter_num
+            (self.val * (self.sampler.iter_num-1) + self.sampler.logl()) \
+            / self.sampler.iter_num
 
 
 class TimeStatistic(ScalarStatistic):
@@ -122,15 +123,16 @@ class AcceptanceRateStatistic(ScalarStatistic):
         pass
     
     def edge_added(self, edge :GraphEdge) -> None:
-        self.acceptance(sampler)
+        self.acceptance()
 
     def edge_removed(self, edge :GraphEdge) -> None:
-        self.acceptance(sampler)
+        self.acceptance()
 
-    def acceptance(self, sampler :MCMCGraphSampler) -> None:
-        if sampler.iter_num > self.last_modified:
-            self.val = (self.val * self.last_modified + 1) / sampler.iter_num
-            self.last_modified = sampler.iter_num
+    def acceptance(self) -> None:
+        if self.sampler.iter_num > self.last_modified:
+            self.val = (self.val * self.last_modified + 1) / \
+                       self.sampler.iter_num
+            self.last_modified = self.sampler.iter_num
 
 
 class EdgeStatistic(MCMCStatistic):
@@ -150,7 +152,7 @@ class EdgeStatistic(MCMCStatistic):
     def edge_removed(self, sampler, idx, edge):
         raise Exception('Not implemented!')
 
-    def next_iter(self, sampler):
+    def next_iter(self):
         pass
     
     def value(self, idx, edge):
@@ -209,7 +211,7 @@ class WordpairStatistic(MCMCStatistic):
     def edge_removed(self, sampler, idx, edge):
         raise NotImplementedError()
 
-    def next_iter(self, sampler):
+    def next_iter(self):
         pass
 
     def value(self, word_1, word_2):
@@ -368,7 +370,7 @@ class RuleStatistic(MCMCStatistic):
     def edge_removed(self, sampler, idx, edge):
         raise Exception('Not implemented!')
 
-    def next_iter(self, sampler):
+    def next_iter(self):
         pass
     
     def value(self, rule):
