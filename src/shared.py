@@ -45,6 +45,7 @@ filenames = {\
     'rules-fit' : 'rules-fit.txt',
     'rules-tr' : 'rules.fsm',
     'sample-edge-stats' : 'sample-edge-stats.txt',
+    'sample-iter-stats' : 'sample-iter-stats.txt',
     'sample-rule-stats' : 'sample-rule-stats.txt',
     'sample-wordpair-stats' : 'sample-wordpair-stats.txt',
     'tagger-tr' : 'tagger.fsm',

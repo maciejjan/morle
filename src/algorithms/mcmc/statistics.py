@@ -1,16 +1,16 @@
-from algorithms.mcmc.samplers import MCMCGraphSampler
+# from algorithms.mcmc.samplers import MCMCGraphSampler
 from datastruct.graph import GraphEdge
 
 
 class MCMCStatistic:
-    def __init__(self, sampler :MCMCGraphSampler) -> None:
+    def __init__(self, sampler :'MCMCGraphSampler') -> None:
         self.sampler = sampler
         self.reset()
     
     def reset(self) -> None:
         pass
 
-    def update(self, sampler :MCMCGraphSampler) -> None:
+    def update(self) -> None:
         pass
 
     def edge_added(self, edge :GraphEdge) -> None:
@@ -24,7 +24,7 @@ class MCMCStatistic:
 
 
 class ScalarStatistic(MCMCStatistic):
-    def __init__(self, sampler :MCMCGraphSampler) -> None:
+    def __init__(self, sampler :'MCMCGraphSampler') -> None:
         super().__init__(sampler)
     
     def reset(self) -> None:
@@ -32,7 +32,7 @@ class ScalarStatistic(MCMCStatistic):
         self.val = 0                # type: float
         self.last_modified = 0      # type: int
 
-    def update(self, sampler :MCMCGraphSampler) -> None:
+    def update(self) -> None:
         raise NotImplementedError()
 
     def edge_added(self, edge :GraphEdge) -> None:
@@ -46,10 +46,10 @@ class ScalarStatistic(MCMCStatistic):
 
 
 class ExpectedCostStatistic(ScalarStatistic):
-    def __init__(self, sampler :MCMCGraphSampler) -> None:
+    def __init__(self, sampler :'MCMCGraphSampler') -> None:
         super().__init__(sampler)
 
-    def update(self, sampler :MCMCGraphSampler) -> None:
+    def update(self) -> None:
         pass
     
     def edge_added(self, edge :GraphEdge) -> None:
@@ -65,11 +65,11 @@ class ExpectedCostStatistic(ScalarStatistic):
 
 
 class TimeStatistic(ScalarStatistic):
-    def reset(self, sampler :MCMCGraphSampler) -> None:
+    def reset(self, sampler :'MCMCGraphSampler') -> None:
         self.started = time.time()
         self.val = 0
     
-    def update(self, sampler :MCMCGraphSampler):
+    def update(self):
         self.val = time.time() - self.started
     
     def edge_added(self, edge :GraphEdge) -> None:
@@ -119,7 +119,7 @@ class TimeStatistic(ScalarStatistic):
 
 
 class AcceptanceRateStatistic(ScalarStatistic):
-    def update(self, sampler :MCMCGraphSampler):
+    def update(self):
         pass
     
     def edge_added(self, edge :GraphEdge) -> None:
@@ -135,32 +135,45 @@ class AcceptanceRateStatistic(ScalarStatistic):
             self.last_modified = self.sampler.iter_num
 
 
+class IterationStatistic(MCMCStatistic):
+    def reset(self) -> None:
+        self.values = []        # type: List[float]
+
+    def value(self, iter_num :int) -> float:
+        if iter_num % self.sampler.iter_stat_interval != 0:
+            raise KeyError(iter_num)
+        return self.values[iter_num // self.sampler.iter_stat_interval]
+
+
+class CostAtIterationStatistic(IterationStatistic):
+    def next_iter(self) -> None:
+        if self.sampler.iter_num % self.sampler.iter_stat_interval == 0:
+            self.values.append(self.sampler.logl())
+
+
 class EdgeStatistic(MCMCStatistic):
-    def __init__(self, sampler):
-        self.reset(sampler)
-
-    def reset(self, sampler):
-        self.values = [0] * sampler.len_edges
-        self.last_modified = [0] * sampler.len_edges
+    def reset(self) -> None:
+        self.values = [0] * len(self.sampler.edge_index)
+        self.last_modified = [0] * len(self.sampler.edge_index)
     
-    def update(self, sampler):
-        raise Exception('Not implemented!')
+    def update(self) -> None:
+        raise NotImplementedError()
 
-    def edge_added(self, sampler, idx, edge):
-        raise Exception('Not implemented!')
+    def edge_added(self, edge :GraphEdge) -> None:
+        raise NotImplementedError()
 
-    def edge_removed(self, sampler, idx, edge):
-        raise Exception('Not implemented!')
+    def edge_removed(self, edge :GraphEdge) -> None:
+        raise NotImplementedError()
 
     def next_iter(self):
         pass
     
-    def value(self, idx, edge):
-        return self.values[idx]
+    def value(self, edge :GraphEdge) -> float:
+        return self.values[self.sampler.edge_index[edge]]
 
 
 class EdgeFrequencyStatistic(EdgeStatistic):
-    def update(self, sampler):
+    def update(self):
         for i, edge in enumerate(sampler.edges):
             if edge in edge.source.edges:
                 # the edge was present in the last graphs
@@ -202,7 +215,7 @@ class WordpairStatistic(MCMCStatistic):
 #                                (len(self.words), len(self.words)), 
 #                                dtype=np.uint32)
         
-    def update(self, sampler):
+    def update(self):
         raise NotImplementedError()
 
     def edge_added(self, sampler, idx, edge):
@@ -233,7 +246,7 @@ class WordpairStatistic(MCMCStatistic):
 
 
 class UndirectedEdgeFrequencyStatistic(WordpairStatistic):
-    def update(self, sampler):
+    def update(self):
         # note: the relation edge <-> wordpair is one-to-one here because 
         # in well-formed graphs there can only be one edge per wordpair
         for i, edge in enumerate(sampler.edges):
@@ -356,7 +369,7 @@ class RuleStatistic(MCMCStatistic):
             self.values[rule] = 0.0
             self.last_modified[rule] = 0
     
-    def update(self, sampler):
+    def update(self):
 #        for rule in sampler.model.rules:
         for rule in sampler.model.rule_features:
             self.update_rule(rule, sampler)

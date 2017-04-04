@@ -1,10 +1,15 @@
+from algorithms.mcmc.statistics import \
+    MCMCStatistic, ScalarStatistic, IterationStatistic, EdgeStatistic, \
+    RuleStatistic, WordpairStatistic
 from datastruct.lexicon import LexiconEntry
 from datastruct.graph import GraphEdge, Branching, FullGraph
 from models.generic import Model
+from utils.files import open_to_write, write_line
 import shared
 
 import logging
 import math
+from operator import itemgetter
 import random
 import tqdm
 from typing import List, Tuple
@@ -15,31 +20,22 @@ class ImpossibleMoveException(Exception):
 
 
 # TODO monitor the number of moves from each variant and their acceptance rates!
-# TODO refactor
 class MCMCGraphSampler:
     def __init__(self, full_graph :FullGraph, 
                        model :Model, 
                        warmup_iter :int = 1000,
-                       sampl_iter :int = 100000) -> None:
+                       sampling_iter :int = 100000,
+                       iter_stat_interval :int = 1) -> None:
         self.full_graph = full_graph
         self.model = model
         self.warmup_iter = warmup_iter
-        self.sampl_iter = sampl_iter
-        self.stats = {}
-        self.iter_num = 0               # type: Dict[str, MCMCStatistic]
+        self.sampling_iter = sampling_iter
+        self.iter_stat_interval = iter_stat_interval
+        self.stats = {}               # type: Dict[str, MCMCStatistic]
+        self.iter_num = 0
         # TODO indices on edges, rules, wordpairs
-
-# TODO deprecated
-#         self.lexicon = lexicon
-#         self.edges = edges
-#         self.edges_hash = defaultdict(lambda: list())
-#         self.edges_idx = {}
-#         for idx, e in enumerate(edges):
-#             self.edges_idx[e] = idx
-#             self.edges_hash[(e.source, e.target)].append(e)
-#         self.len_edges = len(edges)
     
-    def add_stat(self, name: str, stat :'MCMCStatistic') -> None:
+    def add_stat(self, name: str, stat :MCMCStatistic) -> None:
         if name in self.stats:
             raise Exception('Duplicate statistic name: %s' % name)
         self.stats[name] = stat
@@ -53,15 +49,21 @@ class MCMCGraphSampler:
         self.model.fit_to_branching(self.branching)
         logging.getLogger('main').info('Warming up the sampler...')
 #         pp = progress_printer(self.warmup_iter)
-        for i in tqdm.tqdm(range(self.warmup_iter)):
-            self.next()
+        progressbar = tqdm.tqdm(total=self.warmup_iter)
+        while self.iter_num < self.warmup_iter:
+            if self.next():
+                progressbar.update()
+        progressbar.close()
         self.reset()
         logging.getLogger('main').info('Sampling...')
-        for i in tqdm.tqdm(range(self.sampling_iter)):
-            self.next()
+        progressbar = tqdm.tqdm(total=self.sampling_iter)
+        while self.iter_num < self.sampling_iter:
+            if self.next():
+                progressbar.update()
+        progressbar.close()
         self.update_stats()
 
-    def next(self) -> None:
+    def next(self) -> bool:
         # increase the number of iterations
         self.iter_num += 1
 
@@ -79,9 +81,11 @@ class MCMCGraphSampler:
                 self.accept_move(edges_to_add, edges_to_remove)
             for stat in self.stats.values():
                 stat.next_iter()
+            return True
         # if move impossible -- discard this iteration
         except ImpossibleMoveException:
             self.iter_num -= 1
+            return False
 
     # TODO fit to the new Branching class
     # TODO a more reasonable return value?
@@ -95,7 +99,7 @@ class MCMCGraphSampler:
 #             raise ImpossibleMoveException()
             return self.propose_flip(edge)
 #         elif edge.target.parent is not None:
-        elif self.branching.predecessors(edge.target):
+        elif self.branching.parent(edge.target) is not None:
 #             raise ImpossibleMoveException()
             return self.propose_swapping_parent(edge)
         else:
@@ -182,15 +186,10 @@ class MCMCGraphSampler:
 
     def propose_swapping_parent(self, edge :GraphEdge) \
                              -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-#         print('SWAP')
-#         print(edge.to_tuple())
-#         print([e.to_tuple() for e in \
-#                  self.branching.find_edges(edge.source, edge.target)])
-#         print()
-        return [edge], self.branching.find_edges(edge.source, edge.target), 1
-# TODO deprecated
-#         return [edge], [e for e in edge.target.parent.edges\
-#                           if e.target == edge.target], 1
+        edges_to_remove = self.branching.find_edges(
+                              self.branching.parent(edge.target),
+                              edge.target)
+        return [edge], edges_to_remove, 1
 
     def compute_acc_prob(self, edges_to_add, edges_to_remove, prop_prob_ratio):
         return math.exp(\
@@ -283,12 +282,26 @@ class MCMCGraphSampler:
                 write_line(fp, 
                            (word_1, word_2) + tuple([stat.value(word_1, word_2)\
                                                      for stat in stats]))
+
+    def save_iter_stats(self, filename :str) -> None:
+        stats, stat_names = [], []
+        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+            if isinstance(stat, IterationStatistic):
+                stat_names.append(stat_name)
+                stats.append(stat)
+        with open_to_write(filename) as fp:
+            write_line(fp, ('iter_num',) + tuple(stat_names))
+            for iter_num in range(0, self.sampling_iter, 
+                                  self.iter_stat_interval):
+                write_line(fp, (str(iter_num),) + \
+                               tuple([stat.value(iter_num) for stat in stats]))
             
     def summary(self):
         self.print_scalar_stats()
-        self.save_edge_stats(shared.filenames['sample-edge-stats'])
-        self.save_rule_stats(shared.filenames['sample-rule-stats'])
-        self.save_wordpair_stats(shared.filenames['sample-wordpair-stats'])
+        self.save_iter_stats(shared.filenames['sample-iter-stats'])
+#         self.save_edge_stats(shared.filenames['sample-edge-stats'])
+#         self.save_rule_stats(shared.filenames['sample-rule-stats'])
+#         self.save_wordpair_stats(shared.filenames['sample-wordpair-stats'])
 
 # TODO constructor arguments should be the same for every type
 #      (pass ensured edges through the lexicon parameter?)

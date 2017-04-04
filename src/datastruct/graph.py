@@ -33,6 +33,8 @@ class Graph(nx.MultiDiGraph):
 
     def remove_edge(self, edge :GraphEdge) -> None:
         super().remove_edge(edge.source, edge.target, edge.rule)
+        if self.find_edges(edge.source, edge.target):
+            raise Exception('remove_edge apparently didn\'t work')
 
     def find_edges(self, source :LexiconEntry, target :LexiconEntry) \
                   -> List[GraphEdge]:
@@ -48,19 +50,6 @@ class Branching(Graph):
     def __init__(self):
         super().__init__()
 
-    def has_path(self, source :LexiconEntry, target :LexiconEntry) -> bool:
-        # walk back from target and check whether source is on the way
-        node = target
-        while node is not None:
-            if node == source:
-                return True
-            if self.parent(node) == node:
-                raise Exception('Cycle detected!')
-            node = self.parent(node)
-            if node == target:
-                raise Exception('Cycle detected!')
-        return False
-
     def is_edge_possible(self, edge :GraphEdge) -> bool:
         if edge.source == edge.target:
             return False
@@ -73,6 +62,26 @@ class Branching(Graph):
     def parent(self, node :LexiconEntry) -> LexiconEntry:
         predecessors = self.predecessors(node)
         return predecessors[0] if predecessors else None
+
+    def root(self, node :LexiconEntry) -> LexiconEntry:
+        if self.parent(node) is None:
+            return None
+        root = self.parent(node)
+        while root.parent() is not None:
+            root = self.parent(root)
+        return root
+
+    def has_path(self, source :LexiconEntry, target :LexiconEntry) -> bool:
+        node = target
+        seen_nodes = set()
+        while node is not None:
+            if node == source:
+                return True
+            seen_nodes.add(node)
+            node = self.parent(node)
+            if node in seen_nodes:
+                raise Exception('Cycle detected!')
+        return False
 
 
 class FullGraph(Graph):

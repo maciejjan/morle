@@ -37,11 +37,14 @@ def run() -> None:
     logging.getLogger('main').info('Setting up the sampler...')
     sampler = MCMCGraphSamplerFactory.new(full_graph, model,
             shared.config['sample'].getint('warmup_iterations'),
-            shared.config['sample'].getint('sampling_iterations'))
+            shared.config['sample'].getint('sampling_iterations'),
+            shared.config['sample'].getint('iter_stat_interval'))
     if shared.config['sample'].getboolean('stat_cost'):
         sampler.add_stat('cost', stats.ExpectedCostStatistic(sampler))
     if shared.config['sample'].getboolean('stat_acc_rate'):
         sampler.add_stat('acc_rate', stats.AcceptanceRateStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_iter_cost'):
+        sampler.add_stat('iter_cost', stats.CostAtIterationStatistic(sampler))
 #     if shared.config['sample'].getboolean('stat_edge_freq'):
 #         sampler.add_stat('edge_freq', stats.EdgeFrequencyStatistic(sampler))
 #     if shared.config['sample'].getboolean('stat_undirected_edge_freq'):
