@@ -2,6 +2,7 @@ from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import Rule
 from utils.files import read_tsv_file
 
+from collections import defaultdict
 import networkx as nx
 import random
 from typing import Dict, Iterable, List, Set, Tuple
@@ -19,8 +20,14 @@ class GraphEdge:
         self.rule = rule
         self.attr = kwargs
 
+    def key(self) -> Tuple[LexiconEntry, LexiconEntry, Rule]:
+        return (self.source, self.target, self.rule)
+
+    def __hash__(self) -> int:
+        return self.key().__hash__()
+
     def __eq__(self, other) -> bool:
-        return self.to_tuple() == other.to_tuple()
+        return self.key() == other.key()
 
     def to_tuple(self) -> Tuple[LexiconEntry, LexiconEntry, Rule, Dict]:
         return (self.source, self.target, self.rule, self.attr)
@@ -49,6 +56,15 @@ class Branching(Graph):
     # TODO well-formedness conditions etc.
     def __init__(self):
         super().__init__()
+        self.edges_by_rule = defaultdict(lambda: list())
+
+    def add_edge(self, edge :GraphEdge) -> None:
+        super().add_edge(edge)
+        self.edges_by_rule[edge.rule].append(edge)
+
+    def remove_edge(self, edge :GraphEdge) -> None:
+        super().remove_edge(edge)
+        self.edges_by_rule[edge.rule].remove(edge)
 
     def is_edge_possible(self, edge :GraphEdge) -> bool:
         if edge.source == edge.target:
@@ -82,6 +98,9 @@ class Branching(Graph):
             if node in seen_nodes:
                 raise Exception('Cycle detected!')
         return False
+
+    def get_edges_for_rule(self, rule :Rule) -> List[GraphEdge]:
+        return self.edges_by_rule[rule]
 
 
 class FullGraph(Graph):

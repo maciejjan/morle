@@ -1,6 +1,8 @@
-# from algorithms.mcmc.samplers import MCMCGraphSampler
 from datastruct.graph import GraphEdge
+from datastruct.lexicon import LexiconEntry
+from datastruct.rules import Rule
 
+from typing import Tuple
 
 class MCMCStatistic:
     def __init__(self, sampler :'MCMCGraphSampler') -> None:
@@ -81,42 +83,6 @@ class TimeStatistic(ScalarStatistic):
     def next_iter(self):
         pass
 
-# TODO deprecated
-# class GraphsWithoutRuleSetStatistic(ScalarStatistic):
-#     def __init__(self, sampler, forbidden_rules):
-#         self.forbidden_rules = forbidden_rules
-#         self.reset(sampler)
-# 
-#     def reset(self, sampler):
-#         self.val = 0
-#         self.last_modified = 0
-#         self.forbidden_edges =\
-#             sum(count for rule, count in sampler.lexicon.rules_c.items()\
-#                 if rule in self.forbidden_rules)
-# 
-#     def update(self, sampler):
-#         self.val =\
-#             (self.val * self.last_modified +\
-#              int(self.forbidden_edges == 0) *\
-#                 (sampler.num - self.last_modified)) /\
-#             sampler.num
-#         self.last_modified = sampler.num
-# 
-#     def edge_added(self, sampler, idx, edge):
-#         if edge.rule in self.forbidden_rules:
-#             if self.forbidden_edges == 0:
-#                 self.update(sampler)
-#             self.forbidden_edges += 1
-# 
-#     def edge_removed(self, sampler, idx, edge):
-#         if edge.rule in self.forbidden_rules:
-#             if self.forbidden_edges == 1:
-#                 self.update(sampler)
-#             self.forbidden_edges -= 1
-# 
-#     def next_iter(self, sampler):
-#         pass
-
 
 class AcceptanceRateStatistic(ScalarStatistic):
     def update(self):
@@ -173,333 +139,151 @@ class EdgeStatistic(MCMCStatistic):
 
 
 class EdgeFrequencyStatistic(EdgeStatistic):
-    def update(self):
-        for i, edge in enumerate(sampler.edges):
-            if edge in edge.source.edges:
+    def update(self) -> None:
+        for edge in self.sampler.edge_index:
+            if self.sampler.branching.has_edge(edge.source, edge.target, edge.rule):
+                # not really removing -- just accounting for the fact that
                 # the edge was present in the last graphs
-                self.edge_removed(sampler, i, edge)
+                self.edge_removed(edge)
             else:
+                # not really adding -- just accounting for the fact that
                 # the edge was absent in the last graphs
-                self.edge_added(sampler, i, edge)
+                self.edge_added(edge)
 
-    def edge_added(self, sampler, idx, edge):
+    def edge_added(self, edge :GraphEdge) -> None:
+        idx = self.sampler.edge_index[edge]
         self.values[idx] =\
-            self.values[idx] * self.last_modified[idx] / sampler.num
-        self.last_modified[idx] = sampler.num
+            self.values[idx] * self.last_modified[idx] / self.sampler.iter_num
+        self.last_modified[idx] = self.sampler.iter_num
 
-    def edge_removed(self, sampler, idx, edge):
+    def edge_removed(self, edge :GraphEdge) -> None:
+        idx = self.sampler.edge_index[edge]
         self.values[idx] =\
             (self.values[idx] * self.last_modified[idx] +\
-             (sampler.num - self.last_modified[idx])) /\
-            sampler.num
-        self.last_modified[idx] = sampler.num
+             (self.sampler.iter_num - self.last_modified[idx])) /\
+            self.sampler.iter_num
+        self.last_modified[idx] = self.sampler.iter_num
 
 
-class WordpairStatistic(MCMCStatistic):
-    def __init__(self, sampler):
-        self.word_ids = {}
-        self.words = []
-        cur_id = 0
-        for node in sampler.lexicon.iter_nodes():
-            self.word_ids[node.key] = cur_id
-            self.words.append(node.key)
-            cur_id += 1
-        self.reset(sampler)
+class UnorderedWordPairStatistic(MCMCStatistic):
+    def key_from_edge(edge :GraphEdge) -> Tuple[LexiconEntry, LexiconEntry]:
+        if edge.source < edge.target:
+            return (edge.source, edge.target)
+        else:
+            return (edge.target, edge.source)
 
-    def reset(self, sampler):
-        self.values = {}
-        self.last_modified = {}
-#         self.values = scipy.sparse.lil_matrix(
-#                         (len(self.words), len(self.words)), dtype=np.float32)
-#         self.last_modified = scipy.sparse.lil_matrix(
-#                                (len(self.words), len(self.words)), 
-#                                dtype=np.uint32)
-        
-    def update(self):
+    def reset(self) -> None:
+        self.values = [0] * len(self.sampler.unordered_word_pair_index)
+        self.last_modified = [0] * len(self.sampler.unordered_word_pair_index)
+    
+    def update(self) -> None:
         raise NotImplementedError()
 
-    def edge_added(self, sampler, idx, edge):
+    def edge_added(self, edge :GraphEdge) -> None:
         raise NotImplementedError()
 
-    def edge_removed(self, sampler, idx, edge):
+    def edge_removed(self, edge :GraphEdge) -> None:
         raise NotImplementedError()
 
     def next_iter(self):
         pass
-
-    def value(self, word_1, word_2):
-        key = self.key_for_wordpair(word_1, word_2)
-        if key in self.values:
-            return self.values[key]
-        else:
-            return 0.0
-
-    def key_for_edge(self, edge):
-        key_1 = self.word_ids[edge.source.key]
-        key_2 = self.word_ids[edge.target.key]
-        return (min(key_1, key_2), max(key_1, key_2))
-
-    def key_for_wordpair(self, word_1, word_2):
-        key_1 = self.word_ids[word_1]
-        key_2 = self.word_ids[word_2]
-        return (min(key_1, key_2), max(key_1, key_2))
+    
+    def value(self, key :Tuple[LexiconEntry, LexiconEntry]) -> float:
+        idx = self.sampler.unordered_word_pair_index[key]
+        return self.values[idx]
 
 
-class UndirectedEdgeFrequencyStatistic(WordpairStatistic):
-    def update(self):
-        # note: the relation edge <-> wordpair is one-to-one here because 
-        # in well-formed graphs there can only be one edge per wordpair
-        for i, edge in enumerate(sampler.edges):
-            key = self.key_for_edge(edge)   # only for debug
-            if edge in edge.source.edges:
+class UndirectedEdgeFrequencyStatistic(UnorderedWordPairStatistic):
+    def update(self) -> None:
+        for edge in self.sampler.edge_index:
+            if self.sampler.branching.has_edge(\
+                        edge.source, edge.target, edge.rule):
+                # not really removing -- just accounting for the fact that
                 # the edge was present in the last graphs
-                self.edge_removed(sampler, i, edge)
-#                 logging.getLogger('main').debug('updating +: %s -> %s : %f' %\
-#                     (edge.source.key, edge.target.key, self.values[key]))
-        # second loop because all present edges must be processed first
-        for i, edge in enumerate(sampler.edges):
-            key = self.key_for_edge(edge)   # only for debug
-            if edge not in edge.source.edges:
+                self.edge_removed(edge)
+            elif self.sampler.branching.has_edge(edge.source, edge.target) or \
+                 self.sampler.branching.has_edge(edge.target, edge.source):
+                pass
+            else:
+                # not really adding -- just accounting for the fact that
                 # the edge was absent in the last graphs
-                self.edge_added(sampler, i, edge)
-#                 logging.getLogger('main').debug('updating -: %s -> %s : %f' %\
-#                     (edge.source.key, edge.target.key, self.values[key]))
+                self.edge_added(edge)
 
-    def edge_added(self, sampler, idx, edge):
-        key = self.key_for_edge(edge)
-        if key not in self.values:
-            self.values[key] = 0
-            self.last_modified[key] = 0
-        self.values[key] =\
-            self.values[key] * self.last_modified[key] / sampler.num
-        self.last_modified[key] = sampler.num
+    def edge_added(self, edge :GraphEdge) -> None:
+        key = UnorderedWordPairStatistic.key_from_edge(edge)
+        idx = self.sampler.unordered_word_pair_index[key]
+        self.values[idx] =\
+            self.values[idx] * self.last_modified[idx] / self.sampler.iter_num
+        self.last_modified[idx] = self.sampler.iter_num
 
-    def edge_removed(self, sampler, idx, edge):
-        key = self.key_for_edge(edge)
-        if key not in self.values:
-            self.values[key] = 0
-            self.last_modified[key] = 0
-        self.values[key] =\
-            (self.values[key] * self.last_modified[key] +\
-             (sampler.num - self.last_modified[key])) /\
-            sampler.num
-        self.last_modified[key] = sampler.num
+    def edge_removed(self, edge :GraphEdge) -> None:
+        key = UnorderedWordPairStatistic.key_from_edge(edge)
+        idx = self.sampler.unordered_word_pair_index[key]
+        self.values[idx] =\
+            (self.values[idx] * self.last_modified[idx] +\
+             (self.sampler.iter_num - self.last_modified[idx])) /\
+            self.sampler.iter_num
+        self.last_modified[idx] = self.sampler.iter_num
 
-# TODO deprecated
-# class PathFrequencyStatistic(WordpairStatistic):
-#     def reset(self, sampler):
-#         WordpairStatistic.reset(self, sampler)
-#         self.comp = [None] * len(sampler.lexicon)
-#         for root in sampler.lexicon.roots:
-#             comp = [self.word_ids[node.key] for node in root.subtree()]
-#             for x in comp:
-#                 self.comp[x] = comp
-#             for x in comp:
-#                 for y in comp:
-#                     if x != y:
-#                         key = (min(x, y), max(x, y))
-#                         self.values[key] = 0
-#                         self.last_modified[key] = 0
-# 
-#     def update(self, sampler):
-#         for key in self.values:
-#             key_1, key_2 = key
-#             if self.comp[key_1] == self.comp[key_2]:
-#                 self.values[key] =\
-#                     (self.values[key] * self.last_modified[key] +\
-#                      (sampler.num - self.last_modified[key])) /\
-#                     sampler.num
-#             else:
-#                 self.values[key] =\
-#                     self.values[key] * self.last_modified[key] / sampler.num
-#             self.last_modified[key] = sampler.num
-# 
-#     def edge_added(self, sampler, idx, edge):
-#         for key_1 in self.comp[self.word_ids[edge.source.key]]:
-#             for key_2 in self.comp[self.word_ids[edge.target.key]]:
-#                 key = (min(key_1, key_2), max(key_1, key_2))
-#                 if key not in self.values:
-#                     self.values[key] = 0
-#                     self.last_modified[key] = 0
-#                 self.values[key] =\
-#                     self.values[key] * self.last_modified[key] / sampler.num
-#                 self.last_modified[key] = sampler.num
-#         # join the subtrees
-#         comp_joined = self.comp[self.word_ids[edge.source.key]] +\
-#                       self.comp[self.word_ids[edge.target.key]]
-#         for x in comp_joined:
-#             self.comp[x] = comp_joined
-# 
-#     def edge_removed(self, sampler, idx, edge):
-#         comp_target = [self.word_ids[node.key] \
-#                        for node in edge.target.subtree()]
-#         comp_source = [x for x in self.comp[self.word_ids[edge.source.key]]\
-#                          if x not in comp_target]
-#         for key_1 in comp_source:
-#             for key_2 in comp_target:
-#                 key = (min(key_1, key_2), max(key_1, key_2))
-#                 if key not in self.values:
-#                     self.values[key] = 0
-#                     self.last_modified[key] = 0
-#                 self.values[key] =\
-#                     (self.values[key] * self.last_modified[key] +\
-#                      (sampler.num - self.last_modified[key])) /\
-#                     sampler.num
-#                 self.last_modified[key] = sampler.num
-#         # split the component
-#         for x in comp_source:
-#             self.comp[x] = comp_source
-#         for x in comp_target:
-#             self.comp[x] = comp_target
-
-# #     def next_iter(self, sampler):
-# #         if sampler.num % 1000 == 0:
-# #             logging.getLogger('main').debug('size of PathFrequencyStatistic dict: %d' %\
-# #                 len(self.values))
 
 class RuleStatistic(MCMCStatistic):
-    def __init__(self, sampler):
-        self.values = {}
-        self.last_modified = {}
-        self.reset(sampler)
-
-    def reset(self, sampler):
-#        for rule in sampler.model.rules:
-        for rule in sampler.model.rule_features:
-            self.values[rule] = 0.0
-            self.last_modified[rule] = 0
+    def reset(self) -> None:
+        self.values = [0] * len(self.sampler.rule_index)
+        self.last_modified = [0] * len(self.sampler.rule_index)
     
-    def update(self):
-#        for rule in sampler.model.rules:
-        for rule in sampler.model.rule_features:
-            self.update_rule(rule, sampler)
+    def update(self) -> None:
+        for rule in self.sampler.rule_index:
+            self.update_rule(rule)
     
-    def update_rule(self, rule, sampler):
-        raise Exception('Not implemented!')
+    def update_rule(self, rule :Rule) -> None:
+        raise NotImplementedError()
     
-    def edge_added(self, sampler, idx, edge):
-        raise Exception('Not implemented!')
-
-    def edge_removed(self, sampler, idx, edge):
-        raise Exception('Not implemented!')
-
-    def next_iter(self):
-        pass
-    
-    def value(self, rule):
-        return self.values[rule]
+    def value(self, rule :Rule) -> float:
+        return self.values[self.sampler.rule_index[rule]]
 
 
 class RuleFrequencyStatistic(RuleStatistic):
-    def update_rule(self, rule, sampler):
-        self.values[rule] = \
-            (self.values[rule] * self.last_modified[rule] +\
-             sampler.lexicon.rules_c[rule] * (sampler.num - self.last_modified[rule])) /\
-            sampler.num
-        self.last_modified[rule] = sampler.num
-    
-    def edge_added(self, sampler, idx, edge):
-        self.update_rule(edge.rule, sampler)
+    def update_rule(self, rule :Rule) -> None:
+        idx = self.sampler.rule_index[rule]
+        self.values[idx] = \
+            (self.values[idx] * self.last_modified[idx] +\
+             self.current_count[idx] * (self.sampler.iter_num - self.last_modified[idx])) /\
+            self.sampler.iter_num
+        self.last_modified[idx] = self.sampler.iter_num
 
-    def edge_removed(self, sampler, idx, edge):
-        self.update_rule(edge.rule, sampler)
+    def reset(self) -> None:
+        super().reset()
+        self.current_count = [0] * len(self.sampler.rule_index)
+        for rule in self.sampler.rule_index:
+            edges = self.sampler.branching.get_edges_for_rule(rule)
+            self.current_count[self.sampler.rule_index[rule]] = len(edges)
+    
+    def edge_added(self, edge :GraphEdge) -> None:
+        self.update_rule(edge.rule)
+        self.current_count[self.sampler.rule_index[edge.rule]] += 1
+
+    def edge_removed(self, edge :GraphEdge) -> None:
+        self.update_rule(edge.rule)
+        self.current_count[self.sampler.rule_index[edge.rule]] -= 1
 
 
 # TODO include rule cost
 class RuleExpectedContributionStatistic(RuleStatistic):
-    def update_rule(self, rule, sampler):
-        if self.last_modified[rule] < sampler.num:
-            edges = sampler.lexicon.edges_by_rule[rule]
-            new_value = sampler.model.cost_of_change([], edges) #TODO + rule_cost
-            self.values[rule] = \
-                (self.values[rule] * self.last_modified[rule] +\
-                 new_value * (sampler.num - self.last_modified[rule])) /\
-                sampler.num
-            self.last_modified[rule] = sampler.num
+    def update_rule(self, rule :Rule) -> None:
+        idx = self.sampler.rule_index[rule]
+        if self.last_modified[idx] < self.sampler.iter_num:
+            edges = self.sampler.branching.get_edges_for_rule(rule)
+            new_value = self.sampler.model.cost_of_change([], edges) -\
+                self.sampler.model.rule_cost(rule)
+            self.values[idx] = \
+                (self.values[idx] * self.last_modified[idx] +\
+                 new_value * (self.sampler.iter_num - self.last_modified[idx])) /\
+                self.sampler.iter_num
+            self.last_modified[idx] = self.sampler.iter_num
     
-    def edge_added(self, sampler, idx, edge):
-        self.update_rule(edge.rule, sampler)
+    def edge_added(self, edge :GraphEdge) -> None:
+        self.update_rule(edge.rule)
 
-    def edge_removed(self, sampler, idx, edge):
-        self.update_rule(edge.rule, sampler)
+    def edge_removed(self, edge :GraphEdge) -> None:
+        self.update_rule(edge.rule)
 
-
-# TODO
-class RuleChangeCountStatistic(RuleStatistic):
-    def reset(self, sampler):
-        for rule in sampler.lexicon.ruleset.keys():
-            self.values[rule] = 0
-            self.last_modified[rule] = 0
-
-    def update_rule(self, rule, sampler):
-        pass
-    
-    def edge_added(self, sampler, idx, word_1, word_2, rule):
-        if sampler.lexicon.rules_c[rule] == 1:
-            self.values[rule] += 1
-
-    def edge_removed(self, sampler, idx, word_1, word_2, rule):
-        if sampler.lexicon.rules_c[rule] == 0:
-            self.values[rule] += 1
-
-
-# TODO deprecated
-# class RuleGraphsWithoutStatistic(RuleStatistic):
-#     def update_rule(self, rule, sampler):
-#         if sampler.lexicon.rules_c[rule] > 0:
-#             self.values[rule] = \
-#                 self.values[rule] * self.last_modified[rule] / sampler.num
-#             self.last_modified[rule] = sampler.num
-#         else:
-#             self.values[rule] = \
-#                 (self.values[rule] * self.last_modified[rule] +\
-#                  sampler.num - self.last_modified[rule]) / sampler.num
-#     
-#     def edge_added(self, sampler, idx, word_1, word_2, rule):
-#         if sampler.lexicon.rules_c[rule] == 1:
-#             self.values[rule] = \
-#                 (self.values[rule] * self.last_modified[rule] +\
-#                  sampler.num - self.last_modified[rule]) / sampler.num
-#             self.last_modified[rule] = sampler.num
-# 
-#     def edge_removed(self, sampler, idx, word_1, word_2, rule):
-#         if sampler.lexicon.rules_c[rule] == 0:
-#             self.values[rule] = \
-#                 self.values[rule] * self.last_modified[rule] / sampler.num
-#             self.last_modified[rule] = sampler.num
-
-
-# TODO deprecated
-# class RuleIntervalsWithoutStatistic(MCMCStatistic):
-#     def __init__(self, sampler):
-#         self.intervals = {}
-#         self.int_start = {}
-#         self.reset(sampler)
-# 
-#     def reset(self, sampler):
-#         for rule in sampler.lexicon.ruleset.keys():
-#             self.intervals[rule] = []
-#             if sampler.lexicon.rules_c[rule] > 0:
-#                 self.int_start[rule] = None
-#             else:
-#                 self.int_start[rule] = 0
-# 
-#     def update(self, sampler):
-#         for rule in sampler.lexicon.ruleset.keys():
-#             if self.int_start[rule] is not None:
-#                 self.intervals[rule].append((self.int_start[rule], sampler.num))
-#                 self.int_start[rule] = None
-#     
-#     def edge_added(self, sampler, idx, word_1, word_2, rule):
-#         if sampler.lexicon.rules_c[rule] == 1:
-#             if self.int_start[rule] is None:
-#                 raise Exception('Interval with no left end: %s' % rule)
-#             self.intervals[rule].append((self.int_start[rule], sampler.num))
-#             self.int_start[rule] = None
-# 
-#     def edge_removed(self, sampler, idx, word_1, word_2, rule):
-#         if sampler.lexicon.rules_c[rule] == 0:
-#             self.int_start[rule] = sampler.num
-#     
-#     def next_iter(self, sampler):
-#         pass

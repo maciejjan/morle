@@ -52,9 +52,12 @@ class Model:
     def add_rule(self, rule :Rule, domsize :int) -> None:
         self.rule_features[rule] =\
             FeatureSetFactory.new_edge_feature_set(self.model_type, domsize)
-        self.rules_cost += self.ruledist.cost_of_change(\
-            self.extractor.extract_feature_values_from_rules((rule,)), [])
+        self.rules_cost += self.rule_cost(rule)
         self.edges_cost += self.rule_features[rule].null_cost()
+
+    def rule_cost(self, rule :Rule) -> float:
+        return self.ruledist.cost_of_change(\
+            self.extractor.extract_feature_values_from_rules([rule]), [])
 
     def fit_to_branching(self, branching :Branching) -> None:
         # add roots

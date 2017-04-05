@@ -45,14 +45,16 @@ def run() -> None:
         sampler.add_stat('acc_rate', stats.AcceptanceRateStatistic(sampler))
     if shared.config['sample'].getboolean('stat_iter_cost'):
         sampler.add_stat('iter_cost', stats.CostAtIterationStatistic(sampler))
-#     if shared.config['sample'].getboolean('stat_edge_freq'):
-#         sampler.add_stat('edge_freq', stats.EdgeFrequencyStatistic(sampler))
-#     if shared.config['sample'].getboolean('stat_undirected_edge_freq'):
-#         sampler.add_stat('undirected_edge_freq', 
-#                          stats.UndirectedEdgeFrequencyStatistic(sampler))
-#     if shared.config['sample'].getboolean('stat_rule_contrib'):
-#         sampler.add_stat('contrib', 
-#                          stats.RuleExpectedContributionStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_edge_freq'):
+        sampler.add_stat('edge_freq', stats.EdgeFrequencyStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_undirected_edge_freq'):
+        sampler.add_stat('undirected_edge_freq', 
+                         stats.UndirectedEdgeFrequencyStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_rule_freq'):
+        sampler.add_stat('freq', stats.RuleFrequencyStatistic(sampler))
+    if shared.config['sample'].getboolean('stat_rule_contrib'):
+        sampler.add_stat('contrib', 
+                         stats.RuleExpectedContributionStatistic(sampler))
     logging.getLogger('main').debug('rules_cost = %f' % model.rules_cost)
     logging.getLogger('main').debug('roots_cost = %f' % model.roots_cost)
     logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
