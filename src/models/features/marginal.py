@@ -237,14 +237,14 @@ class MarginalFeatureSet(FeatureSet):
         result.weights = (1.0,)
         return result
     
-#     def cost(self):
-#         return sum(w*f.cost() for f, w in\
-#             zip(self.features, self.weights))
-# 
-#     def reset(self):
-#         for f in self.features:
-#             f.reset()
-# 
+    def cost(self):
+        return sum(w*f.cost() for f, w in\
+            zip(self.features, self.weights))
+
+    def reset(self):
+        for f in self.features:
+            f.reset()
+
 #     def cost_of_change(self, values_to_add :List,
 #                              values_to_delete :List) -> float:
 #         # ensure the right size for empty feature vectors

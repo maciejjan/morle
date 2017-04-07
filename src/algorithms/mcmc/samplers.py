@@ -352,9 +352,9 @@ class MCMCSupervisedGraphSampler(MCMCGraphSampler):
 
 # TODO semi-supervised
 class MCMCGraphSamplerFactory:
-    def new(*args):
+    def new(*args, **kwargs):
         if shared.config['General'].getboolean('supervised'):
-            return MCMCSupervisedGraphSampler(*args)
+            return MCMCSupervisedGraphSampler(*args, **kwargs)
         else:
-            return MCMCGraphSampler(*args)
+            return MCMCGraphSampler(*args, **kwargs)
 

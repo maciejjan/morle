@@ -1,6 +1,6 @@
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import Rule
-from utils.files import read_tsv_file
+from utils.files import open_to_write, read_tsv_file, write_line
 
 from collections import defaultdict
 import networkx as nx
@@ -115,6 +115,10 @@ class FullGraph(Graph):
         for entry in lexicon.entries():
             self.add_node(entry)
 
+    def add_edge(self, edge :GraphEdge) -> None:
+        super().add_edge(edge)
+        self.edges_list.append(edge)
+
     def load_edges_from_file(self, filename :str) -> None:
         starting_id = len(self.edges_list) + 1
         rules = {}              # type: Dict[str, Rule]
@@ -126,7 +130,6 @@ class FullGraph(Graph):
             rule = rules[rule_str]
             edge = GraphEdge(v1, v2, rule, id=cur_id)
             self.add_edge(edge)
-            self.edges_list.append(edge)
 
     def iter_edges(self) -> Iterable[GraphEdge]:
         return iter(self.edges_list)
@@ -154,7 +157,16 @@ class FullGraph(Graph):
         return branching
 
     def restriction_to_ruleset(self, ruleset :Set[Rule]) -> 'FullGraph':
-        raise NotImplementedError()
+        result = FullGraph(self.lexicon)
+        for edge in self.edges_list:
+            if edge.rule in ruleset:
+                result.add_edge(edge)
+        return result
+
+    def save_to_file(self, filename :str) -> None:
+        with open_to_write(filename) as fp:
+            for source, target, rule in self.edges_iter(keys=True):
+                write_line(fp, (source, target, rule))
 
 # class Lexicon:
 #     def __init__(self, rootdist=None, ruleset=None):

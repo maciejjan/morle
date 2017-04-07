@@ -2,7 +2,7 @@ from datastruct.graph import GraphEdge
 from datastruct.lexicon import LexiconEntry
 from datastruct.rules import Rule
 
-from typing import Tuple
+from typing import Dict, Tuple
 
 class MCMCStatistic:
     def __init__(self, sampler :'MCMCGraphSampler') -> None:
@@ -240,6 +240,12 @@ class RuleStatistic(MCMCStatistic):
     
     def value(self, rule :Rule) -> float:
         return self.values[self.sampler.rule_index[rule]]
+
+    def values_dict(self) -> Dict[Rule, float]:
+        result = {} # type: Dict[Rule, float]
+        for rule, idx in self.sampler.rule_index.items():
+            result[rule] = self.values[idx]
+        return result
 
 
 class RuleFrequencyStatistic(RuleStatistic):

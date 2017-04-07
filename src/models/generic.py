@@ -41,6 +41,14 @@ class Model:
     def num_rules(self) -> int:
         return len(self.rule_features)
 
+    def reset(self) -> None:
+        '''Remove any information about the graph (roots or edges).'''
+        for f in self.rule_features.values():
+            f.reset()
+        self.roots_cost = 0.0
+        self.edges_cost = sum(f.null_cost()\
+                              for f in self.rule_features.values())
+
     def fit_rootdist(self, roots :Iterable[LexiconEntry]) -> None:
         self.rootdist[0].fit(\
             self.extractor.extract_feature_values_from_nodes(roots)[0])
@@ -55,11 +63,17 @@ class Model:
         self.rules_cost += self.rule_cost(rule)
         self.edges_cost += self.rule_features[rule].null_cost()
 
+    def remove_rule(self, rule :Rule) -> None:
+        self.edges_cost -= self.rule_features[rule].cost()
+        self.rules_cost -= self.rule_cost(rule)
+        del self.rule_features[rule]
+
     def rule_cost(self, rule :Rule) -> float:
         return self.ruledist.cost_of_change(\
             self.extractor.extract_feature_values_from_rules([rule]), [])
 
     def fit_to_branching(self, branching :Branching) -> None:
+        self.reset()
         # add roots
         roots = [node for node in branching.nodes_iter() \
                       if not branching.predecessors(node)]
@@ -144,7 +158,7 @@ class Model:
 #             self.add_rule(Rule.from_string(rule_str), domsize)
 
     def save_rules_to_file(self, filename :str) -> None:
-        rows = ((str(rule_str), features[0].trials) \
+        rows = ((str(rule), features[0].trials) \
                 for rule, features in self.rule_features.items())
         write_tsv_file(filename, rows)
 
