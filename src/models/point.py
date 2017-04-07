@@ -1,18 +1,30 @@
+from datastruct.graph import GraphEdge
+from datastruct.lexicon import LexiconEntry
+from datastruct.rules import Rule
 from models.generic import Model
-from utils.files import *
+from utils.files import open_to_write, write_line
 
 from collections import defaultdict
+from typing import Dict, Iterable, List, Tuple
+
 
 class PointModel(Model):
 
-    def __init__(self, lexicon=None, rules=None, rule_domsizes=None):
+    def __init__(self):
         self.model_type = 'point'
-        Model.__init__(self, lexicon, rules, rule_domsizes)
+        Model.__init__(self)
+        self.edge_costs = {} # type: Dict[GraphEdge, float]
+        self.root_costs = {} # type: Dict[LexiconEntry, float]
 
-    def fit_to_lexicon(self, lexicon):
-        raise NotImplementedError()
+    def add_rule(self, rule :Rule, domsize :int, freq :int = None) -> None:
+        super().add_rule(rule, domsize)
+        if freq is not None:
+            self.rule_features[rule][0].fit(freq)
 
-    def fit_to_sample(self, sample):
+#     def fit_to_lexicon(self, lexicon):
+#         raise NotImplementedError()
+
+    def fit_to_sample(self, sample :Iterable[Tuple[GraphEdge, float]]) -> None:
         def sample_to_edges_by_rule(sample):
             edges_by_rule = defaultdict(lambda: list())
             for edge, weight in sample:
@@ -24,44 +36,41 @@ class PointModel(Model):
             self.rule_features[rule].weighted_fit(\
                 self.extractor.extract_feature_values_from_weighted_edges(edges))
 
-    def recompute_edge_costs(self, edges):
+    def recompute_edge_costs(self, edges :Iterable[GraphEdge]) -> None:
         for e in edges:
 #            logging.getLogger('main').debug(\
 #                    ' '.join((e.source.key, e.target.key, str(e.rule),
 #                              str(self.edge_cost(e)-e.cost))))
-            e.cost = self.edge_cost(e)
+            self.edge_costs[e] = self.edge_cost(e)
 
-    def recompute_root_costs(self, roots):
+    def recompute_root_costs(self, roots :Iterable[LexiconEntry]) -> None:
         for root in roots:
             new_cost = self.rootdist.cost_of_change(\
-                    self.extractor.extract_feature_values_from_nodes((root,)), ())
+                    self.extractor.extract_feature_values_from_nodes([root]), [])
 #            logging.getLogger('main').debug(\
 #                    ' '.join((root.key,
 #                              str(new_cost-root.cost))))
-            root.cost = new_cost
+            self.root_costs[root] = new_cost
 
-    def cost_of_change(self, edges_to_add, edges_to_remove):
-        return sum(e.cost for e in edges_to_add) -\
-                sum(e.target.cost for e in edges_to_add) -\
-                sum(e.cost for e in edges_to_remove) +\
-                sum(e.target.cost for e in edges_to_remove)
+    def cost_of_change(self, edges_to_add :List[GraphEdge], 
+                       edges_to_remove :List[GraphEdge]) -> float:
+        return sum(self.edge_costs[e] for e in edges_to_add) -\
+                sum(self.root_costs[e.target] for e in edges_to_add) -\
+                sum(self.edge_costs[e] for e in edges_to_remove) +\
+                sum(self.root_costs[e.target] for e in edges_to_remove)
 
-    def apply_change(self, edges_to_add, edges_to_remove):
-#        logging.getLogger('main').debug('change costs = %d - %d + %d - %d' %\
-#                (sum(e.cost for e in edges_to_add),
-#                 sum(e.cost for e in edges_to_remove),
-#                 sum(e.target.cost for e in edges_to_remove),
-#                 sum(e.target.cost for e in edges_to_add)))
-        self.edges_cost += sum(e.cost for e in edges_to_add) -\
-                           sum(e.cost for e in edges_to_remove)
-        self.roots_cost += sum(e.target.cost for e in edges_to_remove) -\
-                           sum(e.target.cost for e in edges_to_add)
+    def apply_change(self, edges_to_add :List[GraphEdge], 
+                    edges_to_remove :List[GraphEdge]) -> None:
+        self.edges_cost += sum(self.edge_costs[e] for e in edges_to_add) -\
+                           sum(self.edge_costs[e] for e in edges_to_remove)
+        self.roots_cost += sum(self.root_costs[e.target] for e in edges_to_remove) -\
+                           sum(self.root_costs[e.target] for e in edges_to_add)
 
     def edge_cost(self, edge):
         return self.rule_features[edge.rule].cost(\
-            self.extractor.extract_feature_values_from_edges((edge,)))
+            self.extractor.extract_feature_values_from_edges([edge]))
 
-    def save_rules(self, filename):
+    def save_rules_to_file(self, filename :str):
         with open_to_write(filename) as fp:
             for rule, features in sorted(self.rule_features.items(),
                                          reverse=True,

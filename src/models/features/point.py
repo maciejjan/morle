@@ -3,64 +3,76 @@ import shared
 
 import numpy as np
 from scipy.special import betaln, gammaln
+from typing import Any
+
 
 class PointFeature(Feature):
-    def cost(self, values):
+    def cost(self, values :Any) -> float:
         raise NotImplementedError()
 
-    def cost_of_change(self, values_to_add, values_to_remove):
+    def cost_of_change(self, values_to_add :Any, values_to_remove :Any) \
+                      -> float:
         return self.cost(values_to_add) - self.cost(values_to_remove)
 
-    def apply_change(self, values_to_add, values_to_remove):
+    def apply_change(self, values_to_add :Any, values_to_remove :Any) -> None:
         pass
 
-    def reset(self):
+    def reset(self) -> None:
         pass
 
 
 class PointBinomialFeature(PointFeature):
-    def __init__(self, trials, prob=0.5, alpha=1, beta=1):
+
+    def __init__(self, trials :int, prob :float = 0.5, 
+                 alpha :float = 1, beta :float = 1) -> None:
         self.alpha = alpha
         self.beta = beta
         self.trials = trials
         self.prob = prob
     
-    def cost(self, values):
-        value = sum(values)
+    def cost(self, value :float) -> float:
+        # TODO  int or list?
+#         value = sum(values)
         return -value*(np.log(self.prob)-np.log(1-self.prob))
+
+    def empty(self) -> int:
+        return 0
     
-    def weighted_cost(self, values):
-        value = sum(val*w for val, w in values)
+    def weighted_cost(self, value :float) -> float:
+        # TODO  int or list?
+#         value = sum(val*w for val, w in values)
         return -value*(np.log(self.prob)-np.log(1-self.prob))
     
     # the normalizing constant of the distribution
-    def null_cost(self):
+    def null_cost(self) -> float:
         return betaln(self.alpha, self.beta)-\
             (self.alpha-1)*np.log(self.prob) - \
             (self.trials+self.beta-1) * np.log(1-self.prob)
     
-    def update(self, prob):
+    def update(self, prob :float) -> None:
         self.prob = prob
     
-    def fit(self, values):
-        self.prob = (len(values) + self.alpha-1) / (self.trials + self.alpha + self.beta - 2)
+    def fit(self, value :float) -> None:
+        self.prob = (value + self.alpha-1) / (self.trials + self.alpha + self.beta - 2)
 #        self.prob = min(max(self.prob, 1e-10), 0.9999)
     
-    def weighted_fit(self, values):
-        self.prob = (sum(val*w for val, w in values) + self.alpha - 1) / (self.trials + self.alpha + self.beta - 2)
+    def weighted_fit(self, value :float) -> None:
+        self.fit(value)
+#         self.prob = (sum(val*w for val, w in values) + self.alpha - 1) / (self.trials + self.alpha + self.beta - 2)
 #        self.prob = min(max(self.prob, 1e-10), 0.9999)
     
-    def num_args(self):
-        return 2
-    
-    def parse_string_args(self, trials, prob):
-        self.trials = int(trials)
-        self.prob = float(prob)
+#     def num_args(self):
+#         return 2
+#     
+#     def parse_string_args(self, trials, prob):
+#         self.trials = int(trials)
+#         self.prob = float(prob)
 
     def to_string(self):
         return '\t'.join((str(self.trials), str(self.prob)))
 
 
+# TODO refactor
 class PointExponentialFeature(PointFeature):
     def __init__(self, rate=1.0):
         self.rate = rate
@@ -76,6 +88,7 @@ class PointExponentialFeature(PointFeature):
         self.rate = 1.0 / np.mean(values)
 
 
+# TODO refactor
 class PointGaussianInverseChiSquaredFeature(PointFeature):
     '''Multivariate Gaussian feature with independent coordinates,
        zero-centered prior on means and Inv-Chi-Sq prior on variances.'''
@@ -180,14 +193,14 @@ class PointFeatureSet(FeatureSet):
     '''Creates sets of features according to the program configuration.'''
 
     def __init__(self):
-        self.features = ()
-        self.weights = ()
+        self.features = []
+        self.weights = []
     
     def __getitem__(self, idx):
         return self.features[idx]
     
     @staticmethod
-    def new_edge_feature_set(domsize):
+    def new_edge_feature_set(domsize :int) -> 'PointFeatureSet':
         result = PointFeatureSet()
         features = [PointBinomialFeature(domsize, alpha=1.1, beta=1.1)]
         weights = [1.0]
@@ -199,12 +212,12 @@ class PointFeatureSet(FeatureSet):
             features.append(PointGaussianInverseChiSquaredFeature(
                 shared.config['Features'].getint('word_vec_dim'), 10, 0, 10, 0.01))
             weights.append(shared.config['Features'].getfloat('word_vec_weight'))
-        result.features = tuple(features)
-        result.weights = tuple(weights)
+        result.features = features
+        result.weights = weights
         return result
 
     @staticmethod
-    def new_root_feature_set():
+    def new_root_feature_set() -> 'PointFeatureSet':
         result = PointFeatureSet()
         features = [AlergiaStringFeature()]
         weights = [1.0]
@@ -215,15 +228,15 @@ class PointFeatureSet(FeatureSet):
             features.append(PointGaussianInverseChiSquaredFeature(\
                 settings.WORD_VEC_DIM, 10, 0, 10, 1))
             weights.append(shared.config['Features'].getfloat('word_vec_weight'))
-        result.features = tuple(features)
-        result.weights = tuple(weights)
+        result.features = features
+        result.weights = weights
         return result
 
     @staticmethod
     def new_rule_feature_set():
         result = PointFeatureSet()
-        result.features = (StringFeature(),)
-        result.weights = (1.0,)
+        result.features = [UnigramSequenceFeature()]
+        result.weights = [1.0]
         return result
     
     def weighted_cost(self, values):

@@ -3,7 +3,7 @@ from datastruct.lexicon import LexiconEntry
 from datastruct.rules import Rule
 import shared
 
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 
 
 class FeatureValueExtractor:
@@ -40,8 +40,10 @@ class FeatureValueExtractor:
             )
         return features
     
-    def extract_feature_values_from_weighted_edges(self, edges) -> List:
-        features = [list((1, w) for e, w in edges)]
+    def extract_feature_values_from_weighted_edges(\
+            self, edges :List[Tuple[GraphEdge, float]]) -> List:
+#         features = [list((1, w) for e, w in edges)]
+        features = [sum(w for e, w in edges)]
         if self.use_word_freq:
             features.append(\
                 [(e.source.logfreq - e.target.logfreq, w) for e, w in edges]

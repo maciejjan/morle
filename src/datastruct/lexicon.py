@@ -1,4 +1,4 @@
-from utils.files import open_to_write, read_tsv_file, remove_file
+from utils.files import full_path, open_to_write, read_tsv_file, remove_file
 import shared
 
 from collections import defaultdict
@@ -177,7 +177,7 @@ class Lexicon:
             lexfp.write('LEXICON Root\n')
             for entry in self.entries():
                 lexfp.write('\t' + entry.symstr + ' # ;\n')
-        transducer = hfst.compile_lexc_file(lexc_file)
+        transducer = hfst.compile_lexc_file(full_path(lexc_file))
         remove_file(lexc_file)
         return transducer
 
