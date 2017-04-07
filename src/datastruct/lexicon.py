@@ -1,7 +1,4 @@
-# import algorithms.fst
-# from algorithms.ngrams import TrigramHash
-# from models.marginal import MarginalModel
-from utils.files import read_tsv_file # TODO deprecated -- replace with csv
+from utils.files import open_to_write, read_tsv_file, remove_file
 import shared
 
 from collections import defaultdict
@@ -13,11 +10,6 @@ import math
 import logging
 from typing import Any, Dict, Callable, Iterable, List, Tuple, Union
 
-# TODO: new classes
-# Vocabulary -- a set of lexicon entries
-# VocabularyItem -- a word with features etc.
-# Branching -- a set of lexicon edges conforming to well-formedness conditions
-# EdgeSet? -- a set of lexicon edges
 
 def get_wordlist_format() -> List[Callable[[Any], Any]]:
     result = [str]  # type: List[Callable[[Any], Any]]
@@ -30,6 +22,21 @@ def get_wordlist_format() -> List[Callable[[Any], Any]]:
         result.append(\
             lambda x: np.array(list(map(float, x.split(vector_sep)))))
     return result
+
+
+def tokenize_word(string :str) -> Tuple[List[str], List[str], str]:
+    '''Separate a string into a word and a POS-tag,
+       both expressed as sequences of symbols.'''
+    pat_word = shared.compiled_patterns['word']
+    pat_symbol = shared.compiled_patterns['symbol']
+    pat_tag = shared.compiled_patterns['tag']
+
+    m = re.match(pat_word, string)
+    if m is None:
+        raise Exception('Error while tokenizing word: %s' % string)
+    return list(re.findall(pat_symbol, m.group('word'))),\
+           list(re.findall(pat_tag, m.group('tag'))),\
+           m.group('disamb')
 
 
 def normalize_seq(seq :List[str]) -> List[str]:
@@ -52,23 +59,29 @@ def normalize_seq(seq :List[str]) -> List[str]:
                         _normalize_symbol(c) for c in seq))
 
 
-def unnormalize_seq(seq :Iterable[str]) -> Iterable[str]:
-    raise NotImplementedError()
+def unnormalize_seq(seq :List[str]) -> List[str]:
+    result = []
+    allcaps = False
+    cap = False
+    for c in seq:
+        if c == '{ALLCAPS}':
+            allcaps = True
+        elif c == '{CAP}':
+            cap = True
+        else:
+            if c in shared.unnormalization_substitutions:
+                result.append(shared.unnormalization_substitutions[c])
+            elif allcaps or cap:
+                result.append(c.upper())
+            else:
+                result.append(c)
+            cap = False
+    return result
 
 
-def tokenize_word(string :str) -> Tuple[List[str], List[str], str]:
-    '''Separate a string into a word and a POS-tag,
-       both expressed as sequences of symbols.'''
-    pat_word = shared.compiled_patterns['word']
-    pat_symbol = shared.compiled_patterns['symbol']
-    pat_tag = shared.compiled_patterns['tag']
-
-    m = re.match(pat_word, string)
-    if m is None:
-        raise Exception('Error while tokenizing word: %s' % string)
-    return list(re.findall(pat_symbol, m.group('word'))),\
-           list(re.findall(pat_tag, m.group('tag'))),\
-           m.group('disamb')
+def unnormalize_word(literal :str) -> str:
+    word, tag, disamb = tokenize_word(literal)
+    return ''.join(unnormalize_seq(word) + tag)
 
 
 class LexiconEntry:
@@ -152,6 +165,22 @@ class Lexicon:
         self.items[str(item)] = item
         self.items_by_symstr[item.symstr].append(item)
 
+    def to_fst(self) -> hfst.HfstTransducer:
+        lexc_file = shared.filenames['lexicon-tr'] + '.lex'
+        tags = set()
+        for entry in self.entries():
+            for t in entry.tag:
+                tags.add(t)
+        with open_to_write(lexc_file) as lexfp:
+            lexfp.write('Multichar_Symbols ' + 
+                        ' '.join(shared.multichar_symbols+list(tags)) + '\n\n')
+            lexfp.write('LEXICON Root\n')
+            for entry in self.entries():
+                lexfp.write('\t' + entry.symstr + ' # ;\n')
+        transducer = hfst.compile_lexc_file(lexc_file)
+        remove_file(lexc_file)
+        return transducer
+
     def remove(self, item :LexiconEntry) -> None:
         if str(item) not in self.items:
             raise KeyError(str(item))
@@ -165,10 +194,10 @@ class Lexicon:
         for row in read_tsv_file(filename, get_wordlist_format()):
             try:
                 self.add(LexiconEntry(*row))
-            except Exception:
+            except Exception as e:
+                raise e
                 logging.getLogger('main').warning('ignoring %s' % row[0])
 
-# TODO graph class deprecated -- replace by networkx
 
 # class LexiconNode:
 #     def __init__(self, word, freq=None, vec=None):

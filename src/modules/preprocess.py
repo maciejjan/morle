@@ -27,21 +27,22 @@ def load_normalized_wordlist(filename :str) -> Iterable[str]:
     return results
 
 
-def compile_lexicon_transducer(entries :List[LexiconEntry]) -> HfstTransducer:
-    lexc_file = shared.filenames['lexicon-tr'] + '.lex'
-    tags = set()
-    for entry in entries:
-        for t in entry.tag:
-            tags.add(t)
-    with open_to_write(lexc_file) as lexfp:
-        lexfp.write('Multichar_Symbols ' + 
-                    ' '.join(shared.multichar_symbols + list(tags)) + '\n\n')
-        lexfp.write('LEXICON Root\n')
-        for entry in entries:
-            lexfp.write('\t' + entry.symstr + ' # ;\n')
-    transducer = compile_lexc_file(lexc_file)
-    remove_file(lexc_file)
-    return transducer
+# TODO deprecated
+# def compile_lexicon_transducer(entries :List[LexiconEntry]) -> HfstTransducer:
+#     lexc_file = shared.filenames['lexicon-tr'] + '.lex'
+#     tags = set()
+#     for entry in entries:
+#         for t in entry.tag:
+#             tags.add(t)
+#     with open_to_write(lexc_file) as lexfp:
+#         lexfp.write('Multichar_Symbols ' + 
+#                     ' '.join(shared.multichar_symbols + list(tags)) + '\n\n')
+#         lexfp.write('LEXICON Root\n')
+#         for entry in entries:
+#             lexfp.write('\t' + entry.symstr + ' # ;\n')
+#     transducer = compile_lexc_file(lexc_file)
+#     remove_file(lexc_file)
+#     return transducer
 
 
 def parallel_execute(function :Callable[..., None] = None,
@@ -301,7 +302,7 @@ def run_standard() -> None:
     logging.getLogger('main').info('Loading lexicon...')
     lexicon = Lexicon(filename=shared.filenames['wordlist'])
     logging.getLogger('main').info('Building the lexicon transducer...')
-    lexicon_tr = compile_lexicon_transducer(lexicon.entries())
+    lexicon_tr = lexicon.to_fst()
     algorithms.fst.save_transducer(lexicon_tr, shared.filenames['lexicon-tr'])
 
     if shared.config['General'].getboolean('supervised'):

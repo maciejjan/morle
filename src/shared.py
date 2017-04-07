@@ -27,6 +27,7 @@ filenames = {\
     'eval.graph.vocab' : 'eval-vocab.txt',
     'eval.graph' : 'graph.testing',
     'eval.wordlist' : 'input.testing',
+    'eval.wordgen' : 'wordgen-eval.txt',
     'eval.report' : 'eval.txt',
     'fastss-tr' : 'fastss.fsm',
     'graph' : 'graph.txt',

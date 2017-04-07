@@ -5,6 +5,7 @@ import hfst
 import os.path
 import shared
 import sys
+import tqdm
 import types
 
 def seq_to_transducer(alignment, weight=0.0, type=None, alphabet=None):
@@ -42,11 +43,11 @@ def seq_to_transducer(alignment, weight=0.0, type=None, alphabet=None):
     return hfst.HfstTransducer(tr, type)
 
 def binary_disjunct(transducers, print_progress=False):
-    iterator, pp = None, None
+    iterator, progressbar = None, None
     if isinstance(transducers, list):
         iterator = iter(transducers)
         if print_progress:
-            pp = progress_printer(len(transducers))
+            progressbar = tqdm.tqdm(total=len(transducers))
     elif isinstance(transducers, types.GeneratorType):
         iterator = transducers
     else:
@@ -70,8 +71,8 @@ def binary_disjunct(transducers, print_progress=False):
                 stack.append(next(iterator))
                 sizes.append(1)
                 count += 1
-                if print_progress and pp is not None:
-                    next(pp)
+                if print_progress and progressbar is not None:
+                    progressbar.update()
             except StopIteration:
                 break
     # disjunct the remaining transducers and minimize the result
@@ -82,6 +83,8 @@ def binary_disjunct(transducers, print_progress=False):
     t.minimize()
 #    t.push_weights(hfst.TO_INITIAL_STATE)
     t.push_weights_to_end()
+    if print_progress and progressbar is not None:
+        progressbar.close()
     return t
 
 A_TO_Z = tuple('abcdefghijklmnoprstuvwxyz')
@@ -282,11 +285,9 @@ def load_cascade(filename):
     istr.close()
     return tuple(transducers)
 
-def save_transducer(transducer, filename, type=None):
-    if type is None:
-        type = shared.config['FST'].getint('transducer_type')
+def save_transducer(transducer, filename):
     path = os.path.join(shared.options['working_dir'], filename)
-    ostr = hfst.HfstOutputStream(filename=path, type=type)
+    ostr = hfst.HfstOutputStream(filename=path, type=transducer.get_type())
     ostr.write(transducer)
     ostr.flush()
     ostr.close()
