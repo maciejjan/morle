@@ -61,21 +61,25 @@ class MCMCGraphSampler:
     def run_sampling(self) -> None:
         logging.getLogger('main').info('Warming up the sampler...')
 #         pp = progress_printer(self.warmup_iter)
-        progressbar = tqdm.tqdm(total=self.warmup_iter)
-        while self.iter_num < self.warmup_iter:
-            if self.next():
-                progressbar.update()
-        progressbar.close()
+#         progressbar = tqdm.tqdm(total=self.warmup_iter)
+#         while self.iter_num < self.warmup_iter:
+#             if self.next():
+#                 progressbar.update()
+#         progressbar.close()
+        for i in tqdm.tqdm(range(self.warmup_iter)):
+            self.next()
         self.reset()
         logging.getLogger('main').info('Sampling...')
-        progressbar = tqdm.tqdm(total=self.sampling_iter)
-        while self.iter_num < self.sampling_iter:
-            if self.next():
-                progressbar.update()
-        progressbar.close()
+        for i in tqdm.tqdm(range(self.sampling_iter)):
+            self.next()
+#         progressbar = tqdm.tqdm(total=self.sampling_iter)
+#         while self.iter_num < self.sampling_iter:
+#             if self.next():
+#                 progressbar.update()
+#         progressbar.close()
         self.update_stats()
 
-    def next(self) -> bool:
+    def next(self) -> None:
         # increase the number of iterations
         self.iter_num += 1
 
@@ -93,11 +97,14 @@ class MCMCGraphSampler:
                 self.accept_move(edges_to_add, edges_to_remove)
             for stat in self.stats.values():
                 stat.next_iter()
-            return True
-        # if move impossible -- discard this iteration
+#             return True
+        # if move impossible -- propose staying in the current graph
+        # (the acceptance probability for that is 1, so this move
+        # is automatically accepted and nothing needs to be done
         except ImpossibleMoveException:
-            self.iter_num -= 1
-            return False
+            pass
+#             self.iter_num -= 1
+#             return False
 
     # TODO fit to the new Branching class
     # TODO a more reasonable return value?

@@ -8,6 +8,8 @@ from models.marginal import MarginalModel
 import shared
 
 import logging
+import math
+import numpy as np
 import random
 from scipy.special import expit
 from typing import Dict, Set, Tuple
