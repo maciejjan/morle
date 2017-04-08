@@ -160,30 +160,20 @@ def remove_file_if_exists(filename :str) -> None:
 def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False, 
               stable=False, unique=False, parallel=None):
     sort_call = ['sort']
-#     if isinstance(infiles, str):
     sort_call.append(full_path(infile))
-#     elif isinstance(infiles, list):
-#         sort_call.extend([full_path(infile) for infile in infiles])
-#     else:
-#         raise RuntimeError('sort: wrong input type!')
     sort_call += ['-T', shared.options['working_dir']]
     env = os.environ.copy()
     if key:
         if isinstance(key, tuple) and len(key) == 2:
             sort_call.append('-k%d,%d' % key)
-#             sort_call.append('-t')
-#             sort_call.append('\'	\'')
         elif isinstance(key, int):
             sort_call.append('-k%d,%d' % (key, key))
-#             sort_call.append('-t')
-#             sort_call.append('\'	\'')
         else:
             raise RuntimeError('Wrong key type.')
     if reverse:
         sort_call.append('-r')
     if numeric:
         sort_call.append('-g')
-#         sort_call.insert(0, 'LC_NUMERIC=us_EN.UTF-8')
         env['LC_NUMERIC'] = 'en_US.UTF-8'
     if stable:
         sort_call.append('-s')
@@ -195,12 +185,7 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False,
     if outfile:
         sort_call.append(full_path(outfile))
     else:
-#         if isinstance(infiles, str):
         sort_call.append(full_path(infile) + '.sorted')
-#         elif isinstance(infiles, list):
-#             sort_call.append(full_path(infiles[0]) + '.sorted')
-#         else:
-#             raise RuntimeError('sort: wrong input type!')
     logging.getLogger('main').debug(' '.join(sort_call))
     p = subprocess.Popen(sort_call, env=env)
     p.wait()

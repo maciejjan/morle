@@ -14,7 +14,6 @@ from typing import Set
 def prepare_analyzer(lexicon :Lexicon) -> hfst.HfstTransducer:
     rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
     logging.getLogger('main').info('Building lexicon transducer...')
-#     lexicon.build_transducer(print_progress=True)
     lexicon_tr = lexicon.to_fst()
     analyzer = hfst.HfstTransducer(lexicon_tr)
     logging.getLogger('main').info('Composing with rules...')

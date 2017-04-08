@@ -1,5 +1,4 @@
 from utils.files import full_path
-# from utils.printer import progress_printer
 
 import hfst
 import os.path
@@ -19,7 +18,6 @@ def seq_to_transducer(alignment, weight=0.0, type=None, alphabet=None):
     last_state_id = 0
     for (x, y) in alignment:
         state_id = tr.add_state()
-#        tr.add_transition(state_id, hfst.HfstBasicTransition(state_id, hfst.EPSILON, hfst.EPSILON, 0.0))
         if (x, y) == (hfst.IDENTITY, hfst.IDENTITY):
             tr.add_transition(last_state_id, 
                               hfst.HfstBasicTransition(state_id,
@@ -95,12 +93,6 @@ def generate_id(id_num):
         id_num //= len(A_TO_Z)
         result = A_TO_Z[id_num % len(A_TO_Z)-1] + result
     return result
-
-#def id_absorber(id_num):
-#    seq = ('$',) + tuple(generate_id(id_num))
-#    return seq_to_transducer(\
-#        zip(seq, (hfst.EPSILON,)*len(seq)),\
-#        alphabet=A_TO_Z + ('$',))
 
 def id_generator():
     tr = hfst.HfstBasicTransducer()
@@ -294,8 +286,4 @@ def save_transducer(transducer, filename):
 
 def save_cascade(transducers, filename, type=None):
     raise NotImplementedError()
-#     istr = hfst.HfstInputStream(filename)
-#     delenv = istr.read()
-#     right_tr = istr.read()
-#     istr.close()
-#     return delenv, right_tr
+

@@ -27,24 +27,6 @@ def load_normalized_wordlist(filename :str) -> Iterable[str]:
     return results
 
 
-# TODO deprecated
-# def compile_lexicon_transducer(entries :List[LexiconEntry]) -> HfstTransducer:
-#     lexc_file = shared.filenames['lexicon-tr'] + '.lex'
-#     tags = set()
-#     for entry in entries:
-#         for t in entry.tag:
-#             tags.add(t)
-#     with open_to_write(lexc_file) as lexfp:
-#         lexfp.write('Multichar_Symbols ' + 
-#                     ' '.join(shared.multichar_symbols + list(tags)) + '\n\n')
-#         lexfp.write('LEXICON Root\n')
-#         for entry in entries:
-#             lexfp.write('\t' + entry.symstr + ' # ;\n')
-#     transducer = compile_lexc_file(lexc_file)
-#     remove_file(lexc_file)
-#     return transducer
-
-
 def parallel_execute(function :Callable[..., None] = None,
                      data :List[Any] = None,
                      num_processes :int = 1,
@@ -200,22 +182,6 @@ def run_filters(graph_file :str) -> None:
     contract_graph(graph_file)
 
 
-# TODO deprecated
-# def filter_rules(graph_file :str) -> None:
-#     '''Filter rules according to frequency.'''
-#     # Annotate graph with rule frequency
-#     # format: w1 w2 rule -> w1 w2 rule freq
-#     # truncate the graph file to most frequent rules
-#     # sort edges according to wordpair
-#     sort_file(graph_file + '.filtered', key=3)
-#     sort_file(graph_file + '.filtered', stable=True,
-#               numeric=True, reverse=True, key=4)
-#     remove_file(graph_file)
-#     # cleanup files
-# #    rename_file(graph_file, graph_file + '.orig')
-#     rename_file(graph_file + '.filtered', graph_file)
-# 
-
 def build_graph_fstfastss(
         lexicon :Lexicon,
         lex_tr_file :str,
@@ -231,7 +197,6 @@ def build_graph_fstfastss(
                                  lexicon :Lexicon,
                                  transducer_path :str) -> None:
         sw = algorithms.fstfastss.similar_words(words, transducer_path)
-#         with open_to_write(output_file + '.' + str(p_id)) as outfp:
         for word_1, simwords in sw:
             v1_list = lexicon.get_by_symstr(word_1)
             for v1 in v1_list:
@@ -244,7 +209,6 @@ def build_graph_fstfastss(
                                 results_for_v1.append((v2.literal, str(rule)))
                 output_fun((v1.literal, results_for_v1))
 
-#     logging.getLogger('main').info('Building the graph...')
     if words is None:
         words = sorted(list(set(e.symstr for e in lexicon.entries())))
     transducer_path = shared.filenames['fastss-tr']
@@ -256,13 +220,6 @@ def build_graph_fstfastss(
     for word_1, edges in extractor:
         for word_2, rule_str in edges:
             yield (word_1, word_2, rule_str)
-    # TODO sort the resulting file
-
-#     outfiles = ['.'.join((graph_file, str(p_id)))\
-#                 for p_id in range(num_processes)]
-#     sort_files(outfiles, outfile=graph_file, key=3, parallel=num_processes)
-#     for outfile in outfiles:
-#         remove_file(outfile)
 
 
 # TODO refactor
@@ -294,8 +251,6 @@ def compute_rule_domsizes(lexicon_tr :HfstTransducer,
                   additional_args=(lexicon_tr,), show_progressbar=True)
     for rule, domsize in results:
         yield rule, domsize
-#     rename_file(output_file, rules_file)
-#     sort_file(rules_file, reverse=True, numeric=True, key=2)
 
 
 def run_standard() -> None:
@@ -338,10 +293,6 @@ def run_standard() -> None:
                    ((str(rule), domsize)\
                     for rule, domsize in \
                         compute_rule_domsizes(lexicon_tr, rules)))
-#     write_tsv_file(shared.filenames['rules'],
-#                    ((str(rule), rule_freq[str(rule)], domsize)\
-#                     for rule, domsize in \
-#                         compute_rule_domsizes(lexicon_tr, rules)))
 
 
 def run_bipartite() -> None:
@@ -384,10 +335,4 @@ def run() -> None:
     else:
         raise RuntimeError('No input file supplied!')
 
-
-# TODO deprecated
-# def cleanup() -> None:
-#     remove_file_if_exists(shared.filenames['rules'])
-#     remove_file_if_exists(shared.filenames['lexicon-tr'])
-#     remove_file_if_exists(shared.filenames['graph'])
 

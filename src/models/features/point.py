@@ -31,16 +31,12 @@ class PointBinomialFeature(PointFeature):
         self.prob = prob
     
     def cost(self, value :float) -> float:
-        # TODO  int or list?
-#         value = sum(values)
         return -value*(np.log(self.prob)-np.log(1-self.prob))
 
     def empty(self) -> int:
         return 0
     
     def weighted_cost(self, value :float) -> float:
-        # TODO  int or list?
-#         value = sum(val*w for val, w in values)
         return -value*(np.log(self.prob)-np.log(1-self.prob))
     
     # the normalizing constant of the distribution
@@ -54,20 +50,10 @@ class PointBinomialFeature(PointFeature):
     
     def fit(self, value :float) -> None:
         self.prob = (value + self.alpha-1) / (self.trials + self.alpha + self.beta - 2)
-#        self.prob = min(max(self.prob, 1e-10), 0.9999)
     
     def weighted_fit(self, value :float) -> None:
         self.fit(value)
-#         self.prob = (sum(val*w for val, w in values) + self.alpha - 1) / (self.trials + self.alpha + self.beta - 2)
-#        self.prob = min(max(self.prob, 1e-10), 0.9999)
     
-#     def num_args(self):
-#         return 2
-#     
-#     def parse_string_args(self, trials, prob):
-#         self.trials = int(trials)
-#         self.prob = float(prob)
-
     def to_string(self):
         return '\t'.join((str(self.trials), str(self.prob)))
 

@@ -21,9 +21,6 @@ class PointModel(Model):
         if freq is not None:
             self.rule_features[rule][0].fit(freq)
 
-#     def fit_to_lexicon(self, lexicon):
-#         raise NotImplementedError()
-
     def fit_to_sample(self, sample :Iterable[Tuple[GraphEdge, float]]) -> None:
         def sample_to_edges_by_rule(sample):
             edges_by_rule = defaultdict(lambda: list())
@@ -38,18 +35,12 @@ class PointModel(Model):
 
     def recompute_edge_costs(self, edges :Iterable[GraphEdge]) -> None:
         for e in edges:
-#            logging.getLogger('main').debug(\
-#                    ' '.join((e.source.key, e.target.key, str(e.rule),
-#                              str(self.edge_cost(e)-e.cost))))
             self.edge_costs[e] = self.edge_cost(e)
 
     def recompute_root_costs(self, roots :Iterable[LexiconEntry]) -> None:
         for root in roots:
             new_cost = self.rootdist.cost_of_change(\
                     self.extractor.extract_feature_values_from_nodes([root]), [])
-#            logging.getLogger('main').debug(\
-#                    ' '.join((root.key,
-#                              str(new_cost-root.cost))))
             self.root_costs[root] = new_cost
 
     def cost_of_change(self, edges_to_add :List[GraphEdge], 

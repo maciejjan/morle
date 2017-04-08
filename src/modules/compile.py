@@ -11,11 +11,6 @@ import math
 from operator import itemgetter
 from typing import List, Tuple
 
-# TODO compile the following automata:
-# - rules
-# - rootgen
-# if supervised or bipartite:
-# - roots acceptor
 
 def load_rules() -> List[Tuple[Rule, float]]:
     return [(Rule.from_string(rule), -math.log(prod))\
@@ -53,7 +48,6 @@ def build_rule_transducer(rules :List[Tuple[Rule, float]]) \
 
 
 def build_root_transducer(roots :List[LexiconEntry]) -> hfst.HfstTransducer:
-# TODO only if supervised
     transducers = []
     for root in roots:
         transducers.append(algorithms.fst.seq_to_transducer(root.seq()))

@@ -26,8 +26,6 @@ class FeatureValueExtractor:
     
     def extract_feature_values_from_edges(self, edges :Iterable[GraphEdge]) \
                                          -> List:
-#         features = [list(1 for e in edges)]
-#         features = [[1] * len(edges)]
         features = [len(edges)]
         if self.use_word_freq:
             # source-target, because target-source typically negative
@@ -42,7 +40,6 @@ class FeatureValueExtractor:
     
     def extract_feature_values_from_weighted_edges(\
             self, edges :List[Tuple[GraphEdge, float]]) -> List:
-#         features = [list((1, w) for e, w in edges)]
         features = [sum(w for e, w in edges)]
         if self.use_word_freq:
             features.append(\

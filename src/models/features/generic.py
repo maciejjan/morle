@@ -105,10 +105,6 @@ class ZeroCostFeature(Feature):
     def reset(self) -> None:
         pass
 
-# TODO StringFeature -> UnigramFeature
-# new class: StringValuedFeature for string-valued features
-# also: FloatValuedFeature etc.
-# the existence of edges moved to an extra feature!
 class UnigramSequenceFeature(SequenceValuedFeature):
     '''A sequence feature drawn from a unigram distribution.'''
 
@@ -188,10 +184,7 @@ class AlergiaStringFeature(StringValuedFeature):
 
         self.automaton.concatenate(tag_automaton)
         self.automaton.remove_epsilons()
-#         self.automaton.minimize()
         self.automaton.convert(hfst.ImplementationType.HFST_OLW_TYPE)
-#         algorithms.fst.save_transducer(self.automaton, 'stringfeat.fsm',
-#                                        type=hfst.HFST_OLW_TYPE)
             
     def null_cost(self) -> float:
         return 0.0
@@ -226,9 +219,6 @@ class FeatureSet:
     def new_rule_feature_set() -> 'FeatureSet':
         raise NotImplementedError()
     
-#    def cost(self):
-#        raise NotImplementedError()
-
     def reset(self) -> None:
         for f in self.features:
             f.reset()
@@ -252,10 +242,8 @@ class FeatureSet:
         # ensure the right size for empty feature vectors
         if not values_to_add:
             values_to_add = [feature.empty() for feature in self.features]
-#             values_to_add = ((),) * len(self.features)
         if not values_to_delete:
             values_to_delete = [feature.empty() for feature in self.features]
-#             values_to_delete = ((),) * len(self.features)
         # apply the change in every single feature
         for i, f in enumerate(self.features):
             f.apply_change(values_to_add[i], values_to_delete[i])

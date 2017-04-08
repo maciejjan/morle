@@ -18,13 +18,9 @@ def build_rule_transducers(rules):
     rules.sort(reverse=True, key=itemgetter(2))
     transducers, potential_words = [], 0
     for rule, domsize, prod in rules:
-#         if potential_words + domsize >= shared.config['generate']\
-#                                               .getint('max_words'):
-#                 break
         cost = -math.log(prod)
         if cost < max_cost:
             transducers.append(rule.to_fst(weight=-math.log(prod)))
-#         potential_words += domsize
     return transducers
 
 def word_generator(lexicon):
@@ -39,7 +35,6 @@ def word_generator(lexicon):
     tr.compose(rules_tr)
     tr.minimize()
 
-#     count, max_count = 0, shared.config['generate'].getint('max_words')
     for input_word, outputs in tr.extract_paths(output='dict').items():
         input_word = input_word.replace(hfst.EPSILON, '')
         for output_word, weight in outputs:
@@ -48,10 +43,6 @@ def word_generator(lexicon):
                 yield (unnormalize_word(output_word), 
                        unnormalize_word(input_word), 
                        weight)
-#                 count += 1
-#                 if count >= max_count:
-#                     return
-#                 known_words.add(output_word)
 
 
 def run_without_eval() -> None:

@@ -3,48 +3,6 @@ import hfst
 from operator import itemgetter
 
 
-def align_words(word_1, word_2):
-    previous_row = [(0, ())]
-    for i in range(len(word_1)):
-        left_dist, left_seq = previous_row[-1]
-        previous_row.append((left_dist + 1,\
-                             left_seq + ((word_1[i], hfst.EPSILON),)))
-    for j in range(len(word_2)):
-        up_dist, up_seq = previous_row[0]
-        current_row = [(up_dist + 1, up_seq + ((hfst.EPSILON, word_2[j]),))]
-        for i in range(len(word_1)):
-            up_dist, up_seq = previous_row[i+1]
-            diag_dist, diag_seq = previous_row[i]
-            left_dist, left_seq = current_row[-1]
-            # in case of ties, prefer the diagonal
-            current_row.append(min((
-                (diag_dist + int(word_1[i]!=word_2[j]),
-                    diag_seq + ((word_1[i], word_2[j]),)),
-                (up_dist + 1, up_seq + ((hfst.EPSILON, word_2[j]),)),
-                (left_dist + 1, left_seq + ((word_1[i], hfst.EPSILON),))),
-                key = itemgetter(0)))
-        previous_row = current_row
-    return previous_row[-1][1]
-
-def extract_rule(node_1, node_2):
-    '''Extract the most general rule.'''
-    alignment = align_words(node_1.word, node_2.word)
-    seq = []
-    for x, y in alignment:
-        if x == y:
-            if not seq or seq[-1] != (hfst.IDENTITY, hfst.IDENTITY):
-                seq.append((hfst.IDENTITY, hfst.IDENTITY))
-        else:
-            seq.append((x, y))
-    rule = Rule.from_seq(seq, (node_1.tag, node_2.tag))
-    # check whether the rule conforms to the criteria
-    return rule # TODO remove
-    if rule.check(MAX_AFFIX_LENGTH, MAX_INFIX_LENGTH, INFIX_SLOTS) and\
-            rule.reverse().check(MAX_AFFIX_LENGTH, MAX_INFIX_LENGTH, INFIX_SLOTS):
-        return rule
-    else:
-        return None
-
 def extract_all_rules(node_1, node_2):
     '''Extract all rules fitting the pair of words.'''
     # queue: rule seq, remaining alignment, num_segments, length of the last segment, is_last_segment
