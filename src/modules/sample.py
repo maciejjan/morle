@@ -4,7 +4,7 @@ from datastruct.graph import FullGraph
 from datastruct.lexicon import Lexicon
 from datastruct.rules import Rule
 from models.marginal import MarginalModel
-from utils.files import read_tsv_file
+from utils.files import file_exists, read_tsv_file
 import algorithms.mcmc
 import shared
 import logging
@@ -16,14 +16,20 @@ def run() -> None:
     lexicon = Lexicon(shared.filenames['wordlist'])
 
     logging.getLogger('main').info('Loading rules...')
+    rules_filename = shared.filenames['rules-modsel']
+    if not file_exists(rules_filename):
+        rules_filename = shared.filenames['rules']
     rules = [(Rule.from_string(rule_str), domsize) \
              for rule_str, domsize in \
-                 read_tsv_file(shared.filenames['rules'], (str, int))]
+                 read_tsv_file(rules_filename, (str, int))]
 
     # load the full graph
     logging.getLogger('main').info('Loading the graph...')
+    graph_filename = shared.filenames['graph-modsel']
+    if not file_exists(graph_filename):
+        graph_filename = shared.filenames['graph']
     full_graph = FullGraph(lexicon)
-    full_graph.load_edges_from_file(shared.filenames['graph'])
+    full_graph.load_edges_from_file(graph_filename)
 
     # initialize a MarginalModel
     logging.getLogger('main').info('Initializing the model...')
