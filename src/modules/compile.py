@@ -13,9 +13,10 @@ from typing import List, Tuple
 
 
 def load_rules() -> List[Tuple[Rule, float]]:
+    rules_filename = shared.filenames['rules-fit']
     return [(Rule.from_string(rule), -math.log(prod))\
             for rule, domsize, prod in\
-                read_tsv_file(shared.filenames['rules-fit'],
+                read_tsv_file(rules_filename,
                               (str, int, float))] +\
            [(Rule.from_string(':/:___:'), 0.0)]
 

@@ -62,25 +62,29 @@ def run_with_eval() -> None:
     generated_words = [(input_word, output_word, cost)\
                        for (input_word, output_word, cost) in wordgen]
     generated_words.sort(key=itemgetter(2))
-    eval_words = set(word for (word,) in read_tsv_file(shared.filenames['eval.wordlist'])) -\
+    eval_words = set(word for (word,) in\
+                          read_tsv_file(shared.filenames['eval.wordlist'], (str,))) -\
                  known_words
     tp, fp, fn = 0, 0, len(eval_words)
+    known_words = set()
     with open_to_write(shared.filenames['eval.wordgen']) as outfp:
         for output_word, input_word, weight in generated_words:
-            current_result = None
-            if output_word in eval_words:
-                tp += 1
-                fn -= 1
-                current_result = '+'
-            else:
-                fp += 1
-                current_result = '-'
-            precision, recall = tp / (tp + fp), tp / (tp + fn)
-            fsc = 2 / (1 / precision + 1 / recall) \
-                  if precision*recall != 0.0 else 0.0
-            results = '{}\t{:.1%}\t{:.1%}\t{:.1%}'.format(
-                        current_result, precision, recall, fsc)
-            write_line(outfp, (output_word, input_word, weight, results))
+            if output_word not in known_words:
+                known_words.add(output_word)
+                current_result = None
+                if output_word in eval_words:
+                    tp += 1
+                    fn -= 1
+                    current_result = '+'
+                else:
+                    fp += 1
+                    current_result = '-'
+                precision, recall = tp / (tp + fp), tp / (tp + fn)
+                fsc = 2 / (1 / precision + 1 / recall) \
+                      if precision*recall != 0.0 else 0.0
+                results = '{}\t{:.1%}\t{:.1%}\t{:.1%}'.format(
+                            current_result, precision, recall, fsc)
+                write_line(outfp, (output_word, input_word, weight, results))
 
 
 def run() -> None:
