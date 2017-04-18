@@ -79,6 +79,11 @@ def unnormalize_seq(seq :List[str]) -> List[str]:
     return result
 
 
+def normalize_word(literal :str) -> str:
+    word, tag, disamb = tokenize_word(literal)
+    return ''.join(normalize_seq(word) + tag)
+
+
 def unnormalize_word(literal :str) -> str:
     word, tag, disamb = tokenize_word(literal)
     return ''.join(unnormalize_seq(word) + tag)
