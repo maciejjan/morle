@@ -59,6 +59,7 @@ def binary_disjunct(transducers, print_progress=False):
             # disjunct the two top transducers from the stack
             first, first_size = stack.pop(), sizes.pop()
             second, second_size = stack.pop(), sizes.pop()
+#             print('merge', first_size, second_size)
             first.disjunct(second)
             stack.append(first)
             sizes.append(first_size + second_size)
@@ -66,6 +67,7 @@ def binary_disjunct(transducers, print_progress=False):
         else:
             # push a new transducer to the stack
             try:
+#                 print('push')
                 stack.append(next(iterator))
                 sizes.append(1)
                 count += 1
@@ -74,6 +76,7 @@ def binary_disjunct(transducers, print_progress=False):
             except StopIteration:
                 break
     # disjunct the remaining transducers and minimize the result
+#     print('final merge')
     t = stack.pop()
     while stack:
         t.disjunct(stack.pop())
@@ -85,25 +88,26 @@ def binary_disjunct(transducers, print_progress=False):
         progressbar.close()
     return t
 
-A_TO_Z = tuple('abcdefghijklmnoprstuvwxyz')
-
-def generate_id(id_num):
-    result = A_TO_Z[id_num % len(A_TO_Z)]
-    while id_num > len(A_TO_Z):
-        id_num //= len(A_TO_Z)
-        result = A_TO_Z[id_num % len(A_TO_Z)-1] + result
-    return result
-
-def id_generator():
-    tr = hfst.HfstBasicTransducer()
-    tr.add_symbols_to_alphabet(A_TO_Z + ('$',))
-    tr.add_transition(0, 
-                      hfst.HfstBasicTransition(1, '$', '$', 0.0))
-    for c in A_TO_Z:
-        tr.add_transition(1, 
-                          hfst.HfstBasicTransition(1, c, c, 0.0))
-    tr.set_final_weight(1, 0.0)
-    return hfst.HfstTransducer(tr, settings.TRANSDUCER_TYPE)
+# TODO deprecated
+# A_TO_Z = tuple('abcdefghijklmnoprstuvwxyz')
+# 
+# def generate_id(id_num):
+#     result = A_TO_Z[id_num % len(A_TO_Z)]
+#     while id_num > len(A_TO_Z):
+#         id_num //= len(A_TO_Z)
+#         result = A_TO_Z[id_num % len(A_TO_Z)-1] + result
+#     return result
+# 
+# def id_generator():
+#     tr = hfst.HfstBasicTransducer()
+#     tr.add_symbols_to_alphabet(A_TO_Z + ('$',))
+#     tr.add_transition(0, 
+#                       hfst.HfstBasicTransition(1, '$', '$', 0.0))
+#     for c in A_TO_Z:
+#         tr.add_transition(1, 
+#                           hfst.HfstBasicTransition(1, c, c, 0.0))
+#     tr.set_final_weight(1, 0.0)
+#     return hfst.HfstTransducer(tr, settings.TRANSDUCER_TYPE)
 
 def number_of_paths(transducer):
     # in n-th iteration paths_for_state[s] contains the number of paths
