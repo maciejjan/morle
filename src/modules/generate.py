@@ -32,19 +32,25 @@ def word_generator(lexicon_tr, rules_tr):
     tr.compose(rules_tr)
     tr.minimize()
     lexicon_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
-    generated_words = set()
 
     logging.getLogger('main').info('Extracting paths...')
     for input_word, outputs in tr.extract_paths(output='dict').items():
         input_word = input_word.replace(hfst.EPSILON, '')
+        input_word_unnorm = unnormalize_word(input_word)
         for output_word, weight in outputs:
             output_word = output_word.replace(hfst.EPSILON, '')
-            if not lexicon_tr.lookup(output_word) and \
-                   output_word not in generated_words:
-                generated_words.add(output_word)
-                yield (unnormalize_word(output_word), 
-                       unnormalize_word(input_word), 
-                       weight)
+            output_word_unnorm = unnormalize_word(output_word)
+            if not lexicon_tr.lookup(output_word):
+                yield (output_word_unnorm, input_word_unnorm, weight)
+
+
+def sort_and_deduplicate_results(results):
+    results_list = sorted(list(results), key=itemgetter(2))
+    known_output_words = set()
+    for output_word, input_word, weight in results_list:
+        if output_word not in known_output_words:
+            known_output_words.add(output_word)
+            yield (output_word, input_word, weight)
 
 
 def run() -> None:
@@ -56,7 +62,7 @@ def run() -> None:
     logging.getLogger('main').info('Generating words...')
     with open_to_write(shared.filenames['wordgen']) as outfp:
         for output_word, input_word, weight in \
-                sorted(word_generator(lexicon_tr, rules_tr),
-                       key=itemgetter(2)):
+                sort_and_deduplicate_results(
+                    word_generator(lexicon_tr, rules_tr)):
             write_line(outfp, (output_word, input_word, weight))
 
