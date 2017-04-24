@@ -156,6 +156,13 @@ class FullGraph(Graph):
                 branching.add_edge(edge)
         return branching
 
+    def optimal_branching(self, model :'PointModel') -> Branching:
+        # TODO new graph: only the best edge between any pair of vertices
+        # TODO a root node?
+        # TODO find optimal branching in the new graph
+        # TODO convert back
+        raise NotImplementedError()
+
     def restriction_to_ruleset(self, ruleset :Set[Rule]) -> 'FullGraph':
         result = FullGraph(self.lexicon)
         for edge in self.edges_list:

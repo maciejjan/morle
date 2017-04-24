@@ -32,13 +32,16 @@ def word_generator(lexicon_tr, rules_tr):
     tr.compose(rules_tr)
     tr.minimize()
     lexicon_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
+    generated_words = set()
 
     logging.getLogger('main').info('Extracting paths...')
     for input_word, outputs in tr.extract_paths(output='dict').items():
         input_word = input_word.replace(hfst.EPSILON, '')
         for output_word, weight in outputs:
             output_word = output_word.replace(hfst.EPSILON, '')
-            if not lexicon_tr.lookup(output_word):
+            if not lexicon_tr.lookup(output_word) and \
+                   output_word not in generated_words:
+                generated_words.add(output_word)
                 yield (unnormalize_word(output_word), 
                        unnormalize_word(input_word), 
                        weight)

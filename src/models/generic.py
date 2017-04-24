@@ -65,6 +65,7 @@ class Model:
         return self.ruledist.cost_of_change(\
             self.extractor.extract_feature_values_from_rules([rule]), [])
 
+    # TODO rename!!! - no fitting takes place here
     def fit_to_branching(self, branching :Branching) -> None:
         self.reset()
         # add roots
