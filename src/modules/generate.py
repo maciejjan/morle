@@ -18,7 +18,7 @@ def load_rules():
 
 def build_rule_transducers(rules):
     max_cost = shared.config['generate'].getfloat('max_cost')
-    transducers, potential_words = [], 0
+    transducers = []
     for rule, domsize, prod in rules:
         cost = -math.log(prod)
         if cost < max_cost:
@@ -27,20 +27,26 @@ def build_rule_transducers(rules):
 
 
 def word_generator(lexicon_tr, rules_tr):
+    lexicon_words = set(input_word \
+                        for input_word, outputs in \
+                            lexicon_tr.extract_paths(output='dict').items())
     logging.getLogger('main').info('Composing...')
     tr = hfst.HfstTransducer(lexicon_tr)
     tr.compose(rules_tr)
     tr.minimize()
-    lexicon_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
+#     lexicon_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
+    tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
 
     logging.getLogger('main').info('Extracting paths...')
-    for input_word, outputs in tr.extract_paths(output='dict').items():
+#     for input_word, outputs in tr.extract_paths(output='dict').items():
+    for input_word in lexicon_words:
+        outputs = tr.lookup(input_word)
         input_word = input_word.replace(hfst.EPSILON, '')
         input_word_unnorm = unnormalize_word(input_word)
         for output_word, weight in outputs:
             output_word = output_word.replace(hfst.EPSILON, '')
             output_word_unnorm = unnormalize_word(output_word)
-            if not lexicon_tr.lookup(output_word):
+            if output_word_unnorm not in lexicon_words:
                 yield (output_word_unnorm, input_word_unnorm, weight)
 
 
