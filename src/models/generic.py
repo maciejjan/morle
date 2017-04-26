@@ -61,6 +61,10 @@ class Model:
         self.rules_cost -= self.rule_cost(rule)
         del self.rule_features[rule]
 
+    def root_cost(self, root :LexiconEntry) -> None:
+        return self.rootdist.cost_of_change(\
+            self.extractor.extract_feature_values_from_nodes([root]), [])
+
     def rule_cost(self, rule :Rule) -> float:
         return self.ruledist.cost_of_change(\
             self.extractor.extract_feature_values_from_rules([rule]), [])
