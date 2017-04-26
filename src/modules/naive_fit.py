@@ -3,30 +3,36 @@ from models.point import PointModel
 from utils.files import read_tsv_file, file_exists
 import shared
 
+from collections import defaultdict
 import logging
 
-'''Fit the model using all possible edges.'''
 
-def prepare_model():
+'''Fit the model using all possible edges (ignoring the tree constraints).'''
+
+
+def run() -> None:
     logging.getLogger('main').info('Loading rules...')
-    rules, rule_domsizes, rule_freqs = {}, {}, {}
-    filename = shared.filenames['rules-modsel']
-    if not file_exists(filename):
-        filename = shared.filenames['rules']
-    for rule, freq, domsize in read_tsv_file(filename,\
-            (str, int, int)):
-        rules[rule] = Rule.from_string(rule)
-        rule_domsizes[rule] = domsize
-        rule_freqs[rule] = freq
-    logging.getLogger('main').info('Loading edges...')
-    model = PointModel(None, None)
-    model.fit_ruledist(set(rules.values()))
-    for rule, domsize in rule_domsizes.items():
-        model.add_rule(rules[rule], domsize)
-        model.rule_features[rules[rule]][0].prob = rule_freqs[rule] / domsize
-    return model
+    rules_file = shared.filenames['rules-modsel']
+    if not file_exists(rules_file):
+        rules_file = shared.filenames['rules']
+    rules = [(Rule.from_string(rule_str), domsize) \
+             for rule_str, domsize in \
+                 read_tsv_file(rules_file, (str, int))]
 
-def run():
-    model = prepare_model()
-    model.save_rules(shared.filenames['rules-fit'])
+    # load the full graph
+    graph_file = shared.filenames['graph-modsel']
+    if not file_exists(graph_file):
+        graph_file = shared.filenames['graph']
+    logging.getLogger('main').info('Computing rule frequencies...')
+    rule_freq = defaultdict(lambda: 0)
+    for word_1, word_2, rule_str in read_tsv_file(graph_file):
+        rule_freq[rule_str] += 1
+
+    # initialize a PointModel
+    model = PointModel()
+    for rule, domsize in rules:
+        model.add_rule(rule, domsize, freq=rule_freq[str(rule)])
+
+    logging.getLogger('main').info('Saving rules...')
+    model.save_rules_to_file(shared.filenames['rules-fit'])
 
