@@ -156,36 +156,6 @@ class FullGraph(Graph):
                 branching.add_edge(edge)
         return branching
 
-#     def optimal_branching(self, model :'PointModel') -> Branching:
-# 
-#         def _add_node_if_not_present(graph, node):
-#             if not graph.has_node(node):
-#                 graph.add_node(node)
-#                 graph.add_edge('ROOT', node, weight=model.root_cost(node))
-# 
-#         graph = nx.DiGraph()
-#         graph.add_node('ROOT')
-#         for edge in self.edges_list:
-#             _add_node_if_not_present(graph, edge.source)
-#             _add_node_if_not_present(graph, edge.target)
-#             if graph.has_edge(edge.source, edge.target):
-#                 cur_weight = graph[edge.source][edge.target]['weight']
-#                 new_weight = model.edge_cost(edge)
-#                 if new_weight < cur_weight:
-#                     graph[edge.source][edge.target]['weight'] = new_weight
-#             else:
-#                 graph.add_edge(edge.source, edge.target,
-#                                weight=model.edge_cost(edge))
-# 
-#         arb = nx.minimum_spanning_arborescence(graph)
-# 
-#         result = Branching()
-#         for source, target in arb.edges_iter():
-#             if source != 'ROOT':
-#                 result.add_edge(max(self.find_edges(source, target), \
-#                                     key=lambda e: model.edge_cost(e)))
-#         return result
-
     def optimal_branching(self, model :'PointModel') -> Branching:
         graph = nx.DiGraph()
         for edge in self.edges_list:
