@@ -156,34 +156,53 @@ class FullGraph(Graph):
                 branching.add_edge(edge)
         return branching
 
+#     def optimal_branching(self, model :'PointModel') -> Branching:
+# 
+#         def _add_node_if_not_present(graph, node):
+#             if not graph.has_node(node):
+#                 graph.add_node(node)
+#                 graph.add_edge('ROOT', node, weight=model.root_cost(node))
+# 
+#         graph = nx.DiGraph()
+#         graph.add_node('ROOT')
+#         for edge in self.edges_list:
+#             _add_node_if_not_present(graph, edge.source)
+#             _add_node_if_not_present(graph, edge.target)
+#             if graph.has_edge(edge.source, edge.target):
+#                 cur_weight = graph[edge.source][edge.target]['weight']
+#                 new_weight = model.edge_cost(edge)
+#                 if new_weight < cur_weight:
+#                     graph[edge.source][edge.target]['weight'] = new_weight
+#             else:
+#                 graph.add_edge(edge.source, edge.target,
+#                                weight=model.edge_cost(edge))
+# 
+#         arb = nx.minimum_spanning_arborescence(graph)
+# 
+#         result = Branching()
+#         for source, target in arb.edges_iter():
+#             if source != 'ROOT':
+#                 result.add_edge(max(self.find_edges(source, target), \
+#                                     key=lambda e: model.edge_cost(e)))
+#         return result
+
     def optimal_branching(self, model :'PointModel') -> Branching:
-
-        def _add_node_if_not_present(graph, node):
-            if not graph.has_node(node):
-                graph.add_node(node)
-                graph.add_edge('ROOT', node, weight=model.root_cost(node))
-
         graph = nx.DiGraph()
-        graph.add_node('ROOT')
         for edge in self.edges_list:
-            _add_node_if_not_present(graph, edge.source)
-            _add_node_if_not_present(graph, edge.target)
+            weight = model.root_cost(edge.target) - model.edge_cost(edge)
             if graph.has_edge(edge.source, edge.target):
-                cur_weight = graph[edge.source][edge.target]['weight']
-                new_weight = model.edge_cost(edge)
-                if new_weight < cur_weight:
-                    graph[edge.source][edge.target]['weight'] = new_weight
+                if weight > graph[edge.source][edge.target]['weight']:
+                    graph[edge.source][edge.target]['weight'] = weight
             else:
-                graph.add_edge(edge.source, edge.target,
-                               weight=model.edge_cost(edge))
+                graph.add_edge(edge.source, edge.target, weight=weight)
 
-        arb = nx.minimum_spanning_arborescence(graph)
+        branching = nx.maximum_branching(graph)
 
         result = Branching()
-        for source, target in arb.edges_iter():
-            if source != 'ROOT':
-                result.add_edge(max(self.find_edges(source, target), \
-                                    key=lambda e: model.edge_cost(e)))
+        for source, target in branching.edges_iter():
+            result.add_edge(min(self.find_edges(source, target), \
+                                key=lambda e: model.root_cost(e.target) -\
+                                              model.edge_cost(e)))
         return result
 
     def restriction_to_ruleset(self, ruleset :Set[Rule]) -> 'FullGraph':
