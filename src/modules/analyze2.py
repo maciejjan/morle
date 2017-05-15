@@ -42,8 +42,12 @@ def run():
         # TODO normalize and unnormalize
         for (word,) in read_tsv_file(shared.filenames['analyze.wordlist'],
                                      (str,), show_progressbar=True):
-            word_norm = normalize_word(word)
-            similar_words = set([w for w, c in analyzer.lookup(word_norm)])
-            for w in similar_words:
-                write_line(outfp, (unnormalize_word(w), word))
+            try:
+                word_norm = normalize_word(word)
+                similar_words = set([w for w, c in analyzer.lookup(word_norm)])
+                for w in similar_words:
+                    write_line(outfp, (unnormalize_word(w), word))
+            except Exception as e:
+                logging.getLogger('main').warning('ignoring %s: %s' %\
+                                                  (word, str(e)))
 

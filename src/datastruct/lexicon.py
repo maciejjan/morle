@@ -200,7 +200,8 @@ class Lexicon:
             try:
                 self.add(LexiconEntry(*row))
             except Exception as e:
-                raise e
-                logging.getLogger('main').warning('ignoring %s' % row[0])
+#                 raise e
+                logging.getLogger('main').warning('ignoring %s: %s' %\
+                                                  (row[0], str(e)))
 
 
