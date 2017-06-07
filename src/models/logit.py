@@ -13,10 +13,17 @@ class LogitModel:
     def __init__(self):
         self.model_type = 'logit'
 #         Model.__init__(self)
-        self.edge_costs = {} # type: Dict[GraphEdge, float]
-        self.root_costs = {} # type: Dict[LexiconEntry, float]
+#         self.edge_costs = {} # type: Dict[GraphEdge, float]
+#         self.root_costs = {} # type: Dict[LexiconEntry, float]
+        # TODO initialization
+        # - root_features (vector -- just like a rule)
+        # - rule_features: Dict[Rule, np.ndarray] (feature)
+        # - edge_features: Dict[Rule, np.ndarray] (edge x feature)
+        # - additional rule data (frequency, domsize)?
         # TODO extract features from edges
         # TODO cache edge feature matrices
+        # TODO initialize the parameters randomly
+        # TODO print edges and probabilities
 
     def add_rule(self, rule :Rule, domsize :int, freq :int = None) -> None:
         super().add_rule(rule, domsize)
