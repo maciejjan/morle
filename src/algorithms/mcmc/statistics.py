@@ -119,6 +119,7 @@ class CostAtIterationStatistic(IterationStatistic):
 
 class EdgeStatistic(MCMCStatistic):
     def reset(self) -> None:
+        # TODO use NumPy arrays as values, not lists!
         self.values = [0] * len(self.sampler.edge_index)
         self.last_modified = [0] * len(self.sampler.edge_index)
     

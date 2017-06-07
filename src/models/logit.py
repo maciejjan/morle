@@ -8,13 +8,14 @@
 # from typing import Dict, Iterable, List, Tuple
 
 
-class LogitModel(Model):
+class LogitModel:
 
     def __init__(self):
         self.model_type = 'logit'
-        Model.__init__(self)
+#         Model.__init__(self)
         self.edge_costs = {} # type: Dict[GraphEdge, float]
         self.root_costs = {} # type: Dict[LexiconEntry, float]
+        # TODO extract features from edges
         # TODO cache edge feature matrices
 
     def add_rule(self, rule :Rule, domsize :int, freq :int = None) -> None:
