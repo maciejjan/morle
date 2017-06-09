@@ -4,12 +4,21 @@ from datastruct.rules import Rule
 # from models.generic import Model
 # from utils.files import open_to_write, write_line
 # 
-# from collections import defaultdict
 
+from collections import defaultdict
 import numpy as np
-
+from operator import itemgetter
+import scipy.sparse
+from scipy.special import expit
 from typing import Dict, Iterable, List, Tuple
 
+
+MAX_NGRAM_LENGTH = 5
+MAX_NUM_NGRAMS = 10
+BATCH_SIZE = 10
+COEFF_SD = 0.1
+
+# TODO currently: model AND dataset as one class; separate in the future
 
 class LogitModel:
 
@@ -27,18 +36,79 @@ class LogitModel:
         # TODO cache edge feature matrices
         # TODO initialize the parameters randomly
         # TODO print edges and probabilities
+        # TODO normalize numeric features to zero mean and unit variance?
+        # TODO indices: object -> ID
+        self.edges = edges
+        self.rules = rules
+        self.edge_idx = { edge: idx for idx, edge in enumerate(self.edges) }
+        self.rule_idx = { rule: idx for idx, rule in enumerate(self.rules) }
+        self.ngram_features = self.select_ngram_features(edges)
+        # TODO features -- names of ALL features
+        self.features = self.ngram_features
+        self.attributes, self.selector =\
+            self.extract_features_from_edges(edges)
+        self.coefficients = self.initialize()
+        for e in self.edges:
+            print(e.source, e.target, e.rule)
+        print([str(rule) for rule in self.rules])
+        print(self.ngram_features)
+        print(self.attributes)
+        print(self.selector)
+        print(self.coefficients)
 
     # TODO compute slice-wise
 
+    def initialize(self):
+        dim = (len(self.rules), len(self.features))
+        return np.random.normal(0, COEFF_SD, dim)
+
+    def extract_n_grams(self, word :Iterable[str]) -> Iterable[Iterable[str]]:
+        result = []
+        max_n = min(MAX_NGRAM_LENGTH, len(word))+1
+        result.extend('^'+''.join(word[:i]) for i in range(1, max_n))
+        result.extend(''.join(word[-i:])+'$' for i in range(1, max_n))
+        return result
+
+    def select_ngram_features(self, edges :List[GraphEdge]) -> List[str]:
+        # count n-gram frequencies
+        ngram_freqs = defaultdict(lambda: 0)
+        for edge in edges:
+            for ngram in self.extract_n_grams(edge.source.symstr):
+                ngram_freqs[ngram] += 1
+        # select most common n-grams
+        ngram_features = \
+            list(map(itemgetter(0), 
+                     sorted(ngram_freqs.items(), 
+                            reverse=True, key=itemgetter(1))))[:MAX_NUM_NGRAMS]
+        return ngram_features
+
+    def extract_features_from_edges(self, edges :List[GraphEdge])\
+                                   -> np.ndarray:
+        attributes = []
+        selector = scipy.sparse.dok_matrix((len(edges), len(self.rules)))
+        for edge in edges:
+            attribute_vec, selector_vec = [], []
+            edge_ngrams = set(self.extract_n_grams(edge.source.symstr))
+            for ngram in self.ngram_features:
+                attribute_vec.append(1 if ngram in edge_ngrams else -1)
+            selector[self.edge_idx[edge], self.rule_idx[edge.rule]] = 1
+#             for rule in self.rules:
+#                 selector_vec.append(1 if rule == edge.rule else 0)
+            attributes.append(attribute_vec)
+        return np.array(attributes), selector.tocsr()
+
     def edge_probability(self, slice_size=1000) -> np.ndarray:
-        return expit(np.sum(self.edge_features *\
-                            np.dot(self.rule_selector, 
-                                  self.rule_coefficients),
+        return expit(np.sum(self.attributes *\
+                            np.array(np.dot(self.selector.todense(), 
+                                            self.coefficients)),
                      axis=1))
 
     def gradient(self, y, slice_size=1000) -> np.ndarray:
-        return np.dot(((y-self.edge_prob)*self.rule_selector).transpose(), 
-                      self.edge_features)
+        edge_prob = self.edge_probability()
+        return np.dot((np.dot((y-edge_prob).reshape((-1, 1)),
+                              np.ones((1, len(self.rules))))\
+                       * self.selector).transpose(), 
+                      self.attributes)
 
     def recompute_edge_costs(self) -> None:
         self.edge_prob = self.edge_probability()
