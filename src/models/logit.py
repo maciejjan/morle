@@ -37,6 +37,17 @@ class LogitModel:
         # TODO initialize the parameters randomly
         # TODO print edges and probabilities
         # TODO normalize numeric features to zero mean and unit variance?
+        # -> fit feature regularization vectors B and C and the beginning
+        #    X' = (X-B)*C
+        #    question: globally or for each rule? -> better separately for each rule
+        # -> no regularization required!
+        #    - the rule coefficients show the direction of expected change
+        #    - the length of the coefficient vector is the importance/certainty
+        #    - the more change in this direction = the better!
+        #      (but the lengths are probably not going to vary much)
+        # evt. the normalized length of the change vector as a feature
+        # but rescaling might be needed to ensure feature comparability
+        #   and speed up convergence
         # TODO indices: object -> ID
         self.edges = edges
         self.rules = rules
@@ -92,22 +103,22 @@ class LogitModel:
             for ngram in self.ngram_features:
                 attribute_vec.append(1 if ngram in edge_ngrams else -1)
             selector[self.edge_idx[edge], self.rule_idx[edge.rule]] = 1
-#             for rule in self.rules:
-#                 selector_vec.append(1 if rule == edge.rule else 0)
             attributes.append(attribute_vec)
+        # TODO reformat attributes and selector to slices
         return np.array(attributes), selector.tocsr()
 
-    def edge_probability(self, slice_size=1000) -> np.ndarray:
+    def edge_probability(self) -> np.ndarray:
         return expit(np.sum(self.attributes *\
                             np.array(np.dot(self.selector.todense(), 
                                             self.coefficients)),
                      axis=1))
 
-    def gradient(self, y, slice_size=1000) -> np.ndarray:
+    def gradient(self, y) -> np.ndarray:
         edge_prob = self.edge_probability()
+        selector = np.squeeze(np.asarray(self.selector.todense()))
         return np.dot((np.dot((y-edge_prob).reshape((-1, 1)),
                               np.ones((1, len(self.rules))))\
-                       * self.selector).transpose(), 
+                       * selector).transpose(), 
                       self.attributes)
 
     def recompute_edge_costs(self) -> None:
