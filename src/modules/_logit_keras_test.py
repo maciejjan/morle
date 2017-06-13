@@ -11,6 +11,8 @@ from typing import Iterable, List
 # TODO
 # - why is the rule :/en:ung extracted rather than :/e:u/:g?
 # - ngram feature bug: multi-character symbols
+# - max_edges_per_wordpair: take the most general rule
+#   and the most general rule without infix
 
 
 def load_edges(filename):
