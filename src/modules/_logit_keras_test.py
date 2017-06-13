@@ -2,39 +2,44 @@ from datastruct.lexicon import LexiconEntry
 from datastruct.graph import GraphEdge
 from datastruct.rules import Rule
 from models.neural import NeuralModel
+from utils.files import read_tsv_file
+import shared
 
 import numpy as np
 from typing import Iterable, List
 
 # TODO
-# - move model into separate class: NeuralModel
-# - test on real data and verify the convergence
+# - why is the rule :/en:ung extracted rather than :/e:u/:g?
+# - ngram feature bug: multi-character symbols
+
+
+def load_edges(filename):
+    lexicon, rules = {}, {}
+    edges, y = [], []
+    for word_1, word_2, rule_str, prob in \
+            read_tsv_file(filename, types=(str, str, str, float),\
+                          show_progressbar=True):
+        if word_1 not in lexicon:
+            lexicon[word_1] = LexiconEntry(word_1)
+        if word_2 not in lexicon:
+            lexicon[word_2] = LexiconEntry(word_2)
+        if rule_str not in rules:
+            rules[rule_str] = Rule.from_string(rule_str)
+        edges.append(GraphEdge(lexicon[word_1], lexicon[word_2],\
+                               rules[rule_str]))
+        y.append(prob)
+    return edges, np.array(y)
+
 
 def run():
-    words_raw = ['machen', 'gemacht', 'macht', 'machte', 'gemachte']
-    rules_raw = [':ge/en:t', ':/en:t', ':/:e', ':/en:te', 'ge:/:']
-    words = [LexiconEntry(w) for w in words_raw]
-    rules = [Rule.from_string(r) for r in rules_raw]
-    edges = [
-        GraphEdge(words[0], words[1], rules[0]),
-        GraphEdge(words[0], words[2], rules[1]),
-        GraphEdge(words[1], words[4], rules[2]),
-        GraphEdge(words[2], words[3], rules[2]),
-        GraphEdge(words[0], words[3], rules[3]),
-        GraphEdge(words[1], words[2], rules[4]),
-        GraphEdge(words[4], words[3], rules[4]),
-    ]
-    y = np.array([1, 1, 1, 0.3, 0.7, 0.05, 0.05])
-    print(y)
+    edges, y = load_edges(shared.filenames['sample-edge-stats'])
 
     model = NeuralModel(edges)
-    for edge in edges:
-        print(str(edge.source), str(edge.target), str(edge.rule),
-              model.edge_prob(edge), sep='\t')
+    y1 = model.y_pred.copy()
     model.fit(y)
-    print()
     model.recompute_edge_prob()
-    for edge in edges:
+    y2 = model.y_pred.copy()
+    for i, edge in enumerate(edges):
         print(str(edge.source), str(edge.target), str(edge.rule),
-              model.edge_prob(edge), sep='\t')
+              str(float(y[i])), str(float(y2[i])), sep='\t')
 
