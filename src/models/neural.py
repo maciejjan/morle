@@ -54,7 +54,8 @@ class NeuralModel:
         # count n-gram frequencies
         ngram_freqs = defaultdict(lambda: 0)
         for edge in edges:
-            for ngram in self.extract_n_grams(edge.source.symstr):
+            source_seq = edge.source.word + edge.source.tag
+            for ngram in self.extract_n_grams(source_seq):
                 ngram_freqs[ngram] += 1
         # select most common n-grams
         ngram_features = \
