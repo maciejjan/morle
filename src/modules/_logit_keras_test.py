@@ -42,6 +42,7 @@ def run():
     model.fit(y)
     model.recompute_edge_prob()
     y2 = model.y_pred.copy()
+    # TODO calculate the benefit in entropy
     for i, edge in enumerate(edges):
         print(str(edge.source), str(edge.target), str(edge.rule),
               str(float(y[i])), str(float(y2[i])), sep='\t')

@@ -19,6 +19,7 @@ BATCH_SIZE = 10
 COEFF_SD = 0.1
 
 # TODO currently: model AND dataset as one class; separate in the future
+# TODO a logit model -- coefficients for each rule, but trained with KERAS
 
 class LogitModel:
 
