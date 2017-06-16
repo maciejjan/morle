@@ -12,7 +12,7 @@ from keras.models import Model
 
 
 MAX_NGRAM_LENGTH = 5
-MAX_NUM_NGRAMS = 500
+MAX_NUM_NGRAMS = 100
 
 # TODO currently: model AND dataset as one class; separate in the future
 
@@ -27,15 +27,16 @@ class NeuralModel:
         print(self.ngram_features)
         self.features = self.ngram_features
         self.X_attr, self.X_rule = self.extract_features_from_edges(edges)
-        self.network = self.compile_network()
+        self.network = self.compile()
         self.recompute_edge_prob()
 
-    def fit(self, y :np.ndarray) -> None:
-        self.network.fit([self.X_attr, self.X_rule], y, epochs=3,\
+#     def fit(self, y :np.ndarray) -> None:
+    def fit_to_sample(self, edge_freq :List[Tuple[GraphEdge, float]]) -> None:
+        y = np.empty((len(edge_freq),))
+        for edge, prob in edge_freq:
+            y[self.edge_idx[edge]] = prob
+        self.network.fit([self.X_attr, self.X_rule], y, epochs=5,\
                          batch_size=1000, verbose=1)
-
-    def fit_to_sample(self, sample) -> None:
-        raise NotImplementedError()
 
     def recompute_edge_prob(self) -> None:
         self.y_pred = self.network.predict([self.X_attr, self.X_rule])
@@ -80,7 +81,7 @@ class NeuralModel:
         print('rule_ids.nbytes =', rule_ids.nbytes)
         return attributes, rule_ids
 
-    def compile_network(self):
+    def compile(self):
         num_features, num_rules = len(self.features), len(self.rule_idx)
         input_attr = Input(shape=(num_features,), name='input_attr')
         dense_attr = Dense(100, activation='softplus', name='dense_attr')(input_attr)
