@@ -4,4 +4,5 @@
 * [HFST](https://hfst.github.io/) >= 3.11 with Python 3 bindings
 * NumPy
 * SciPy
-
+* networkx
+* keras
