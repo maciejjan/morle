@@ -62,11 +62,11 @@ def run():
     y = np.array(list(map(itemgetter(1), edges_freq)))
 
     neural_prob = experiment('neural', edges_freq)
-    logit_prob = experiment('logit', edges_freq)
+#     logit_prob = experiment('logit', edges_freq)
     baseline_prob = experiment('baseline', edges_freq)
     print('Loss function:')
     print('neural:', loss(neural_prob, y))
-    print('logit:', loss(logit_prob, y))
+#     print('logit:', loss(logit_prob, y))
     print('baseline:', loss(baseline_prob, y))
     print('perfect:', loss(y, y))
 

@@ -1,4 +1,6 @@
-from datastruct.graph import GraphEdge
+from datastruct.lexicon import LexiconEntry
+from datastruct.graph import GraphEdge, FullGraph
+from models.generic import Model
 
 from collections import defaultdict
 import numpy as np
@@ -12,17 +14,33 @@ from keras.models import Model
 
 
 MAX_NGRAM_LENGTH = 5
-MAX_NUM_NGRAMS = 100
+MAX_NUM_NGRAMS = 300
 
 # TODO currently: model AND dataset as one class; separate in the future
 
-class NeuralModel:
-    def __init__(self, edges :List[GraphEdge]):
+# TODO integrate the root probabilities
+# TODO routines for running the sampler
+# - rules()
+# - cost()
+# - cost_of_change()
+# - apply_change()
+
+# TODO further ideas:
+# - take also n-grams of the target word -- useful for e.g. insertion rules
+# - take also n-grams around alternation spots
+
+# TODO initialization:
+# - root prob = alpha ** word_length - between 0.1 and 0.9
+# - edge prob = expit(log(rule freq)) - between 0.1 and 0.9
+
+class NeuralModel(Model):
+    def __init__(self, graph :FullGraph):
         self.model_type = 'neural'
-        # TODO create rule and edge index
-        self.edge_idx = { edge: idx for idx, edge in enumerate(edges) }
+        # create rule and edge index
+        self.word_idx = { } # TODO word -> root edge idx
+        self.edge_idx = { edge: idx for idx, edge in enumerate(edges, len(self.word_idx)) }
         self.rule_idx = { rule: idx for idx, rule in \
-                          enumerate(set(edge.rule for edge in edges)) }
+                          enumerate(set(edge.rule for edge in edges), 1) }
         self.ngram_features = self.select_ngram_features(edges)
         print(self.ngram_features)
         self.features = self.ngram_features
@@ -30,7 +48,6 @@ class NeuralModel:
         self.network = self.compile()
         self.recompute_edge_prob()
 
-#     def fit(self, y :np.ndarray) -> None:
     def fit_to_sample(self, edge_freq :List[Tuple[GraphEdge, float]]) -> None:
         y = np.empty((len(edge_freq),))
         for edge, prob in edge_freq:
@@ -38,11 +55,28 @@ class NeuralModel:
         self.network.fit([self.X_attr, self.X_rule], y, epochs=5,\
                          batch_size=1000, verbose=1)
 
+    # TODO rename -> recompute_edge_costs
     def recompute_edge_prob(self) -> None:
         self.y_pred = self.network.predict([self.X_attr, self.X_rule])
 
     def edge_prob(self, edge :GraphEdge) -> float:
         return float(self.y_pred[self.edge_idx[edge]])
+
+    def root_prob(self, node :LexiconEntry) -> float:
+        raise NotImplementedError()
+
+    def cost() -> float:
+        raise NotImplementedError()
+
+    def cost_of_change() -> float:
+        raise NotImplementedError()
+
+    def apply_change() -> None:
+        raise NotImplementedError()
+
+    def fit_to_branching() -> None:
+        # TODO set the cost to the branching cost
+        raise NotImplementedError()
 
     def extract_n_grams(self, word :Iterable[str]) -> Iterable[Iterable[str]]:
         result = []
