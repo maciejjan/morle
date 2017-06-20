@@ -15,6 +15,7 @@ from keras.models import Model
 
 MAX_NGRAM_LENGTH = 5
 MAX_NUM_NGRAMS = 300
+MAX_NEGATIVE_EXAMPLES = 1000000
 
 # TODO currently: model AND dataset as one class; separate in the future
 
@@ -114,6 +115,24 @@ class NeuralModel(Model):
         print('attributes.nbytes =', attributes.nbytes)
         print('rule_ids.nbytes =', rule_ids.nbytes)
         return attributes, rule_ids
+
+    def sample_negative_examples(self):
+        # shuffle the wordlist
+        # for word in wordlist:
+        #   lookup the word in lexicon .o. rules transducer
+        #   for word2:
+        #     extract all rules from (word, word2)
+        #     for rule:
+        #       if rule in ruleset:
+        #         add (word, rule) to negative examples
+        #         if length(negative examples) >= MAX_NEGATIVE_EXAMPLES:
+        #           prepare the weights vector
+        #           return
+        # if number of examples < MAX_NEGATIVE_EXAMPLES:
+        #   resize the array
+        # prepare the weights vector
+        # return
+        raise NotImplementedError()
 
     def compile(self):
         num_features, num_rules = len(self.features), len(self.rule_idx)
