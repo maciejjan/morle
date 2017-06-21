@@ -35,13 +35,13 @@ MAX_NEGATIVE_EXAMPLES = 1000000
 # - edge prob = expit(log(rule freq)) - between 0.1 and 0.9
 
 class NeuralModel(Model):
-    def __init__(self, graph :FullGraph):
+    def __init__(self, edges :List[GraphEdge]):
         self.model_type = 'neural'
         # create rule and edge index
         self.word_idx = { } # TODO word -> root edge idx
         self.edge_idx = { edge: idx for idx, edge in enumerate(edges, len(self.word_idx)) }
         self.rule_idx = { rule: idx for idx, rule in \
-                          enumerate(set(edge.rule for edge in edges), 1) }
+                          enumerate(set(edge.rule for edge in edges)) }
         self.ngram_features = self.select_ngram_features(edges)
         print(self.ngram_features)
         self.features = self.ngram_features
@@ -108,7 +108,8 @@ class NeuralModel(Model):
             ngram_features_hash[ngram] = i
         print('Memory allocation OK.', file=sys.stderr)
         for i, edge in enumerate(edges):
-            for ngram in self.extract_n_grams(edge.source.symstr):
+            source_seq = edge.source.word + edge.source.tag
+            for ngram in self.extract_n_grams(source_seq):
                 if ngram in ngram_features_hash:
                     attributes[i, ngram_features_hash[ngram]] = 1
             rule_ids[i, 0] = self.rule_idx[edge.rule]

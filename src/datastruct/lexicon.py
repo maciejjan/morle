@@ -196,9 +196,13 @@ class Lexicon:
                 del self.items_by_symstr[item.symstr]
 
     def load_from_file(self, filename :str) -> None:
+        use_freq = shared.config['Features'].getfloat('word_freq_weight') > 0
+        use_vec = shared.config['Features'].getfloat('word_vec_weight') > 0
         for row in read_tsv_file(filename, get_wordlist_format()):
             try:
-                self.add(LexiconEntry(*row))
+                self.add(LexiconEntry(row[0],\
+                                      freq=row[1] if use_freq else None,\
+                                      vec=row[-1] if use_vec else None))
             except Exception as e:
 #                 raise e
                 logging.getLogger('main').warning('ignoring %s: %s' %\
