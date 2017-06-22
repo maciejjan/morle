@@ -16,6 +16,10 @@ from typing import Iterable, List
 MAX_NGRAM_LENGTH = 5
 MAX_NUM_NGRAMS = 300
 
+# TODO compare the mean squared error of both prediction methods
+# TODO pack into separate classes: two different FeatureModel subclasses
+# TODO standard RootModel (ALERGIA) and EdgeModel (Bernoulli)
+
 
 def normalize_vec(lexicon :Lexicon) -> None:
     for entry in lexicon.entries():
@@ -104,6 +108,52 @@ def compute_costs(y_true, y_pred, error_cov):
     return -multivariate_normal.logpdf(error, np.zeros(y_true.shape[1]), error_cov)
 
 
+def compute_error(y_true, y_pred):
+    vector_dim = y_true.shape[1]
+    sq_err = (y_true - y_pred)**2
+    return np.sum(sq_err, axis=1) / vector_dim
+
+
+def compute_baseline(word_idx, edge_idx):
+    print('Computing the baseline costs...')
+    vector_dim = shared.config['Features'].getint('word_vec_dim')
+    edges_by_rule = {}
+    for edge in edge_idx:
+        if edge.rule not in edges_by_rule:
+            edges_by_rule[edge.rule] = []
+        edges_by_rule[edge.rule].append(edge)
+    # create a matrix of shifts for each word/edge, hashed by rule
+    print('* reformatting the data')
+    shift_matrix_by_rule = {}
+    for rule, edges in edges_by_rule.items():
+        shift_matrix_by_rule[rule] =\
+            np.array(list(e.target.vec - e.source.vec for e in edges))
+    shift_matrix_by_rule['root'] = np.array(list(entry.vec for entry in word_idx))
+    # compute the per-rule mean and variance
+    print('* fitting the Gaussians')
+    means, variances = {}, {}
+    for rule, shift_matrix in shift_matrix_by_rule.items():
+        n = shift_matrix.shape[0]
+        means[rule] = np.sum(shift_matrix, axis=0) / n
+        error = shift_matrix - means[rule]
+        cov = np.dot(error.T, error) / n
+        variances[rule] = np.diag(cov) + np.repeat(0.00001, vector_dim)
+    print('* computing the costs and predictions')
+    sample_size = len(word_idx) + len(edge_idx)
+    costs, pred = np.empty(sample_size), np.empty((sample_size, vector_dim))
+    for entry, idx in word_idx.items():
+        pred[idx] = means['root']
+        costs[idx] = -multivariate_normal.logpdf(entry.vec, means['root'], \
+                                                 np.diag(variances['root']))
+    for edge, idx in edge_idx.items():
+        pred[idx] = edge.source.vec + means[edge.rule]
+        costs[idx] = -multivariate_normal.logpdf(\
+                          edge.target.vec - edge.source.vec,\
+                          means[edge.rule], variances[edge.rule])
+    print('* done')
+    return costs, pred
+
+
 def run():
     print('Loading lexicon...')
     lexicon = Lexicon(shared.filenames['wordlist'])
@@ -116,10 +166,13 @@ def run():
     print('X_attr.shape =', X_attr.shape)
     print('X_rule.shape =', X_rule.shape)
     print('y.shape =', y.shape)
+    baseline_costs, baseline_pred = compute_baseline(word_idx, edge_idx)
+    baseline_err = compute_error(y, baseline_pred)
     print('Compiling the model...')
     model = compile_model(X_attr.shape[1], int(np.max(X_rule))+1, y.shape[1])
     model.fit([X_attr, X_rule], y, epochs=5, verbose=1, batch_size=1000)
     y_pred = model.predict([X_attr, X_rule])
+    err = compute_error(y, y_pred)
     print('Fitting the error distribution...')
     error_cov = fit_error(y, y_pred)
     print('Computing the edge costs...')
@@ -127,8 +180,26 @@ def run():
     print('Writing output...')
     with open_to_write('_feature_model_test.txt') as outfp:
         for entry, idx in word_idx.items():
-            write_line(outfp, ('ROOT', entry, '-', costs[idx], 0.0))
+            write_line(outfp, ('ROOT', entry, '-', err[idx], costs[idx], 0.0,\
+                               baseline_err[idx], baseline_costs[idx], 0.0, 0.0))
+#             write_line(outfp, ('ROOT', entry, '-', err[idx], costs[idx], 0.0,\
+#                                0.0, 0.0, 0.0, 0.0))
         for edge, idx in edge_idx.items():
-            write_line(outfp, (edge.source, edge.target, edge.rule, costs[idx],\
-                               costs[word_idx[edge.target]]-costs[idx]))
+            gain = costs[word_idx[edge.target]]-costs[idx]
+            baseline_gain = baseline_costs[word_idx[edge.target]]-baseline_costs[idx]
+            write_line(outfp, (edge.source, edge.target, edge.rule,
+                               err[idx],
+                               costs[idx],
+                               gain,
+                               baseline_err[idx],
+                               baseline_costs[idx],
+                               baseline_gain,
+                               baseline_gain-gain))
+#             write_line(outfp, (edge.source, edge.target, edge.rule,
+#                                err[idx],
+#                                costs[idx],
+#                                gain, 0.0, 0.0, 0.0, 0.0))
+    print()
+    print('Baseline error =', np.sum(baseline_err) / baseline_err.shape[0])
+    print('Neural network error =', np.sum(err) / err.shape[0])
 
