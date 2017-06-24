@@ -34,6 +34,30 @@ MAX_NEGATIVE_EXAMPLES = 1000000
 # - root prob = alpha ** word_length - between 0.1 and 0.9
 # - edge prob = expit(log(rule freq)) - between 0.1 and 0.9
 
+class RootModel:
+    raise NotImplementedError()
+
+class AlergiaRootModel:
+    raise NotImplementedError()
+
+class EdgeModel:
+    raise NotImplementedError()
+
+class BernoulliEdgeModel:
+    raise NotImplementedError()
+
+class NeuralEdgeModel:
+    raise NotImplementedError()
+
+class FeatureMode:
+    raise NotImplementedError()
+
+class NeuralFeatureModel:
+    def __init__(self, graph :FullGraph):
+        raise NotImplementedError()
+
+
+# TODO this class is deprecated
 class NeuralModel(Model):
     def __init__(self, edges :List[GraphEdge]):
         self.model_type = 'neural'
