@@ -3,7 +3,8 @@ import algorithms.mcmc.statistics as stats
 from datastruct.graph import FullGraph
 from datastruct.lexicon import Lexicon
 from datastruct.rules import Rule
-from models.marginal import MarginalModel
+# from models.marginal import MarginalModel
+from models.neural import ModelSuite
 from utils.files import file_exists, read_tsv_file
 import algorithms.mcmc
 import shared
@@ -32,12 +33,16 @@ def run() -> None:
     full_graph.load_edges_from_file(graph_filename)
 
     # initialize a MarginalModel
+#     logging.getLogger('main').info('Initializing the model...')
+#     model = MarginalModel()
+#     model.fit_rootdist(lexicon.entries())
+#     model.fit_ruledist(rule for (rule, domsize) in rules)
+#     for rule, domsize in rules:
+#         model.add_rule(rule, domsize)
+
+    # initialize a ModelSuite
     logging.getLogger('main').info('Initializing the model...')
-    model = MarginalModel()
-    model.fit_rootdist(lexicon.entries())
-    model.fit_ruledist(rule for (rule, domsize) in rules)
-    for rule, domsize in rules:
-        model.add_rule(rule, domsize)
+    model = ModelSuite(full_graph, dict(rules))
 
     # setup the sampler
     logging.getLogger('main').info('Setting up the sampler...')
@@ -61,16 +66,16 @@ def run() -> None:
     if shared.config['sample'].getboolean('stat_rule_contrib'):
         sampler.add_stat('contrib', 
                          stats.RuleExpectedContributionStatistic(sampler))
-    logging.getLogger('main').debug('rules_cost = %f' % model.rules_cost)
-    logging.getLogger('main').debug('roots_cost = %f' % model.roots_cost)
-    logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
+#     logging.getLogger('main').debug('rules_cost = %f' % model.rules_cost)
+#     logging.getLogger('main').debug('roots_cost = %f' % model.roots_cost)
+#     logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
 
     # run sampling and print results
     logging.getLogger('main').info('Running sampling...')
     sampler.run_sampling()
     sampler.summary()
 
-    logging.getLogger('main').debug('rules_cost = %f' % model.rules_cost)
-    logging.getLogger('main').debug('roots_cost = %f' % model.roots_cost)
-    logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
+#     logging.getLogger('main').debug('rules_cost = %f' % model.rules_cost)
+#     logging.getLogger('main').debug('roots_cost = %f' % model.roots_cost)
+#     logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
 

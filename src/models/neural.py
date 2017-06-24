@@ -1,8 +1,13 @@
+import algorithms.alergia
 from datastruct.lexicon import LexiconEntry
-from datastruct.graph import GraphEdge, FullGraph
+from datastruct.graph import GraphEdge, FullGraph, Branching
+from datastruct.rules import Rule
 from models.generic import Model
+import shared
 
 from collections import defaultdict
+import hfst
+import math
 import numpy as np
 from operator import itemgetter
 from typing import Dict, Iterable, List, Tuple
@@ -35,26 +40,176 @@ MAX_NEGATIVE_EXAMPLES = 1000000
 # - edge prob = expit(log(rule freq)) - between 0.1 and 0.9
 
 class RootModel:
-    raise NotImplementedError()
+    def __init__(self, entries :Iterable[LexiconEntry]) -> None:
+        raise NotImplementedError()
+
+    def root_cost(self, entry :LexiconEntry) -> float:
+        raise NotImplementedError()
+
 
 class AlergiaRootModel:
-    raise NotImplementedError()
+    def __init__(self, entries :List[LexiconEntry]) -> None:
+        word_seqs, tag_seqs = [], []
+        for entry in entries:
+            word_seqs.append(entry.word)
+            tag_seqs.append(entry.tag)
+
+        alpha = shared.config['compile'].getfloat('alergia_alpha')
+        freq_threshold = \
+            shared.config['compile'].getint('alergia_freq_threshold')
+        self.automaton = \
+            algorithms.alergia.alergia(word_seqs, alpha=alpha, 
+                                       freq_threshold=freq_threshold).to_hfst()
+        tag_automaton = \
+            algorithms.alergia.prefix_tree_acceptor(tag_seqs).to_hfst()
+        tag_automaton.minimize()
+
+        self.automaton.concatenate(tag_automaton)
+        self.automaton.remove_epsilons()
+        self.automaton.convert(hfst.ImplementationType.HFST_OLW_TYPE)
+
+        self.costs = {}
+        for entry in entries:
+            self.costs[entry] = self.automaton.lookup(entry.symstr)[0][1]
+
+    def root_cost(self, entry :LexiconEntry) -> float:
+        return self.costs[entry]
+
 
 class EdgeModel:
-    raise NotImplementedError()
+    def __init__(self, edges :List[GraphEdge], rule_domsizes :Dict[Rule, int])\
+                -> None:
+        raise NotImplementedError()
+
+    def edge_cost(self, edge :GraphEdge) -> float:
+        raise NotImplementedError()
+
+    def null_cost(self) -> float:
+        'Cost of a graph without any edges.'
+        raise NotImplementedError()
+
+    def recompute_costs(self) -> None:
+        raise NotImplementedError()
+
+    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+        raise NotImplementedError()
+
 
 class BernoulliEdgeModel:
-    raise NotImplementedError()
+    def __init__(self, edges :List[GraphEdge], rule_domsizes :Dict[Rule, int])\
+                -> None:
+        self.rule_domsizes = rule_domsizes
+        self.fit_to_sample(list((edge, 1.0) for edge in edges))
+
+    def edge_cost(self, edge :GraphEdge) -> float:
+        return self.rule_cost[edge.rule]
+
+    def null_cost(self) -> float:
+        'Cost of a graph without any edges.'
+        return self._null_cost
+
+    def recompute_costs(self) -> None:
+        # no edge costs are cached, because they are readily obtained
+        # from rule costs
+        pass
+
+    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+        rule_freq = { rule: 0.0 for rule in self.rule_domsizes }
+        for edge, edge_freq in sample:
+            rule_freq[edge.rule] += edge_freq
+        self.rule_cost, self._null_cost = {}, 0.0
+        for rule in self.rule_domsizes:
+            # 0.1 is added to account for a non-uniform prior Beta(1.1, 1.1)
+            # (goal: excluding the extreme values 0.0 and 1.0)
+            prob = (rule_freq[rule] + 0.1) / (self.rule_domsizes[rule] + 0.2)
+            self.rule_cost[rule] = -math.log(prob) + math.log(1-prob)
+            self._null_cost -= math.log(1-prob)
+
 
 class NeuralEdgeModel:
-    raise NotImplementedError()
+    pass
 
-class FeatureMode:
-    raise NotImplementedError()
+
+class FeatureModel:
+    def __init__(self, graph :FullGraph) -> None:
+        raise NotImplementedError()
+
+    def root_cost(self, entry :LexiconEntry) -> float:
+        raise NotImplementedError()
+
+    def edge_cost(self, edge :GraphEdge) -> float:
+        raise NotImplementedError()
+
+    def recompute_costs(self) -> None:
+        raise NotImplementedError()
+
+    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+        raise NotImplementedError()
+
 
 class NeuralFeatureModel:
-    def __init__(self, graph :FullGraph):
+    def __init__(self, graph :FullGraph) -> None:
+        # TODO edge and root index
+        # TODO extract features from edges and roots
+        # TODO recompute costs
         raise NotImplementedError()
+
+    def root_cost(self, entry :LexiconEntry) -> float:
+        raise NotImplementedError()
+
+    def edge_cost(self, edge :GraphEdge) -> float:
+        raise NotImplementedError()
+
+    def recompute_costs(self) -> None:
+        raise NotImplementedError()
+
+    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+        raise NotImplementedError()
+
+
+class ModelSuite:
+    def __init__(self, graph :FullGraph, rule_domsizes :Dict[Rule, int])\
+                -> None:
+        self.graph = graph
+        self.root_model = AlergiaRootModel(list(graph.nodes_iter()))
+        self.edge_model = BernoulliEdgeModel(list(graph.iter_edges()),
+                                             rule_domsizes)
+        # TODO feature model -- initially without
+        self.reset()
+
+    def cost_of_change(self, edges_to_add :List[GraphEdge],
+                       edges_to_delete :List[GraphEdge]) -> float:
+        result = 0.0
+        for edge in edges_to_add:
+            result += self.edge_model.edge_cost(edge)
+            result -= self.root_model.root_cost(edge.target)
+        for edge in edges_to_delete:
+            result -= self.edge_model.edge_cost(edge)
+            result += self.root_model.root_cost(edge.target)
+        return result
+
+    def apply_change(self, edges_to_add :List[GraphEdge],
+                     edges_to_delete :List[GraphEdge]) -> None:
+        self._cost += self.cost_of_change(edges_to_add, edges_to_delete)
+
+    def iter_rules(self) -> Iterable[Rule]:
+        return self.edge_model.rule_domsizes.keys()
+        
+    def cost(self) -> float:
+        return self._cost
+
+    def reset(self) -> None:
+        self._cost = sum(self.root_model.root_cost(entry)\
+                        for entry in self.graph.nodes_iter()) +\
+                    self.edge_model.null_cost()
+
+    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+        self.edge_model.fit_to_sample(sample)
+        # TODO fit the feature model
+
+    def fit_to_branching(self, branching :Branching) -> None:
+        self.reset()
+        self.apply_change(sum(branching.edges_by_rule.values(), []), [])
 
 
 # TODO this class is deprecated

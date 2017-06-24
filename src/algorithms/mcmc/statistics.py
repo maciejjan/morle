@@ -108,7 +108,7 @@ class IterationStatistic(MCMCStatistic):
     def value(self, iter_num :int) -> float:
         if iter_num % self.sampler.iter_stat_interval != 0:
             raise KeyError(iter_num)
-        return self.values[iter_num // self.sampler.iter_stat_interval]
+        return self.values[iter_num // self.sampler.iter_stat_interval-1]
 
 
 class CostAtIterationStatistic(IterationStatistic):

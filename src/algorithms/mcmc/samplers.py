@@ -4,7 +4,8 @@ from algorithms.mcmc.statistics import \
     RuleStatistic, UnorderedWordPairStatistic
 from datastruct.lexicon import LexiconEntry
 from datastruct.graph import GraphEdge, Branching, FullGraph
-from models.generic import Model
+# from models.generic import Model
+from models.neural import ModelSuite
 from utils.files import open_to_write, write_line
 import shared
 
@@ -23,7 +24,7 @@ class ImpossibleMoveException(Exception):
 # TODO monitor the number of moves from each variant and their acceptance rates!
 class MCMCGraphSampler:
     def __init__(self, full_graph :FullGraph, 
-                       model :Model, 
+                       model :ModelSuite,
                        warmup_iter :int = 1000,
                        sampling_iter :int = 100000,
                        iter_stat_interval :int = 1) -> None:
@@ -47,7 +48,7 @@ class MCMCGraphSampler:
             key = (min(source, target), max(source, target))
             self.unordered_word_pair_index.add(key)
         self.rule_index = Index()
-        for rule in self.model.rule_features:
+        for rule in self.model.iter_rules():
             self.rule_index.add(rule)
     
     def add_stat(self, name: str, stat :MCMCStatistic) -> None:
@@ -274,9 +275,9 @@ class MCMCGraphSampler:
                 stat_names.append(stat_name)
                 stats.append(stat)
         with open_to_write(filename) as fp:
-            write_line(fp, ('rule', 'domsize') + tuple(stat_names))
+            write_line(fp, ('rule',) + tuple(stat_names))
             for rule in self.rule_index:
-                write_line(fp, (str(rule), self.model.rule_features[rule][0].trials) +\
+                write_line(fp, (str(rule),) +\
                                tuple([stat.value(rule) for stat in stats]))
 
     def save_wordpair_stats(self, filename):
