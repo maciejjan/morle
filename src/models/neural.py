@@ -88,6 +88,10 @@ class EdgeModel:
         'Cost of a graph without any edges.'
         raise NotImplementedError()
 
+    def rule_cost(self, rule :Rule) -> float:
+        'Cost of having a rule in the model.'
+        raise NotImplementedError()
+
     def recompute_costs(self) -> None:
         raise NotImplementedError()
 
@@ -102,11 +106,15 @@ class BernoulliEdgeModel:
         self.fit_to_sample(list((edge, 1.0) for edge in edges))
 
     def edge_cost(self, edge :GraphEdge) -> float:
-        return self.rule_cost[edge.rule]
+        return self._rule_appl_cost[edge.rule]
 
     def null_cost(self) -> float:
         'Cost of a graph without any edges.'
         return self._null_cost
+
+    def rule_cost(self, rule :Rule) -> float:
+        'Cost of having a rule in the model.'
+        return -self.rule_domsizes[rule] * math.log(1-self.rule_prob[rule])
 
     def recompute_costs(self) -> None:
         # no edge costs are cached, because they are readily obtained
@@ -117,12 +125,13 @@ class BernoulliEdgeModel:
         rule_freq = { rule: 0.0 for rule in self.rule_domsizes }
         for edge, edge_freq in sample:
             rule_freq[edge.rule] += edge_freq
-        self.rule_cost, self._null_cost = {}, 0.0
+        self._rule_appl_cost, self.rule_prob, self._null_cost = {}, {}, 0.0
         for rule in self.rule_domsizes:
             # 0.1 is added to account for a non-uniform prior Beta(1.1, 1.1)
             # (goal: excluding the extreme values 0.0 and 1.0)
             prob = (rule_freq[rule] + 0.1) / (self.rule_domsizes[rule] + 0.2)
-            self.rule_cost[rule] = -math.log(prob) + math.log(1-prob)
+            self.rule_prob[rule] = prob
+            self._rule_appl_cost[rule] = -math.log(prob) + math.log(1-prob)
             self._null_cost -= math.log(1-prob)
 
 
@@ -155,16 +164,68 @@ class NeuralFeatureModel:
         raise NotImplementedError()
 
     def root_cost(self, entry :LexiconEntry) -> float:
-        raise NotImplementedError()
+        return float(self.costs[self.word_idx[entry]])
 
     def edge_cost(self, edge :GraphEdge) -> float:
-        raise NotImplementedError()
+        return float(self.costs[self.edge_idx[edge]])
 
     def recompute_costs(self) -> None:
         raise NotImplementedError()
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
         raise NotImplementedError()
+
+    def _prepare_data(self, graph :FullGraph):
+        self.ngram_features = select_ngram_features(lexicon.entries())
+        ngram_features_hash = {}
+        for i, ngram in enumerate(ngram_features):
+            ngram_features_hash[ngram] = i
+        self.word_idx = { entry : idx for idx, entry in enumerate(graph.nodes_iter()) }
+        self.edge_idx = { edge : idx for idx, edge in \
+                                enumerate(graph.iter_edges(), len(word_idx)) }
+        self.rule_idx = { rule : idx for idx, rule in \
+                                enumerate(set(edge.rule for edge in edge_idx), 1) }
+        vector_dim = shared.config['Features'].getint('word_vec_dim')
+        sample_size = len(self.word_idx) + len(self.edge_idx)
+        num_features = len(ngram_features) +\
+                       shared.config['Features'].getint('word_vec_dim')
+        self.X_attr = np.zeros((sample_size, num_features))
+        self.X_rule = np.empty(sample_size)
+        self.y = np.empty((sample_size, vector_dim))
+        for entry, idx in self.word_idx.items():
+            for ngram in _extract_n_grams(entry.word + entry.tag):
+                if ngram in ngram_features_hash:
+                    self.X_attr[idx, ngram_features_hash[ngram]] = 1
+            self.X_rule[idx] = 0
+            self.y[idx] = entry.vec
+        for edge, idx in self.edge_idx.items():
+            for ngram in extract_n_grams(edge.source.word + edge.source.tag):
+                if ngram in ngram_features_hash:
+                    self.X_attr[idx, ngram_features_hash[ngram]] = 1
+            self.X_attr[idx, len(ngram_features_hash):] = edge.source.vec
+            self.X_rule[idx] = rule_idx[edge.rule]
+            self.y[idx] = edge.target.vec
+
+    def _compile_model(self) -> None:
+        vector_dim = shared.config['Features'].getint('word_vec_dim')
+        num_rules = len(self.rule_idx)
+        num_features = len(self.ngram_features) + vector_dim
+        input_attr = Input(shape=(num_features,), name='input_attr')
+        dense_attr = Dense(100, activation='softplus', name='dense_attr')\
+                     (input_attr)
+        input_rule = Input(shape=(1,), name='input_rule')
+        rule_emb = Embedding(input_dim=num_rules, output_dim=100,\
+                             input_length=1)(input_rule)
+        rule_emb_fl = Flatten(name='rule_emb_fl')(rule_emb)
+        concat = keras.layers.concatenate([dense_attr, rule_emb_fl])
+        output = Dense(vector_dim, activation='linear', name='dense')(concat)
+
+        self.model = Model(inputs=[input_attr, input_rule], outputs=[output])
+        self.model.compile(optimizer='adam', loss='mse')
+
+
+class GaussianFeatureModel(FeatureModel):
+    pass # TODO
 
 
 class ModelSuite:
@@ -191,6 +252,9 @@ class ModelSuite:
     def apply_change(self, edges_to_add :List[GraphEdge],
                      edges_to_delete :List[GraphEdge]) -> None:
         self._cost += self.cost_of_change(edges_to_add, edges_to_delete)
+
+    def rule_cost(self, rule :Rule) -> float:
+        return self.edge_model.rule_cost(rule)
 
     def iter_rules(self) -> Iterable[Rule]:
         return self.edge_model.rule_domsizes.keys()
