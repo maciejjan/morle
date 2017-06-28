@@ -158,6 +158,9 @@ class FeatureModel:
 
 class NeuralFeatureModel:
     def __init__(self, graph :FullGraph) -> None:
+        self._prepare_data(graph)
+        self._compile_model()
+        self.recompute_costs()
         # TODO edge and root index
         # TODO extract features from edges and roots
         # TODO recompute costs
@@ -235,7 +238,8 @@ class ModelSuite:
         self.root_model = AlergiaRootModel(list(graph.nodes_iter()))
         self.edge_model = BernoulliEdgeModel(list(graph.iter_edges()),
                                              rule_domsizes)
-        # TODO feature model -- initially without
+        if shared.config['Features'].getfloat('word_vec_weight') > 0:
+            self.feature_model = NeuralFeatureModel(graph)
         self.reset()
 
     def cost_of_change(self, edges_to_add :List[GraphEdge],
