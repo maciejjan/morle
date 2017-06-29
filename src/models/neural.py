@@ -47,7 +47,7 @@ class RootModel:
         raise NotImplementedError()
 
 
-class AlergiaRootModel:
+class AlergiaRootModel(RootModel):
     def __init__(self, entries :List[LexiconEntry]) -> None:
         word_seqs, tag_seqs = [], []
         for entry in entries:
@@ -99,7 +99,7 @@ class EdgeModel:
         raise NotImplementedError()
 
 
-class BernoulliEdgeModel:
+class BernoulliEdgeModel(EdgeModel):
     def __init__(self, edges :List[GraphEdge], rule_domsizes :Dict[Rule, int])\
                 -> None:
         self.rule_domsizes = rule_domsizes
@@ -135,7 +135,7 @@ class BernoulliEdgeModel:
             self._null_cost -= math.log(1-prob)
 
 
-class NeuralEdgeModel:
+class NeuralEdgeModel(EdgeModel):
     pass
 
 
@@ -156,15 +156,13 @@ class FeatureModel:
         raise NotImplementedError()
 
 
-class NeuralFeatureModel:
+class NeuralFeatureModel(FeatureModel):
     def __init__(self, graph :FullGraph) -> None:
         self._prepare_data(graph)
         self._compile_model()
+        self.model.fit([self.X_attr, self.X_rule], self.y, epochs=5,
+                       batch_size=1000, verbose=1)
         self.recompute_costs()
-        # TODO edge and root index
-        # TODO extract features from edges and roots
-        # TODO recompute costs
-        raise NotImplementedError()
 
     def root_cost(self, entry :LexiconEntry) -> float:
         return float(self.costs[self.word_idx[entry]])
@@ -173,7 +171,11 @@ class NeuralFeatureModel:
         return float(self.costs[self.edge_idx[edge]])
 
     def recompute_costs(self) -> None:
-        raise NotImplementedError()
+        self.y_pred = self.model.predict([self.X_attr, self.X_rule])
+        self._fit_error()
+        error = self.y - self.y_pred
+        return -multivariate_normal.logpdf(error, np.zeros(y_true.shape[1]),
+                                           self.error_cov)
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
         raise NotImplementedError()
@@ -224,7 +226,12 @@ class NeuralFeatureModel:
         output = Dense(vector_dim, activation='linear', name='dense')(concat)
 
         self.model = Model(inputs=[input_attr, input_rule], outputs=[output])
-        self.model.compile(optimizer='adam', loss='mse')
+        self.model.compile(optimizer='adam', loss='cosine_similarity')
+
+    def _fit_error(self):
+        n = self.y.shape[0]
+        error = self.y - self.y_pred
+        self.error_cov = np.dot(error.T, error)/n
 
 
 class GaussianFeatureModel(FeatureModel):
@@ -238,6 +245,7 @@ class ModelSuite:
         self.root_model = AlergiaRootModel(list(graph.nodes_iter()))
         self.edge_model = BernoulliEdgeModel(list(graph.iter_edges()),
                                              rule_domsizes)
+        self.feature_model = None
         if shared.config['Features'].getfloat('word_vec_weight') > 0:
             self.feature_model = NeuralFeatureModel(graph)
         self.reset()
@@ -248,9 +256,15 @@ class ModelSuite:
         for edge in edges_to_add:
             result += self.edge_model.edge_cost(edge)
             result -= self.root_model.root_cost(edge.target)
+            if self.feature_model is not None:
+                result += self.feature_model.edge_cost(edge)
+                result -= self.feature_model.root_cost(edge.target)
         for edge in edges_to_delete:
             result -= self.edge_model.edge_cost(edge)
             result += self.root_model.root_cost(edge.target)
+            if self.feature_model is not None:
+                result -= self.feature_model.edge_cost(edge)
+                result += self.feature_model.root_cost(edge.target)
         return result
 
     def apply_change(self, edges_to_add :List[GraphEdge],
@@ -270,6 +284,7 @@ class ModelSuite:
         self._cost = sum(self.root_model.root_cost(entry)\
                         for entry in self.graph.nodes_iter()) +\
                     self.edge_model.null_cost()
+        # TODO feature model
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
         self.edge_model.fit_to_sample(sample)
