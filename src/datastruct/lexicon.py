@@ -113,6 +113,8 @@ class LexiconEntry:
                                           .getfloat('word_vec_dim'):
                 raise Exception("%s dim=%d" %\
                                 (self.literal, self.vec.shape[0]))
+            if shared.config['Features'].getboolean('normalize_vec'):
+                self.vec = self.vec / np.sqrt(np.dot(self.vec, self.vec))
     def __lt__(self, other) -> bool:
         if not isinstance(other, LexiconEntry):
             raise TypeError('Expected LexiconEntry, got %s', type(other))

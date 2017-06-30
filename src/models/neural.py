@@ -3,6 +3,7 @@ from datastruct.lexicon import LexiconEntry
 from datastruct.graph import GraphEdge, FullGraph, Branching
 from datastruct.rules import Rule
 from models.generic import Model
+from utils.files import open_to_write, write_line
 import shared
 
 from collections import defaultdict
@@ -10,6 +11,7 @@ import hfst
 import math
 import numpy as np
 from operator import itemgetter
+from scipy.stats import multivariate_normal
 from typing import Dict, Iterable, List, Tuple
 import sys
 
@@ -19,7 +21,7 @@ from keras.models import Model
 
 
 MAX_NGRAM_LENGTH = 5
-MAX_NUM_NGRAMS = 300
+MAX_NUM_NGRAMS = 50
 MAX_NEGATIVE_EXAMPLES = 1000000
 
 # TODO currently: model AND dataset as one class; separate in the future
@@ -160,9 +162,10 @@ class NeuralFeatureModel(FeatureModel):
     def __init__(self, graph :FullGraph) -> None:
         self._prepare_data(graph)
         self._compile_model()
-        self.model.fit([self.X_attr, self.X_rule], self.y, epochs=5,
+        self.model.fit([self.X_attr, self.X_rule], self.y, epochs=10,
                        batch_size=1000, verbose=1)
         self.recompute_costs()
+        self.save_costs_to_file('costs.txt')
 
     def root_cost(self, entry :LexiconEntry) -> float:
         return float(self.costs[self.word_idx[entry]])
@@ -174,46 +177,57 @@ class NeuralFeatureModel(FeatureModel):
         self.y_pred = self.model.predict([self.X_attr, self.X_rule])
         self._fit_error()
         error = self.y - self.y_pred
-        return -multivariate_normal.logpdf(error, np.zeros(y_true.shape[1]),
-                                           self.error_cov)
+        self.costs = \
+            -multivariate_normal.logpdf(error, np.zeros(self.y.shape[1]),
+                                        self.error_cov)
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
         raise NotImplementedError()
 
+    def save_costs_to_file(self, filename :str) -> None:
+        with open_to_write(filename) as fp:
+            for entry, idx in sorted(self.word_idx.items(), key=itemgetter(1)):
+                write_line(fp, (str(entry), self.root_cost(entry)))
+            for edge, idx in sorted(self.edge_idx.items(), key=itemgetter(1)):
+                edge_cost = self.edge_cost(edge)
+                edge_gain = edge_cost - self.root_cost(edge.target)
+                write_line(fp, (str(edge.source), str(edge.target),
+                                str(edge.rule), edge_cost, edge_gain))
+
     def _prepare_data(self, graph :FullGraph):
-        self.ngram_features = select_ngram_features(lexicon.entries())
+        self.ngram_features = self._select_ngram_features(graph.nodes_iter())
         ngram_features_hash = {}
-        for i, ngram in enumerate(ngram_features):
+        for i, ngram in enumerate(self.ngram_features):
             ngram_features_hash[ngram] = i
         self.word_idx = { entry : idx for idx, entry in enumerate(graph.nodes_iter()) }
         self.edge_idx = { edge : idx for idx, edge in \
-                                enumerate(graph.iter_edges(), len(word_idx)) }
+                                enumerate(graph.iter_edges(), len(self.word_idx)) }
         self.rule_idx = { rule : idx for idx, rule in \
-                                enumerate(set(edge.rule for edge in edge_idx), 1) }
+                                enumerate(set(edge.rule for edge in self.edge_idx), 1) }
         vector_dim = shared.config['Features'].getint('word_vec_dim')
         sample_size = len(self.word_idx) + len(self.edge_idx)
-        num_features = len(ngram_features) +\
+        num_features = len(self.ngram_features) +\
                        shared.config['Features'].getint('word_vec_dim')
         self.X_attr = np.zeros((sample_size, num_features))
         self.X_rule = np.empty(sample_size)
         self.y = np.empty((sample_size, vector_dim))
         for entry, idx in self.word_idx.items():
-            for ngram in _extract_n_grams(entry.word + entry.tag):
+            for ngram in self._extract_n_grams(entry.word + entry.tag):
                 if ngram in ngram_features_hash:
                     self.X_attr[idx, ngram_features_hash[ngram]] = 1
             self.X_rule[idx] = 0
             self.y[idx] = entry.vec
         for edge, idx in self.edge_idx.items():
-            for ngram in extract_n_grams(edge.source.word + edge.source.tag):
+            for ngram in self._extract_n_grams(edge.source.word + edge.source.tag):
                 if ngram in ngram_features_hash:
                     self.X_attr[idx, ngram_features_hash[ngram]] = 1
             self.X_attr[idx, len(ngram_features_hash):] = edge.source.vec
-            self.X_rule[idx] = rule_idx[edge.rule]
+            self.X_rule[idx] = self.rule_idx[edge.rule]
             self.y[idx] = edge.target.vec
 
     def _compile_model(self) -> None:
         vector_dim = shared.config['Features'].getint('word_vec_dim')
-        num_rules = len(self.rule_idx)
+        num_rules = len(self.rule_idx)+1
         num_features = len(self.ngram_features) + vector_dim
         input_attr = Input(shape=(num_features,), name='input_attr')
         dense_attr = Dense(100, activation='softplus', name='dense_attr')\
@@ -226,12 +240,32 @@ class NeuralFeatureModel(FeatureModel):
         output = Dense(vector_dim, activation='linear', name='dense')(concat)
 
         self.model = Model(inputs=[input_attr, input_rule], outputs=[output])
-        self.model.compile(optimizer='adam', loss='cosine_similarity')
+        self.model.compile(optimizer='adam', loss='cosine_proximity')
 
     def _fit_error(self):
         n = self.y.shape[0]
         error = self.y - self.y_pred
         self.error_cov = np.dot(error.T, error)/n
+
+    def _select_ngram_features(self, entries :Iterable[LexiconEntry]) -> List[str]:
+        # count n-gram frequencies
+        ngram_freqs = defaultdict(lambda: 0)
+        for entry in entries:
+            for ngram in self._extract_n_grams(entry.word + entry.tag):
+                ngram_freqs[ngram] += 1
+        # select most common n-grams
+        ngram_features = \
+            list(map(itemgetter(0), 
+                     sorted(ngram_freqs.items(), 
+                            reverse=True, key=itemgetter(1))))[:MAX_NUM_NGRAMS]
+        return ngram_features
+
+    def _extract_n_grams(self, word :Iterable[str]) -> Iterable[Iterable[str]]:
+        result = []
+        max_n = min(MAX_NGRAM_LENGTH, len(word))+1
+        result.extend('^'+''.join(word[:i]) for i in range(1, max_n))
+        result.extend(''.join(word[-i:])+'$' for i in range(1, max_n))
+        return result
 
 
 class GaussianFeatureModel(FeatureModel):
@@ -316,7 +350,7 @@ class NeuralModel(Model):
         for edge, prob in edge_freq:
             y[self.edge_idx[edge]] = prob
         self.network.fit([self.X_attr, self.X_rule], y, epochs=5,\
-                         batch_size=1000, verbose=1)
+                         batch_size=100, verbose=1)
 
     # TODO rename -> recompute_edge_costs
     def recompute_edge_prob(self) -> None:
