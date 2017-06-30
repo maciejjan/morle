@@ -181,7 +181,7 @@ class Lexicon:
                         ' '.join(shared.multichar_symbols+list(tags)) + '\n\n')
             lexfp.write('LEXICON Root\n')
             for entry in self.entries():
-                lexfp.write('\t' + entry.symstr + ' # ;\n')
+                lexfp.write('\t' + self._lexc_escape(entry.symstr) + ' # ;\n')
         transducer = hfst.compile_lexc_file(full_path(lexc_file))
         remove_file(lexc_file)
         return transducer
@@ -203,5 +203,9 @@ class Lexicon:
 #                 raise e
                 logging.getLogger('main').warning('ignoring %s: %s' %\
                                                   (row[0], str(e)))
+
+    def _lexc_escape(self, string :str) -> str:
+        '''Escape a string for correct rendering in a LEXC file.'''
+        return string.replace('0', '%0')
 
 
