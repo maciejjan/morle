@@ -337,8 +337,8 @@ class ModelSuite:
                                              rule_domsizes)
         self.feature_model = None
         if shared.config['Features'].getfloat('word_vec_weight') > 0:
-            self.feature_model = NeuralFeatureModel(graph)
-#             self.feature_model = GaussianFeatureModel(graph)
+#             self.feature_model = NeuralFeatureModel(graph)
+            self.feature_model = GaussianFeatureModel(graph)
         self.reset()
 
     def cost_of_change(self, edges_to_add :List[GraphEdge],
