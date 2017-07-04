@@ -38,13 +38,14 @@ def hardem(full_graph :FullGraph, model :PointModel) -> None:
         logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
 
 
-def softem(full_graph :FullGraph, model :PointModel) -> None:
+def softem(full_graph :FullGraph, model :ModelSuite) -> None:
     iter_num = 0
-    model.recompute_root_costs(full_graph.nodes_iter())
+#     model.recompute_root_costs(full_graph.nodes_iter())
+    model.recompute_costs()
     while iter_num < shared.config['fit'].getint('iterations'):
         iter_num += 1
         logging.getLogger('main').info('Iteration %d' % iter_num)
-        model.recompute_edge_costs(full_graph.iter_edges())
+        model.recompute_costs()
 
         # expectation step
         sampler = MCMCGraphSampler(full_graph, model,
@@ -63,8 +64,8 @@ def softem(full_graph :FullGraph, model :PointModel) -> None:
 
         logging.getLogger('main').info('cost = %f' %\
                 sampler.stats['exp_cost'].value())
-        logging.getLogger('main').debug('roots_cost = %f' % model.roots_cost)
-        logging.getLogger('main').debug('rules_cost = %f' % model.rules_cost)
-        logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
+#         logging.getLogger('main').debug('roots_cost = %f' % model.roots_cost)
+#         logging.getLogger('main').debug('rules_cost = %f' % model.rules_cost)
+#         logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
 
 

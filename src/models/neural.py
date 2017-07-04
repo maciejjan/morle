@@ -182,7 +182,16 @@ class NeuralFeatureModel(FeatureModel):
                                         self.error_cov)
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
-        raise NotImplementedError()
+        weights = np.empty(self.y.shape)
+        root_weights = { entry: 1.0 for entry in self.word_idx }
+        for edge, weight in sample:
+            weights[self.edge_idx[edge]] = weight
+            root_weigths[edge.target] -= weight
+        for entry, weight in root_weights.items():
+            weights[self.word_idx[entry]] = weight
+        self.model.fit([self.X_attr, self.X_rule], self.y, 
+                       epochs=10, sample_weight=weights,
+                       batch_size=1000, verbose=1)
 
     def save_costs_to_file(self, filename :str) -> None:
         with open_to_write(filename) as fp:
@@ -314,6 +323,16 @@ class GaussianFeatureModel(FeatureModel):
                                             np.diag(self.vars[rule]))
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+        sample_by_rule = {}
+        root_weight = { entry: 1.0 for entry in self.roots }
+        for edge, weight in sample:
+            if edge.rule not in sample_by_rule:
+                sample_by_rule[edge.rule] = []
+            sample_by_rule.append((edge, weight))
+            root_weight[edge.target] -= weight
+        # TODO fit the matrix of root vectors
+        # TODO fit the matrix for each rule
+        # TODO also index and matrices? -- do not recompute everything every time!
         raise NotImplementedError()
 
     def save_costs_to_file(self, filename :str) -> None:
@@ -337,33 +356,42 @@ class ModelSuite:
                                              rule_domsizes)
         self.feature_model = None
         if shared.config['Features'].getfloat('word_vec_weight') > 0:
-#             self.feature_model = NeuralFeatureModel(graph)
-            self.feature_model = GaussianFeatureModel(graph)
+            self.feature_model = NeuralFeatureModel(graph)
+#             self.feature_model = GaussianFeatureModel(graph)
         self.reset()
 
     def cost_of_change(self, edges_to_add :List[GraphEdge],
                        edges_to_delete :List[GraphEdge]) -> float:
         result = 0.0
         for edge in edges_to_add:
-            result += self.edge_model.edge_cost(edge)
-            result -= self.root_model.root_cost(edge.target)
-            if self.feature_model is not None:
-                result += self.feature_model.edge_cost(edge)
-                result -= self.feature_model.root_cost(edge.target)
+            result += self.edge_cost(edge) - self.root_cost(edge.target)
         for edge in edges_to_delete:
-            result -= self.edge_model.edge_cost(edge)
-            result += self.root_model.root_cost(edge.target)
-            if self.feature_model is not None:
-                result -= self.feature_model.edge_cost(edge)
-                result += self.feature_model.root_cost(edge.target)
+            result -= self.edge_cost(edge) - self.root_cost(edge.target)
         return result
 
     def apply_change(self, edges_to_add :List[GraphEdge],
                      edges_to_delete :List[GraphEdge]) -> None:
         self._cost += self.cost_of_change(edges_to_add, edges_to_delete)
 
+    def root_cost(self, entry :LexiconEntry) -> float:
+        result = self.root_model.root_cost(entry)
+        if self.feature_model is not None:
+            result += self.feature_model.root_cost(entry)
+        return result
+
     def rule_cost(self, rule :Rule) -> float:
         return self.edge_model.rule_cost(rule)
+
+    def edge_cost(self, edge :GraphEdge) -> float:
+        result = self.edge_model.edge_cost(edge)
+        if self.feature_model is not None:
+            result += self.feature_model.edge_cost(edge)
+        return result
+
+    def recompute_costs(self) -> None:
+        self.edge_model.recompute_costs()
+        if self.feature_model is not None:
+            self.feature_model.recompute_costs()
 
     def iter_rules(self) -> Iterable[Rule]:
         return self.edge_model.rule_domsizes.keys()
@@ -372,18 +400,33 @@ class ModelSuite:
         return self._cost
 
     def reset(self) -> None:
-        self._cost = sum(self.root_model.root_cost(entry)\
+        self._cost = sum(self.root_cost(entry)\
                         for entry in self.graph.nodes_iter()) +\
                     self.edge_model.null_cost()
-        # TODO feature model
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
         self.edge_model.fit_to_sample(sample)
-        # TODO fit the feature model
+        if self.feature_model is not None:
+            self.feature_model.fit_to_sample(sample)
 
     def fit_to_branching(self, branching :Branching) -> None:
         self.reset()
         self.apply_change(sum(branching.edges_by_rule.values(), []), [])
+
+    def save(self) -> None:
+        # to save:
+        # - root model
+        #   - ALERGIA -- as HFST automaton
+        # - edge model
+        #   - Bernoulli: rule productivities and domsizes
+        # - (maybe) feature model
+        #   - the Keras model
+        #   - n-gram features
+        raise NotImplementedError()
+
+    @staticmethod
+    def load() -> ModelSuite:
+        raise NotImplementedError()
 
 
 # TODO this class is deprecated
