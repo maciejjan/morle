@@ -41,7 +41,7 @@ def hardem(full_graph :FullGraph, model :PointModel) -> None:
 def softem(full_graph :FullGraph, model :ModelSuite) -> None:
     iter_num = 0
 #     model.recompute_root_costs(full_graph.nodes_iter())
-    model.recompute_costs()
+#     model.recompute_costs()
     while iter_num < shared.config['fit'].getint('iterations'):
         iter_num += 1
         logging.getLogger('main').info('Iteration %d' % iter_num)
@@ -60,7 +60,7 @@ def softem(full_graph :FullGraph, model :ModelSuite) -> None:
         sample = list((edge, sampler.stats['exp_edge_freq'].value(edge))\
                       for edge in sampler.edge_index)
         model.fit_to_sample(sample)
-        model.save_rules_to_file(shared.filenames['rules-fit'])
+#         model.save_rules_to_file(shared.filenames['rules-fit'])
 
         logging.getLogger('main').info('cost = %f' %\
                 sampler.stats['exp_cost'].value())
