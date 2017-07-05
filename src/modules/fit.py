@@ -2,7 +2,8 @@ import algorithms.em
 from datastruct.graph import FullGraph
 from datastruct.lexicon import Lexicon
 from datastruct.rules import Rule
-from models.point import PointModel
+# from models.point import PointModel
+from models.neural import ModelSuite
 from utils.files import file_exists, read_tsv_file
 import shared
 
@@ -38,11 +39,12 @@ def run() -> None:
 
     # initialize a PointModel
     logging.getLogger('main').info('Initializing the model...')
-    model = PointModel()
-    model.fit_rootdist(lexicon.entries())
-    model.fit_ruledist(rule for (rule, domsize) in rules)
-    for rule, domsize in rules:
-        model.add_rule(rule, domsize, freq=rule_freq[rule])
+    model = ModelSuite(full_graph, dict(rules))
+#     model = PointModel()
+#     model.fit_rootdist(lexicon.entries())
+#     model.fit_ruledist(rule for (rule, domsize) in rules)
+#     for rule, domsize in rules:
+#         model.add_rule(rule, domsize, freq=rule_freq[rule])
 
     algorithms.em.softem(full_graph, model)
 

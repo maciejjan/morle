@@ -182,13 +182,12 @@ class NeuralFeatureModel(FeatureModel):
                                         self.error_cov)
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
-        weights = np.empty(self.y.shape)
-        root_weights = { entry: 1.0 for entry in self.word_idx }
+        weights = np.empty(self.y.shape[0])
+        for idx in self.word_idx.values():
+            weights[idx] = 1.0
         for edge, weight in sample:
             weights[self.edge_idx[edge]] = weight
-            root_weigths[edge.target] -= weight
-        for entry, weight in root_weights.items():
-            weights[self.word_idx[entry]] = weight
+            weights[self.word_idx[edge.target]] -= weight
         self.model.fit([self.X_attr, self.X_rule], self.y, 
                        epochs=10, sample_weight=weights,
                        batch_size=1000, verbose=1)
@@ -348,7 +347,7 @@ class GaussianFeatureModel(FeatureModel):
         else:
             sum_weights = np.sum(weights)
             self.means[rule] = np.sum(weights * m.T, axis=1) / sum_weights
-            self.vars[rule] = np.diag(np.dot(weights * m.T, m) / sum_weights
+            self.vars[rule] = np.diag(np.dot(weights * m.T, m) / sum_weights)
 
 
 class ModelSuite:
@@ -429,7 +428,7 @@ class ModelSuite:
         raise NotImplementedError()
 
     @staticmethod
-    def load() -> ModelSuite:
+    def load() -> 'ModelSuite':
         raise NotImplementedError()
 
 

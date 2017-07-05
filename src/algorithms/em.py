@@ -3,6 +3,7 @@ from algorithms.mcmc.statistics import AcceptanceRateStatistic, \
 from algorithms.mcmc.samplers import MCMCGraphSampler
 from datastruct.graph import FullGraph
 from models.point import PointModel
+from models.neural import ModelSuite
 import shared
 
 import logging
