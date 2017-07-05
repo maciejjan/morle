@@ -279,61 +279,55 @@ class NeuralFeatureModel(FeatureModel):
 
 class GaussianFeatureModel(FeatureModel):
     def __init__(self, graph :FullGraph) -> None:
-        self.roots = list(graph.nodes_iter())
-        self.edges_by_rule = {}
+        roots = list(graph.nodes_iter())
+        edges_by_rule = {}
         for edge in graph.iter_edges():
             if edge.rule not in self.edges_by_rule:
                 self.edges_by_rule[edge.rule] = []
             self.edges_by_rule[edge.rule].append(edge)
+        # create attribute matrices and indices: roots and edges by rule
+        dim = shared.config['Features'].getint('word_vec_dim')
+        self.root_idx, self.edge_idx = {}, {}
+        self.attr_matrices = {}
+        self.attr_matrices['ROOT'] = np.empty((len(roots), dim))
+        for i, root in enumerate(roots):
+            self.attr_matrices['ROOT'][i,:] = root.vec
+            self.root_idx[root] = i
+        for rule, edges in edges_by_rule.items():
+            self.attr_matrices[rule] = np.empty((len(edges), dim))
+            for i, edge in enumerate(edges):
+                self.attr_matrices[rule][i,:] = \
+                    edge.target.vec - edge.source.vec
+                self.edge_idx[edge] = i
         # initial fit
         self.means, self.vars = {}, {}
-        dim = shared.config['Features'].getint('word_vec_dim')
-        m = np.empty((len(self.roots), dim))
-        for i, root in enumerate(self.roots):
-            m[i,:] = root.vec
-        self.means['ROOT'] = np.sum(m, axis=0) / m.shape[0]
-        self.vars['ROOT'] = np.diag(np.dot(m.T, m)) / m.shape[0]
-        for rule, edges in self.edges_by_rule.items():
-            m = np.empty((len(edges), dim))
-            for i, edge in enumerate(edges):
-                m[i,:] = edge.target.vec - edge.source.vec
-            self.means[rule] = np.sum(m, axis=0) / m.shape[0]
-            self.vars[rule] = np.diag(np.dot(m.T, m)) / m.shape[0]
+        for rule in self.attr_matrices:
+            self._fit_rule(rule)
         self.recompute_costs()
         self.save_costs_to_file('costs-gaussian.txt')
 
     def root_cost(self, entry :LexiconEntry) -> float:
-        return self._root_costs[entry]
+        return self.costs['ROOT'][self.root_idx[entry]]
 
     def edge_cost(self, edge :GraphEdge) -> float:
-        return self._edge_costs[edge]
+        return self.costs[edge.rule][self.edge_idx[edge]]
 
     def recompute_costs(self) -> None:
-        self._root_costs = {}
-        for entry in self.roots:
-            self._root_costs[entry] = -multivariate_normal.logpdf(\
-                                         entry.vec, self.means['ROOT'],
-                                         np.diag(self.vars['ROOT']))
-        self._edge_costs = {}
-        for rule, edges in self.edges_by_rule.items():
-            for edge in edges:
-                self._edge_costs[edge] = -multivariate_normal.logpdf(\
-                                            edge.target.vec - edge.source.vec,
-                                            self.means[rule],
-                                            np.diag(self.vars[rule]))
+        self.costs = {}
+        for rule, m in self.attr_matrices.items():
+            self.costs[rule] = -multivariate_normal.logpdf(\
+                                  m, self.means[rule], 
+                                  np.diag(self.vars[rule]))
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
-        sample_by_rule = {}
-        root_weight = { entry: 1.0 for entry in self.roots }
+        weights_by_rule = { rule : np.zeros(m.shape[0]) if rule != 'ROOT' \
+                                   else np.ones(m.shape[0]) \
+                            for rule, m in self.attr_matrices.items() }
         for edge, weight in sample:
-            if edge.rule not in sample_by_rule:
-                sample_by_rule[edge.rule] = []
-            sample_by_rule.append((edge, weight))
-            root_weight[edge.target] -= weight
-        # TODO fit the matrix of root vectors
-        # TODO fit the matrix for each rule
-        # TODO also index and matrices? -- do not recompute everything every time!
-        raise NotImplementedError()
+            weights_by_rule[rule][self.edge_idx[edge]] = weight
+            weights_by_rule['ROOT'][self.root_idx[edge.target]] -= weight
+        for rule, weights in weights_by_rule.items():
+            self._fit_rule(rule, weights=weights)
 
     def save_costs_to_file(self, filename :str) -> None:
         with open_to_write(filename) as fp:
@@ -345,6 +339,16 @@ class GaussianFeatureModel(FeatureModel):
                     edge_gain = edge_cost - self.root_cost(edge.target)
                     write_line(fp, (str(edge.source), str(edge.target),
                                     str(edge.rule), edge_cost, edge_gain))
+
+    def _fit_rule(self, rule, weights=None) -> None:
+        m = self.matrices[rule]
+        if weights is None:
+            self.means[rule] = np.sum(m, axis=0) / m.shape[0]
+            self.vars[rule] = np.diag(np.dot(m.T, m)) / m.shape[0]
+        else:
+            sum_weights = np.sum(weights)
+            self.means[rule] = np.sum(weights * m.T, axis=1) / sum_weights
+            self.vars[rule] = np.diag(np.dot(weights * m.T, m) / sum_weights
 
 
 class ModelSuite:
