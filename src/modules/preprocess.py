@@ -192,6 +192,9 @@ def build_graph_fstfastss(
     algorithms.fstfastss.build_fastss_cascade(lex_tr_file,
                                               max_word_len=max_word_len)
 
+    def _is_possible_edge(v1 :LexiconEntry, v2 :LexiconEntry) -> bool:
+        return v1.is_possible_edge_source() and v2.is_possible_edge_target()
+
     def _extract_candidate_edges(words :Iterable[str],
                                  output_fun :Callable[..., None],
                                  lexicon :Lexicon,
@@ -203,7 +206,7 @@ def build_graph_fstfastss(
                 results_for_v1 = []
                 for word_2 in simwords:
                     for v2 in lexicon.get_by_symstr(word_2):
-                        if v1 != v2:
+                        if v1 != v2 and _is_possible_edge(v1, v2):
                             rules = algorithms.align.extract_all_rules(v1, v2)
                             for rule in rules:
                                 results_for_v1.append((v2.literal, str(rule)))

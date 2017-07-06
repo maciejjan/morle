@@ -11,17 +11,17 @@ import logging
 from typing import Any, Dict, Callable, Iterable, List, Tuple, Union
 
 
-def get_wordlist_format() -> List[Callable[[Any], Any]]:
-    result = [str]  # type: List[Callable[[Any], Any]]
-    if shared.config['General'].getboolean('supervised'):
-        result.append(str)
-    if shared.config['Features'].getfloat('word_freq_weight') > 0:
-        result.append(int)
-    if shared.config['Features'].getfloat('word_vec_weight') > 0:
-        vector_sep = shared.format['vector_sep']
-        result.append(\
-            lambda x: np.array(list(map(float, x.split(vector_sep)))))
-    return result
+# def get_wordlist_format() -> List[Callable[[Any], Any]]:
+#     result = [str]  # type: List[Callable[[Any], Any]]
+#     if shared.config['General'].getboolean('supervised'):
+#         result.append(str)
+#     if shared.config['Features'].getfloat('word_freq_weight') > 0:
+#         result.append(int)
+#     if shared.config['Features'].getfloat('word_vec_weight') > 0:
+#         vector_sep = shared.format['vector_sep']
+#         result.append(\
+#             lambda x: np.array(list(map(float, x.split(vector_sep)))))
+#     return result
 
 
 def tokenize_word(string :str) -> Tuple[List[str], List[str], str]:
@@ -91,28 +91,39 @@ def unnormalize_word(literal :str) -> str:
 
 class LexiconEntry:
 
-    def __init__(self, word :str, freq :float = None,
-                 vec :np.ndarray = None) -> None:
-
-        self.literal = word
-        self.word, self.tag, self.disamb = tokenize_word(word)
+    # TODO do not retrieve config for every lexicon entry!
+    #      (strings have to be converted each time)
+    def __init__(self, *args) -> None:
+        # read arguments one by one
+        args = list(args)
+        self.literal = args.pop(0)
+        self.word, self.tag, self.disamb = tokenize_word(self.literal)
         self.word = normalize_seq(self.word)
         # string of printable symbols -- does not include disambiguation IDs
         self.symstr = ''.join(self.word + self.tag)
         self.normalized = ''.join(self.word + self.tag) +\
                           ((shared.format['word_disamb_sep'] + self.disamb) \
                            if self.disamb is not None else '')
+        if shared.config['General'].getboolean('use_edge_restrictions'):
+            edge_restrictions = args.pop(0)
+            self._is_possible_edge_source = ('L' in edge_restrictions)
+            self._is_possible_edge_target = ('R' in edge_restrictions)
+        else:
+            self._is_possible_edge_source = True
+            self._is_possible_edge_target = True
         if shared.config['Features'].getfloat('word_freq_weight') > 0:
-            self.freq = freq
+            self.freq = int(args.pop(0))
             self.logfreq = math.log(self.freq)
         if shared.config['Features'].getfloat('word_vec_weight') > 0:
-            self.vec = vec
+            vec_sep = shared.format['vector_sep']
+            self.vec = np.array(list(map(float, args.pop(0).split(vec_sep))))
             if self.vec is None:
                 raise Exception("%s vec=None" % (self.literal))
             if self.vec.shape[0] != shared.config['Features']\
                                           .getfloat('word_vec_dim'):
                 raise Exception("%s dim=%d" %\
                                 (self.literal, self.vec.shape[0]))
+
     def __lt__(self, other) -> bool:
         if not isinstance(other, LexiconEntry):
             raise TypeError('Expected LexiconEntry, got %s', type(other))
@@ -127,6 +138,12 @@ class LexiconEntry:
 
     def __hash__(self) -> int:
         return self.literal.__hash__()
+
+    def is_possible_edge_source(self) -> bool:
+        return self._is_possible_edge_source
+
+    def is_possible_edge_target(self) -> bool:
+        return self._is_possible_edge_target
     
     def to_fst(self) -> hfst.HfstTransducer:
         return hfst.fst(self.symstr)
@@ -178,7 +195,8 @@ class Lexicon:
                 tags.add(t)
         with open_to_write(lexc_file) as lexfp:
             lexfp.write('Multichar_Symbols ' + 
-                        ' '.join(shared.multichar_symbols+list(tags)) + '\n\n')
+                        ' '.join(self._lexc_escape(s) \
+                        for s in shared.multichar_symbols+list(tags)) + '\n\n')
             lexfp.write('LEXICON Root\n')
             for entry in self.entries():
                 lexfp.write('\t' + self._lexc_escape(entry.symstr) + ' # ;\n')
@@ -196,7 +214,8 @@ class Lexicon:
                 del self.items_by_symstr[item.symstr]
 
     def load_from_file(self, filename :str) -> None:
-        for row in read_tsv_file(filename, get_wordlist_format()):
+#         for row in read_tsv_file(filename, get_wordlist_format()):
+        for row in read_tsv_file(filename):
             try:
                 self.add(LexiconEntry(*row))
             except Exception as e:
@@ -206,6 +225,6 @@ class Lexicon:
 
     def _lexc_escape(self, string :str) -> str:
         '''Escape a string for correct rendering in a LEXC file.'''
-        return string.replace('0', '%0')
+        return re.sub('([0<>])', '%\\1', string)
 
 
