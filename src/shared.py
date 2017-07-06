@@ -67,7 +67,7 @@ format = {\
 
 patterns = {}   # type: Dict[str, str]
 patterns['symbol'] = '(?:[\w\-\.\']|\{[A-Z0-9]+\})'
-patterns['tag'] = '(?:<[A-Z0-9]+>)'
+patterns['tag'] = '(?:<[A-Z0-9*]+>)'
 patterns['disamb'] = '[0-9]+'
 patterns['word'] = '^(?P<word>%s+)(?P<tag>%s*)(?:%s(?P<disamb>%s))?$' %\
                           (patterns['symbol'], patterns['tag'], 
