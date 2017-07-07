@@ -275,6 +275,11 @@ class NeuralFeatureModel(FeatureModel):
         result.extend(''.join(word[-i:])+'$' for i in range(1, max_n))
         return result
 
+    def save(self, filename :str) -> None:
+        # needed for saving: rule, word and edge IDs
+        # if present -- save the network and n-gram features
+        raise NotImplementedError()
+
 
 class GaussianFeatureModel(FeatureModel):
     def __init__(self, graph :FullGraph) -> None:
@@ -417,15 +422,9 @@ class ModelSuite:
         self.apply_change(sum(branching.edges_by_rule.values(), []), [])
 
     def save(self) -> None:
-        # to save:
-        # - root model
-        #   - ALERGIA -- as HFST automaton
-        # - edge model
-        #   - Bernoulli: rule productivities and domsizes
-        # - (maybe) feature model
-        #   - the Keras model
-        #   - n-gram features
-        raise NotImplementedError()
+        self.root_model.save(shared.filenames['root-model'])
+        self.edge_model.save(shared.filenames['edge-model'])
+        self.feature_model.save(shared.filenames['feature-model'])
 
     @staticmethod
     def load() -> 'ModelSuite':
