@@ -26,26 +26,22 @@ MAX_NEGATIVE_EXAMPLES = 1000000
 
 # TODO currently: model AND dataset as one class; separate in the future
 
-# TODO integrate the root probabilities
-# TODO routines for running the sampler
-# - rules()
-# - cost()
-# - cost_of_change()
-# - apply_change()
-
 # TODO further ideas:
 # - take also n-grams of the target word -- useful for e.g. insertion rules
 # - take also n-grams around alternation spots
-
-# TODO initialization:
-# - root prob = alpha ** word_length - between 0.1 and 0.9
-# - edge prob = expit(log(rule freq)) - between 0.1 and 0.9
 
 class RootModel:
     def __init__(self, entries :Iterable[LexiconEntry]) -> None:
         raise NotImplementedError()
 
     def root_cost(self, entry :LexiconEntry) -> float:
+        raise NotImplementedError()
+
+    def save(self, filename :str) -> None:
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(filename :str) -> 'RootModel':
         raise NotImplementedError()
 
 
@@ -77,6 +73,13 @@ class AlergiaRootModel(RootModel):
     def root_cost(self, entry :LexiconEntry) -> float:
         return self.costs[entry]
 
+    def save(self, filename :str) -> None:
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(filename :str) -> 'AlergiaRootModel':
+        raise NotImplementedError()
+
 
 class EdgeModel:
     def __init__(self, edges :List[GraphEdge], rule_domsizes :Dict[Rule, int])\
@@ -98,6 +101,13 @@ class EdgeModel:
         raise NotImplementedError()
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+        raise NotImplementedError()
+
+    def save(self, filename :str) -> None:
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(filename :str) -> 'EdgeModel':
         raise NotImplementedError()
 
 
@@ -136,6 +146,13 @@ class BernoulliEdgeModel(EdgeModel):
             self._rule_appl_cost[rule] = -math.log(prob) + math.log(1-prob)
             self._null_cost -= math.log(1-prob)
 
+    def save(self, filename :str) -> None:
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(filename :str) -> 'BernoulliEdgeModel':
+        raise NotImplementedError()
+
 
 class NeuralEdgeModel(EdgeModel):
     pass
@@ -155,6 +172,13 @@ class FeatureModel:
         raise NotImplementedError()
 
     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+        raise NotImplementedError()
+
+    def save(self, filename :str) -> None:
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(filename :str) -> 'FeatureModel':
         raise NotImplementedError()
 
 
@@ -276,8 +300,13 @@ class NeuralFeatureModel(FeatureModel):
         return result
 
     def save(self, filename :str) -> None:
-        # needed for saving: rule, word and edge IDs
+        # needed for saving: rule IDs
+        # (word and edge IDs only needed for preparing the dataset)
         # if present -- save the network and n-gram features
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(filename :str) -> 'NeuralFeatureModel':
         raise NotImplementedError()
 
 
@@ -353,6 +382,15 @@ class GaussianFeatureModel(FeatureModel):
             sum_weights = np.sum(weights)
             self.means[rule] = np.sum(weights * m.T, axis=1) / sum_weights
             self.vars[rule] = np.diag(np.dot(weights * m.T, m) / sum_weights)
+
+    def save(self, filename :str) -> None:
+        # for each rule -- save mean and variance
+        # also -- save mean and variance of the ROOT "rule"
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(filename :str) -> 'GaussianFeatureModel':
+        raise NotImplementedError()
 
 
 class ModelSuite:
