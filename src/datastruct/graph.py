@@ -57,7 +57,7 @@ class EdgeSet:
         self.index[edge] = self.next_id
         self.next_id += 1
 
-    def getid(self, edge :GraphEdge) -> int:
+    def get_id(self, edge :GraphEdge) -> int:
         return self.index[edge]
 
     def save(self, filename :str) -> None:
