@@ -155,14 +155,14 @@ class Lexicon:
     def __len__(self) -> int:
         return len(self.items)
 
+    def __iter__(self) -> Iterable[LexiconEntry]:
+        return self.items.values()
+
     def keys(self) -> Iterable[str]:
         return self.items.keys()
 
     def symstrs(self) -> Iterable[str]:
         return self.items_by_symstr.keys()
-
-    def entries(self) -> Iterable[LexiconEntry]:
-        return self.items.values()
 
     def add(self, item :LexiconEntry) -> None:
         if str(item) in self.items:
@@ -175,14 +175,14 @@ class Lexicon:
     def to_fst(self) -> hfst.HfstTransducer:
         lexc_file = shared.filenames['lexicon-tr'] + '.lex'
         tags = set()
-        for entry in self.entries():
+        for entry in self:
             for t in entry.tag:
                 tags.add(t)
         with open_to_write(lexc_file) as lexfp:
             lexfp.write('Multichar_Symbols ' + 
                         ' '.join(shared.multichar_symbols+list(tags)) + '\n\n')
             lexfp.write('LEXICON Root\n')
-            for entry in self.entries():
+            for entry in self:
                 lexfp.write('\t' + self._lexc_escape(entry.symstr) + ' # ;\n')
         transducer = hfst.compile_lexc_file(full_path(lexc_file))
         remove_file(lexc_file)
@@ -210,6 +210,7 @@ class Lexicon:
                 logging.getLogger('main').warning('ignoring %s: %s' %\
                                                   (row[0], str(e)))
 
+    # TODO this should be a class method
     def _lexc_escape(self, string :str) -> str:
         '''Escape a string for correct rendering in a LEXC file.'''
         return string.replace('0', '%0')

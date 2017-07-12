@@ -9,6 +9,7 @@ from typing import Dict, Iterable, List, Set, Tuple
 
 
 
+# TODO rename: GraphEdge -> Edge
 class GraphEdge:
     def __init__(self, 
                  source :LexiconEntry,
@@ -31,6 +32,46 @@ class GraphEdge:
 
     def to_tuple(self) -> Tuple[LexiconEntry, LexiconEntry, Rule, Dict]:
         return (self.source, self.target, self.rule, self.attr)
+
+
+class EdgeSet:
+    '''Class responsible for reading/writing a list of edges from/to a file
+       and indexing (i.e. assigning IDs to) the edges.'''
+
+    def __init__(self) -> None:
+        self.items = []     # type: List[GraphEdge]
+        self.index = {}     # type: Dict[GraphEdge, int]
+        self.next_id = 1
+
+    def __iter__(self) -> Iterable[GraphEdge]:
+        return iter(self.items)
+
+    def __contains__(self, edge :GraphEdge) -> bool:
+        return edge in self.index
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def add(self, edge :GraphEdge) -> None:
+        self.items.append(edge)
+        self.index[edge] = self.next_id
+        self.next_id += 1
+
+    def getid(self, edge :GraphEdge) -> int:
+        return self.index[edge]
+
+    def save(self, filename :str) -> None:
+        with open_to_write(filename) as fp:
+            for edge in self.__iter__():
+                write_line(fp, edge.to_tuple())
+
+    @staticmethod
+    def load(filename :str, lexicon :Lexicon, rule_set :RuleSet) -> 'EdgeSet':
+        result = EdgeSet()
+        for source, target, rule in read_tsv_file(filename):
+            result.add(GraphEdge(lexicon[source], lexicon[target], 
+                                 rule_set[rule]))
+        return result
 
 
 class Graph(nx.MultiDiGraph):
@@ -105,38 +146,38 @@ class Branching(Graph):
 
 class FullGraph(Graph):
     # TODO immutable, loaded from file
-    def __init__(self, lexicon :Lexicon = None) -> None:
-
-        assert lexicon is not None
+    def __init__(self, lexicon :Lexicon, edge_set :EdgeSet) -> None:
         super().__init__()
-        self.edges_list = []
+#         self.edges_list = []
         self.lexicon = lexicon
+        self.edge_set = edge_set
 #         self.rules = {}       # type: Dict[str, Rule]
-        for entry in lexicon.entries():
-            self.add_node(entry)
+        for lexentry in lexicon:
+            self.add_node(lexentry)
+        for edge in edge_set:
+            self.add_edge(edge)
 
     def add_edge(self, edge :GraphEdge) -> None:
         super().add_edge(edge)
-        self.edges_list.append(edge)
 
-    def load_edges_from_file(self, filename :str) -> None:
-        starting_id = len(self.edges_list) + 1
-        rules = {}              # type: Dict[str, Rule]
-        for cur_id, (w1, w2, rule_str) in enumerate(read_tsv_file(filename),\
-                                                    starting_id):
-            v1, v2 = self.lexicon[w1], self.lexicon[w2]
-            if not rule_str in rules:
-                rules[rule_str] = Rule.from_string(rule_str)
-            rule = rules[rule_str]
-            edge = GraphEdge(v1, v2, rule, id=cur_id)
-            self.add_edge(edge)
+#     def load_edges_from_file(self, filename :str) -> None:
+#         starting_id = len(self.edges_list) + 1
+#         rules = {}              # type: Dict[str, Rule]
+#         for cur_id, (w1, w2, rule_str) in enumerate(read_tsv_file(filename),\
+#                                                     starting_id):
+#             v1, v2 = self.lexicon[w1], self.lexicon[w2]
+#             if not rule_str in rules:
+#                 rules[rule_str] = Rule.from_string(rule_str)
+#             rule = rules[rule_str]
+#             edge = GraphEdge(v1, v2, rule, id=cur_id)
+#             self.add_edge(edge)
 
-    def iter_edges(self) -> Iterable[GraphEdge]:
-        return iter(self.edges_list)
+#     def iter_edges(self) -> Iterable[GraphEdge]:
+#         return iter(self.edges_list)
 
     def random_edge(self) -> GraphEdge:
         # choose an edge with uniform probability
-        return random.choice(self.edges_list)
+        return random.choice(self.edge_set.items)
 
     def empty_branching(self) -> Branching:
         branching = Branching()
@@ -145,20 +186,27 @@ class FullGraph(Graph):
 
     def random_branching(self) -> Branching:
         # choose some edges randomly and compose a branching out of them
-        edge_indices = list(range(len(self.edges_list)))
-        random.shuffle(edge_indices)
-        edge_indices = edge_indices[:random.randrange(len(edge_indices))]
-
+        edges = list(iter(self.edge_set))
+        random.shuffle(edges)
         branching = self.empty_branching()
-        for idx in edge_indices:
-            edge = self.edges_list[idx]
-            if branching.is_edge_possible(edge):
+        for edge in edges:
+            if branching.is_edge_possible(edge) and random.random() < 0.5:
                 branching.add_edge(edge)
         return branching
+#         edge_ids = list(range(len(self.edge_set.items)))
+#         random.shuffle(edge_indices)
+#         edge_indices = edge_indices[:random.randrange(len(edge_indices))]
+# 
+#         branching = self.empty_branching()
+#         for idx in edge_indices:
+#             edge = self.edge_set.[idx]
+#             if branching.is_edge_possible(edge):
+#                 branching.add_edge(edge)
+#         return branching
 
     def optimal_branching(self, model :'PointModel') -> Branching:
         graph = nx.DiGraph()
-        for edge in self.edges_list:
+        for edge in self.edge_set:
             weight = model.root_cost(edge.target) - model.edge_cost(edge)
             if graph.has_edge(edge.source, edge.target):
                 if weight > graph[edge.source][edge.target]['weight']:
@@ -176,14 +224,16 @@ class FullGraph(Graph):
         return result
 
     def restriction_to_ruleset(self, ruleset :Set[Rule]) -> 'FullGraph':
+        # TODO
         result = FullGraph(self.lexicon)
         for edge in self.edges_list:
             if edge.rule in ruleset:
                 result.add_edge(edge)
         return result
 
-    def save_to_file(self, filename :str) -> None:
-        with open_to_write(filename) as fp:
-            for source, target, rule in self.edges_iter(keys=True):
-                write_line(fp, (source, target, rule))
+    # TODO deprecated -- replaced with EdgeSet.save() and Lexicon.save()
+#     def save_to_file(self, filename :str) -> None:
+#         with open_to_write(filename) as fp:
+#             for source, target, rule in self.edges_iter(keys=True):
+#                 write_line(fp, (source, target, rule))
 
