@@ -2,6 +2,7 @@ from datastruct.graph import GraphEdge
 from datastruct.lexicon import LexiconEntry
 from datastruct.rules import Rule
 
+import numpy as np
 from typing import Dict, Tuple
 
 class MCMCStatistic:
@@ -119,9 +120,9 @@ class CostAtIterationStatistic(IterationStatistic):
 
 class EdgeStatistic(MCMCStatistic):
     def reset(self) -> None:
-        # TODO use NumPy arrays as values, not lists!
-        self.values = [0] * len(self.sampler.edge_index)
-        self.last_modified = [0] * len(self.sampler.edge_index)
+        self.val = np.zeros(len(self.sampler.edge_set))
+        self.last_modified = np.zeros(len(self.sampler.edge_set),
+                                      dtype=np.int64)
     
     def update(self) -> None:
         raise NotImplementedError()
@@ -135,13 +136,16 @@ class EdgeStatistic(MCMCStatistic):
     def next_iter(self):
         pass
     
-    def value(self, edge :GraphEdge) -> float:
-        return self.values[self.sampler.edge_index[edge]]
+    def value(self) -> np.ndarray:
+        return self.val
+
+    def value_at(self, idx :int) -> float:
+        return float(self.val[idx])
 
 
 class EdgeFrequencyStatistic(EdgeStatistic):
     def update(self) -> None:
-        for edge in self.sampler.edge_index:
+        for edge in self.sampler.edge_set:
             if self.sampler.branching.has_edge(edge.source, edge.target, edge.rule):
                 # not really removing -- just accounting for the fact that
                 # the edge was present in the last graphs
@@ -152,15 +156,15 @@ class EdgeFrequencyStatistic(EdgeStatistic):
                 self.edge_added(edge)
 
     def edge_added(self, edge :GraphEdge) -> None:
-        idx = self.sampler.edge_index[edge]
-        self.values[idx] =\
-            self.values[idx] * self.last_modified[idx] / self.sampler.iter_num
+        idx = self.sampler.edge_set.get_id(edge)
+        self.val[idx] =\
+            self.val[idx] * self.last_modified[idx] / self.sampler.iter_num
         self.last_modified[idx] = self.sampler.iter_num
 
     def edge_removed(self, edge :GraphEdge) -> None:
-        idx = self.sampler.edge_index[edge]
-        self.values[idx] =\
-            (self.values[idx] * self.last_modified[idx] +\
+        idx = self.sampler.edge_set.get_id(edge)
+        self.val[idx] =\
+            (self.val[idx] * self.last_modified[idx] +\
              (self.sampler.iter_num - self.last_modified[idx])) /\
             self.sampler.iter_num
         self.last_modified[idx] = self.sampler.iter_num
@@ -174,8 +178,10 @@ class UnorderedWordPairStatistic(MCMCStatistic):
             return (edge.target, edge.source)
 
     def reset(self) -> None:
-        self.values = [0] * len(self.sampler.unordered_word_pair_index)
-        self.last_modified = [0] * len(self.sampler.unordered_word_pair_index)
+        self.values = np.zeros(len(self.sampler.unordered_word_pair_index))
+        self.last_modified =\
+            np.zeros(len(self.sampler.unordered_word_pair_index),
+                     dtype=np.int64)
     
     def update(self) -> None:
         raise NotImplementedError()
@@ -196,7 +202,7 @@ class UnorderedWordPairStatistic(MCMCStatistic):
 
 class UndirectedEdgeFrequencyStatistic(UnorderedWordPairStatistic):
     def update(self) -> None:
-        for edge in self.sampler.edge_index:
+        for edge in self.sampler.edge_set:
             if self.sampler.branching.has_edge(\
                         edge.source, edge.target, edge.rule):
                 # not really removing -- just accounting for the fact that
@@ -229,61 +235,66 @@ class UndirectedEdgeFrequencyStatistic(UnorderedWordPairStatistic):
 
 class RuleStatistic(MCMCStatistic):
     def reset(self) -> None:
-        self.values = [0] * len(self.sampler.rule_index)
-        self.last_modified = [0] * len(self.sampler.rule_index)
+        self.val = np.zeros(len(self.sampler.rule_set))
+        self.last_modified = np.zeros(len(self.sampler.rule_set), 
+                                      dtype=np.int64)
     
     def update(self) -> None:
-        for rule in self.sampler.rule_index:
+        for rule in self.sampler.rule_set:
             self.update_rule(rule)
     
     def update_rule(self, rule :Rule) -> None:
         raise NotImplementedError()
-    
-    def value(self, rule :Rule) -> float:
-        return self.values[self.sampler.rule_index[rule]]
 
-    def values_dict(self) -> Dict[Rule, float]:
-        result = {} # type: Dict[Rule, float]
-        for rule, idx in self.sampler.rule_index.items():
-            result[rule] = self.values[idx]
-        return result
+    def value(self) -> np.ndarray:
+        return self.val
+    
+    def value_at(self, rule :Rule) -> float:
+        return self.val[self.sampler.rule_set.get_id(rule)]
+# 
+#     TODO deprecated
+#     def values_dict(self) -> Dict[Rule, float]:
+#         result = {} # type: Dict[Rule, float]
+#         for rule, idx in self.sampler.rule_index.items():
+#             result[rule] = self.values[idx]
+#         return result
 
 
 class RuleFrequencyStatistic(RuleStatistic):
     def update_rule(self, rule :Rule) -> None:
-        idx = self.sampler.rule_index[rule]
-        self.values[idx] = \
-            (self.values[idx] * self.last_modified[idx] +\
+        idx = self.sampler.rule_set.get_id(rule)
+        self.val[idx] = \
+            (self.val[idx] * self.last_modified[idx] +\
              self.current_count[idx] * (self.sampler.iter_num - self.last_modified[idx])) /\
             self.sampler.iter_num
         self.last_modified[idx] = self.sampler.iter_num
 
     def reset(self) -> None:
         super().reset()
-        self.current_count = [0] * len(self.sampler.rule_index)
-        for rule in self.sampler.rule_index:
+        self.current_count = np.zeros(len(self.sampler.rule_set),
+                                      dtype=np.int32)
+        for rule in self.sampler.rule_set:
             edges = self.sampler.branching.get_edges_for_rule(rule)
-            self.current_count[self.sampler.rule_index[rule]] = len(edges)
+            self.current_count[self.sampler.rule_set.get_id(rule)] = len(edges)
     
     def edge_added(self, edge :GraphEdge) -> None:
         self.update_rule(edge.rule)
-        self.current_count[self.sampler.rule_index[edge.rule]] += 1
+        self.current_count[self.sampler.rule_set.get_id(edge.rule)] += 1
 
     def edge_removed(self, edge :GraphEdge) -> None:
         self.update_rule(edge.rule)
-        self.current_count[self.sampler.rule_index[edge.rule]] -= 1
+        self.current_count[self.sampler.rule_set.get_id(edge.rule)] -= 1
 
 
-# TODO include rule cost
 class RuleExpectedContributionStatistic(RuleStatistic):
     def update_rule(self, rule :Rule) -> None:
-        idx = self.sampler.rule_index[rule]
+        idx = self.sampler.rule_set.get_id(rule)
         if self.last_modified[idx] < self.sampler.iter_num:
             edges = self.sampler.branching.get_edges_for_rule(rule)
             new_value = self.sampler.model.cost_of_change([], edges) -\
                 self.sampler.model.rule_cost(rule)
-            self.values[idx] = \
-                (self.values[idx] * self.last_modified[idx] +\
+            self.val[idx] = \
+                (self.val[idx] * self.last_modified[idx] +\
                  new_value * (self.sampler.iter_num - self.last_modified[idx])) /\
                 self.sampler.iter_num
             self.last_modified[idx] = self.sampler.iter_num

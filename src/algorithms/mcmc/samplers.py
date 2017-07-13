@@ -1,10 +1,8 @@
-from algorithms.mcmc.indexing import Index
 from algorithms.mcmc.statistics import \
     MCMCStatistic, ScalarStatistic, IterationStatistic, EdgeStatistic, \
     RuleStatistic, UnorderedWordPairStatistic
 from datastruct.lexicon import LexiconEntry
 from datastruct.graph import GraphEdge, Branching, FullGraph
-# from models.generic import Model
 from models.neural import ModelSuite
 from utils.files import open_to_write, write_line
 import shared
@@ -29,6 +27,9 @@ class MCMCGraphSampler:
                        sampling_iter :int = 100000,
                        iter_stat_interval :int = 1) -> None:
         self.full_graph = full_graph
+        self.lexicon = full_graph.lexicon
+        self.edge_set = full_graph.edge_set
+        self.rule_set = model.rule_set
         self.model = model
         self.warmup_iter = warmup_iter
         self.sampling_iter = sampling_iter
@@ -39,17 +40,20 @@ class MCMCGraphSampler:
         self.branching = self.full_graph.random_branching()
         self.model.fit_to_branching(self.branching)
 
-        # indices on edges, rules, wordpairs
-        self.edge_index = Index()
-        for source, target, rule in self.full_graph.edges_iter(keys=True):
-            self.edge_index.add(GraphEdge(source, target, rule))
-        self.unordered_word_pair_index = Index()
-        for source, target in self.full_graph.edges_iter():
-            key = (min(source, target), max(source, target))
-            self.unordered_word_pair_index.add(key)
-        self.rule_index = Index()
-        for rule in self.model.iter_rules():
-            self.rule_index.add(rule)
+        # TODO deprecated
+#         self.edge_index = Index()
+#         for source, target, rule in self.full_graph.edges_iter(keys=True):
+#             self.edge_index.add(GraphEdge(source, target, rule))
+        self.unordered_word_pair_index = {}
+        next_id = 0
+        for e in self.edge_set:
+            key = (min(e.source, e.target), max(e.source, e.target))
+            if key not in self.unordered_word_pair_index:
+                self.unordered_word_pair_index[key] = next_id
+                next_id += 1
+#         self.rule_index = Index()
+#         for rule in self.model.iter_rules():
+#             self.rule_index.add(rule)
     
     def add_stat(self, name: str, stat :MCMCStatistic) -> None:
         if name in self.stats:
@@ -262,10 +266,10 @@ class MCMCGraphSampler:
                 stats.append(stat)
         with open_to_write(filename) as fp:
             write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
-            for edge in self.edge_index:
+            for idx, edge in enumerate(self.edge_set):
                 write_line(fp, 
                            (str(edge.source), str(edge.target), 
-                            str(edge.rule)) + tuple([stat.value(edge)\
+                            str(edge.rule)) + tuple([stat.val[idx]\
                                                      for stat in stats]))
 
     def save_rule_stats(self, filename):
@@ -276,9 +280,9 @@ class MCMCGraphSampler:
                 stats.append(stat)
         with open_to_write(filename) as fp:
             write_line(fp, ('rule',) + tuple(stat_names))
-            for rule in self.rule_index:
+            for idx, rule in enumerate(self.rule_set):
                 write_line(fp, (str(rule),) +\
-                               tuple([stat.value(rule) for stat in stats]))
+                               tuple([stat.val[idx] for stat in stats]))
 
     def save_wordpair_stats(self, filename):
         stats, stat_names = [], []

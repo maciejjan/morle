@@ -1,5 +1,5 @@
 from datastruct.lexicon import Lexicon, LexiconEntry
-from datastruct.rules import Rule
+from datastruct.rules import Rule, RuleSet
 from utils.files import open_to_write, read_tsv_file, write_line
 
 from collections import defaultdict
@@ -45,6 +45,9 @@ class EdgeSet:
 
     def __iter__(self) -> Iterable[GraphEdge]:
         return iter(self.items)
+
+    def __getitem__(self, idx :int) -> GraphEdge:
+        return self.items[idx]
 
     def __contains__(self, edge :GraphEdge) -> bool:
         return edge in self.index

@@ -58,10 +58,11 @@ def softem(full_graph :FullGraph, model :ModelSuite) -> None:
         sampler.run_sampling()
 
         # maximization step
-        sample = list((edge, sampler.stats['exp_edge_freq'].value(edge))\
-                      for edge in sampler.edge_index)
-        model.fit_to_sample(sample)
+#         sample = list((edge, sampler.stats['exp_edge_freq'].value(edge))\
+#                       for edge in sampler.edge_index)
+        model.fit_to_sample(sampler.stats['exp_edge_freq'].value())
 #         model.save_rules_to_file(shared.filenames['rules-fit'])
+        model.save()
 
         logging.getLogger('main').info('cost = %f' %\
                 sampler.stats['exp_cost'].value())

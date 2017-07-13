@@ -1,9 +1,9 @@
 import algorithms.alergia
-from datastruct.lexicon import LexiconEntry
-from datastruct.graph import GraphEdge, FullGraph, Branching
-from datastruct.rules import Rule
+from datastruct.lexicon import LexiconEntry, Lexicon
+from datastruct.graph import GraphEdge, EdgeSet, FullGraph, Branching
+from datastruct.rules import Rule, RuleSet
 from models.generic import Model
-from utils.files import open_to_write, write_line
+from utils.files import open_to_write, write_line, write_tsv_file
 import shared
 
 from collections import defaultdict
@@ -46,9 +46,17 @@ class RootModel:
 
 
 class AlergiaRootModel(RootModel):
-    def __init__(self, entries :List[LexiconEntry]) -> None:
+
+    def __init__(self, lexicon :Lexicon = None) -> None:
+        self.lexicon = lexicon
+        if self.lexicon is None:
+            self.automaton = hfst.empty_fst()
+        else:
+            self.fit()
+
+    def fit(self) -> None:
         word_seqs, tag_seqs = [], []
-        for entry in entries:
+        for entry in self.lexicon:
             word_seqs.append(entry.word)
             tag_seqs.append(entry.tag)
 
@@ -65,20 +73,26 @@ class AlergiaRootModel(RootModel):
         self.automaton.concatenate(tag_automaton)
         self.automaton.remove_epsilons()
         self.automaton.convert(hfst.ImplementationType.HFST_OLW_TYPE)
-
-        self.costs = {}
-        for entry in entries:
-            self.costs[entry] = self.automaton.lookup(entry.symstr)[0][1]
+        self.recompute_costs()
+            
+    def recompute_costs(self) -> None:
+        self.costs = np.empty(len(self.lexicon))
+        for i, entry in enumerate(self.lexicon):
+            self.costs[i] = self.automaton.lookup(entry.symstr)[0][1]
 
     def root_cost(self, entry :LexiconEntry) -> float:
-        return self.costs[entry]
+        return self.costs[self.lexicon.get_id(entry)]
 
     def save(self, filename :str) -> None:
-        raise NotImplementedError()
+        algorithms.fst.save_transducer(self.automaton, filename)
 
     @staticmethod
-    def load(filename :str) -> 'AlergiaRootModel':
-        raise NotImplementedError()
+    def load(filename :str, lexicon :Lexicon) -> 'AlergiaRootModel':
+        result = AlergiaRootModel()
+        result.lexicon = lexicon
+        result.automaton = algorithms.fst.load_transducer(filename)
+        result.recompute_costs()
+        return result
 
 
 class EdgeModel:
@@ -100,7 +114,7 @@ class EdgeModel:
     def recompute_costs(self) -> None:
         raise NotImplementedError()
 
-    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+    def fit_to_sample(self, sample :np.ndarray) -> None:
         raise NotImplementedError()
 
     def save(self, filename :str) -> None:
@@ -112,13 +126,20 @@ class EdgeModel:
 
 
 class BernoulliEdgeModel(EdgeModel):
-    def __init__(self, edges :List[GraphEdge], rule_domsizes :Dict[Rule, int])\
-                -> None:
-        self.rule_domsizes = rule_domsizes
-        self.fit_to_sample(list((edge, 1.0) for edge in edges))
+    def __init__(self, edge_set :EdgeSet, rule_set :RuleSet,
+                 alpha=1.1, beta=1.1) -> None:
+        self.edge_set = edge_set
+        self.rule_set = rule_set
+        self.rule_domsize = np.empty(len(rule_set))
+        for i in range(len(rule_set)):
+            self.rule_domsize[i] = rule_set.get_domsize(rule_set[i])
+        # actually alpha-1 and beta-1: the prior hyperparameters
+        self.alpha = alpha
+        self.beta = beta
+#         self.fit_to_sample(np.ones(len(edge_set)))
 
     def edge_cost(self, edge :GraphEdge) -> float:
-        return self._rule_appl_cost[edge.rule]
+        return self._rule_appl_cost[self.rule_set.get_id(edge.rule)]
 
     def null_cost(self) -> float:
         'Cost of a graph without any edges.'
@@ -126,28 +147,32 @@ class BernoulliEdgeModel(EdgeModel):
 
     def rule_cost(self, rule :Rule) -> float:
         'Cost of having a rule in the model.'
-        return -self.rule_domsizes[rule] * math.log(1-self.rule_prob[rule])
+        return -self._rule_cost[self.rule_set.get_id(rule)]
 
     def recompute_costs(self) -> None:
         # no edge costs are cached, because they are readily obtained
         # from rule costs
         pass
 
-    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
-        rule_freq = { rule: 0.0 for rule in self.rule_domsizes }
-        for edge, edge_freq in sample:
-            rule_freq[edge.rule] += edge_freq
-        self._rule_appl_cost, self.rule_prob, self._null_cost = {}, {}, 0.0
-        for rule in self.rule_domsizes:
-            # 0.1 is added to account for a non-uniform prior Beta(1.1, 1.1)
-            # (goal: excluding the extreme values 0.0 and 1.0)
-            prob = (rule_freq[rule] + 0.1) / (self.rule_domsizes[rule] + 0.2)
-            self.rule_prob[rule] = prob
-            self._rule_appl_cost[rule] = -math.log(prob) + math.log(1-prob)
-            self._null_cost -= math.log(1-prob)
+    def fit_to_sample(self, sample :np.ndarray) -> None:
+        # compute rule frequencies
+        rule_freq = np.zeros(len(self.rule_set))
+        for i in range(sample.shape[0]):
+            rule_id = self.rule_set.get_id(self.edge_set[i].rule)
+            rule_freq[rule_id] += sample[i]
+        # fit
+        self.rule_prob = \
+            (rule_freq + np.repeat(self.alpha-1, len(self.rule_set))) /\
+            (self.rule_domsize + np.repeat(self.alpha+self.beta-2,
+                                           len(self.rule_set)))
+        self._rule_appl_cost = -np.log(self.rule_prob) +\
+                                np.log(1-self.rule_prob)
+        self._rule_cost = -np.log(1-self.rule_prob) * self.rule_domsize
+        self._null_cost = -np.sum(self._rule_cost)
 
     def save(self, filename :str) -> None:
-        raise NotImplementedError()
+        write_tsv_file(filename, ((rule, self.rule_prob[i])\
+                                  for i, rule in enumerate(self.rule_set)))
 
     @staticmethod
     def load(filename :str) -> 'BernoulliEdgeModel':
@@ -394,15 +419,17 @@ class GaussianFeatureModel(FeatureModel):
 
 
 class ModelSuite:
-    def __init__(self, graph :FullGraph, rule_domsizes :Dict[Rule, int])\
-                -> None:
-        self.graph = graph
-        self.root_model = AlergiaRootModel(list(graph.nodes_iter()))
-        self.edge_model = BernoulliEdgeModel(list(graph.iter_edges()),
-                                             rule_domsizes)
+    def __init__(self, lexicon :Lexicon, edge_set :EdgeSet,
+                 rule_set :RuleSet) -> None:
+        self.lexicon = lexicon
+        self.rule_set = rule_set
+        self.root_model = AlergiaRootModel(lexicon)
+        self.root_model.fit()
+        self.edge_model = BernoulliEdgeModel(edge_set, rule_set)
+        self.edge_model.fit_to_sample(np.ones(len(rule_set)))
         self.feature_model = None
         if shared.config['Features'].getfloat('word_vec_weight') > 0:
-            self.feature_model = NeuralFeatureModel(graph)
+            self.feature_model = NeuralFeatureModel(edge_set, rule_set)
 #             self.feature_model = GaussianFeatureModel(graph)
         self.reset()
 
@@ -440,17 +467,18 @@ class ModelSuite:
             self.feature_model.recompute_costs()
 
     def iter_rules(self) -> Iterable[Rule]:
-        return self.edge_model.rule_domsizes.keys()
+        return iter(self.rule_set)
         
     def cost(self) -> float:
         return self._cost
 
     def reset(self) -> None:
         self._cost = sum(self.root_cost(entry)\
-                        for entry in self.graph.nodes_iter()) +\
+                        for entry in self.lexicon) +\
                     self.edge_model.null_cost()
 
-    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+#     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+    def fit_to_sample(self, sample :np.ndarray) -> None:
         self.edge_model.fit_to_sample(sample)
         if self.feature_model is not None:
             self.feature_model.fit_to_sample(sample)
@@ -462,7 +490,8 @@ class ModelSuite:
     def save(self) -> None:
         self.root_model.save(shared.filenames['root-model'])
         self.edge_model.save(shared.filenames['edge-model'])
-        self.feature_model.save(shared.filenames['feature-model'])
+        if self.feature_model is not None:
+            self.feature_model.save(shared.filenames['feature-model'])
 
     @staticmethod
     def load() -> 'ModelSuite':

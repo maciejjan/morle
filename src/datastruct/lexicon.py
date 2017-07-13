@@ -162,8 +162,19 @@ class Lexicon:
             return key in self.index
         return key in self.items_by_key
 
-    def __getitem__(self, key :str) -> LexiconEntry:
-        return self.items_by_key[key]
+    def __getitem__(self, key :Union[int, str]) -> LexiconEntry:
+        if isinstance(key, str):
+            return self.items_by_key[key]
+        elif isinstance(key, int):
+            return self.items[key]
+        else:
+            raise KeyError(key)
+
+    def get_by_id(self, idx :int) -> LexiconEntry:
+        return self.items[idx]
+
+    def get_id(self, entry :LexiconEntry) -> int:
+        return self.index[entry]
 
     def get_by_symstr(self, key :str) -> List[LexiconEntry]:
         return self.items_by_symstr[key]

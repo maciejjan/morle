@@ -149,12 +149,21 @@ class RuleSet:
 
     def __init__(self) -> None:
         self.items = []         # type: List[Rule]
+        self.items_by_str = {}  # type: Dict[str, Rule]
         self.index = {}         # type: Dict[Rule, int]
         self.domsizes = {}      # type: Dict[Rule, domsize]
         self.next_id = 0
 
     def __contains__(self, rule :Rule) -> bool:
         return rule in self.index
+
+    def __getitem__(self, key :Union[int, str]) -> Rule:
+        if isinstance(key, str):
+            return self.items_by_str[key]
+        elif isinstance(key, int):
+            return self.items[key]
+        else:
+            raise KeyError(key)
 
     def __len__(self) -> int:
         return len(self.items)
@@ -165,6 +174,7 @@ class RuleSet:
     def add(self, rule :Rule, domsize :int) -> None:
         self.items.append(rule)
         self.index[rule] = self.next_id
+        self.items_by_str[str(rule)] = rule
         self.domsizes[rule] = domsize
         self.next_id += 1
 
@@ -181,9 +191,11 @@ class RuleSet:
 
     @staticmethod
     def load(filename :str) -> 'RuleSet':
+        result = RuleSet()
         for rule_str, domsize in read_tsv_file(filename, types=(str, int)):
             rule = Rule.from_string(rule_str)
-            self.add(rule, domsize)
+            result.add(rule, domsize)
+        return result
 
 # def load_ruleset(filename :str) -> Dict[str, Rule]:
 #     result = {} # type: Dict[str, Rule]

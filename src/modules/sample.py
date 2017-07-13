@@ -1,8 +1,8 @@
 from algorithms.mcmc.samplers import MCMCGraphSamplerFactory
 import algorithms.mcmc.statistics as stats
-from datastruct.graph import FullGraph
+from datastruct.graph import EdgeSet, FullGraph
 from datastruct.lexicon import Lexicon
-from datastruct.rules import Rule
+from datastruct.rules import Rule, RuleSet
 # from models.marginal import MarginalModel
 from models.neural import ModelSuite
 from utils.files import file_exists, read_tsv_file
@@ -12,37 +12,25 @@ import logging
 
 
 def run() -> None:
-    # load the lexicon
     logging.getLogger('main').info('Loading lexicon...')
-    lexicon = Lexicon(shared.filenames['wordlist'])
+    lexicon = Lexicon.load(shared.filenames['wordlist'])
 
     logging.getLogger('main').info('Loading rules...')
-    rules_filename = shared.filenames['rules-modsel']
-    if not file_exists(rules_filename):
-        rules_filename = shared.filenames['rules']
-    rules = [(Rule.from_string(rule_str), domsize) \
-             for rule_str, domsize in \
-                 read_tsv_file(rules_filename, (str, int))]
+    rules_file = shared.filenames['rules-modsel']
+    if not file_exists(rules_file):
+        rules_file = shared.filenames['rules']
+    rule_set = RuleSet.load(rules_file)
 
-    # load the full graph
+    edges_file = shared.filenames['graph-modsel']
+    if not file_exists(edges_file):
+        edges_file = shared.filenames['graph']
     logging.getLogger('main').info('Loading the graph...')
-    graph_filename = shared.filenames['graph-modsel']
-    if not file_exists(graph_filename):
-        graph_filename = shared.filenames['graph']
-    full_graph = FullGraph(lexicon)
-    full_graph.load_edges_from_file(graph_filename)
-
-    # initialize a MarginalModel
-#     logging.getLogger('main').info('Initializing the model...')
-#     model = MarginalModel()
-#     model.fit_rootdist(lexicon.entries())
-#     model.fit_ruledist(rule for (rule, domsize) in rules)
-#     for rule, domsize in rules:
-#         model.add_rule(rule, domsize)
+    edge_set = EdgeSet.load(edges_file, lexicon, rule_set)
+    full_graph = FullGraph(lexicon, edge_set)
 
     # initialize a ModelSuite
     logging.getLogger('main').info('Initializing the model...')
-    model = ModelSuite(full_graph, dict(rules))
+    model = ModelSuite(lexicon, edge_set, rule_set)
 
     # setup the sampler
     logging.getLogger('main').info('Setting up the sampler...')
