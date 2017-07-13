@@ -151,7 +151,7 @@ class RuleSet:
         self.items = []         # type: List[Rule]
         self.index = {}         # type: Dict[Rule, int]
         self.domsizes = {}      # type: Dict[Rule, domsize]
-        self.next_id = 1
+        self.next_id = 0
 
     def __contains__(self, rule :Rule) -> bool:
         return rule in self.index

@@ -150,19 +150,20 @@ class LexiconEntry:
     
 
 class Lexicon:
-    def __init__(self, filename :str = None) -> None:
-        self.items = {}           # type: Dict[str, LexiconEntry]
+    def __init__(self) -> None:
+        self.items = []           # type: List[LexiconEntry]
+        self.index = {}           # type: Dict[LexiconEntry, int]
+        self.items_by_key = {}    # type: Dict[str, LexiconEntry]
         self.items_by_symstr = {} # type: Dict[str, List[LexiconEntry]]
-        if filename is not None:
-            self.load_from_file(filename)
+        self.next_id = 0
 
     def __contains__(self, key :Union[str, LexiconEntry]) -> bool:
         if isinstance(key, LexiconEntry):
-            key = str(key)
-        return key in self.items
+            return key in self.index
+        return key in self.items_by_key
 
     def __getitem__(self, key :str) -> LexiconEntry:
-        return self.items[key]
+        return self.items_by_key[key]
 
     def get_by_symstr(self, key :str) -> List[LexiconEntry]:
         return self.items_by_symstr[key]
@@ -170,27 +171,30 @@ class Lexicon:
     def __len__(self) -> int:
         return len(self.items)
 
+    def __iter__(self) -> Iterable[LexiconEntry]:
+        return iter(self.items)
+
     def keys(self) -> Iterable[str]:
-        return self.items.keys()
+        return self.items_by_key.keys()
 
     def symstrs(self) -> Iterable[str]:
         return self.items_by_symstr.keys()
 
-    def entries(self) -> Iterable[LexiconEntry]:
-        return self.items.values()
-
     def add(self, item :LexiconEntry) -> None:
-        if str(item) in self.items:
+        if str(item) in self.items_by_key:
             raise ValueError('{} already in vocabulary'.format(str(item)))
         if not item.symstr in self.items_by_symstr:
             self.items_by_symstr[item.symstr] = []
-        self.items[str(item)] = item
+        self.items.append(item)
+        self.index[item] = self.next_id
+        self.items_by_key[str(item)] = item
         self.items_by_symstr[item.symstr].append(item)
+        self.next_id += 1
 
     def to_fst(self) -> hfst.HfstTransducer:
         lexc_file = shared.filenames['lexicon-tr'] + '.lex'
         tags = set()
-        for entry in self.entries():
+        for entry in self.items:
             for t in entry.tag:
                 tags.add(t)
         with open_to_write(lexc_file) as lexfp:
@@ -198,30 +202,34 @@ class Lexicon:
                         ' '.join(self._lexc_escape(s) \
                         for s in shared.multichar_symbols+list(tags)) + '\n\n')
             lexfp.write('LEXICON Root\n')
-            for entry in self.entries():
+            for entry in self.items:
                 lexfp.write('\t' + self._lexc_escape(entry.symstr) + ' # ;\n')
         transducer = hfst.compile_lexc_file(full_path(lexc_file))
         remove_file(lexc_file)
         return transducer
 
-    def remove(self, item :LexiconEntry) -> None:
-        if str(item) not in self.items:
-            raise KeyError(str(item))
-        del self.items[str(item)]
-        if item.symstr in self.items_by_symstr:
-            self.items_by_symstr[item.symstr].remove(item)
-            if not self.items_by_symstr[item.symstr]:
-                del self.items_by_symstr[item.symstr]
+    # deprecated -- probably not needed
+#     def remove(self, item :LexiconEntry) -> None:
+#         if str(item) not in self.items:
+#             raise KeyError(str(item))
+#         del self.items[str(item)]
+#         if item.symstr in self.items_by_symstr:
+#             self.items_by_symstr[item.symstr].remove(item)
+#             if not self.items_by_symstr[item.symstr]:
+#                 del self.items_by_symstr[item.symstr]
 
-    def load_from_file(self, filename :str) -> None:
+    @staticmethod
+    def load(filename :str) -> 'Lexicon':
 #         for row in read_tsv_file(filename, get_wordlist_format()):
+        lexicon = Lexicon()
         for row in read_tsv_file(filename):
             try:
-                self.add(LexiconEntry(*row))
+                lexicon.add(LexiconEntry(*row))
             except Exception as e:
 #                 raise e
                 logging.getLogger('main').warning('ignoring %s: %s' %\
                                                   (row[0], str(e)))
+        return lexicon
 
     def _lexc_escape(self, string :str) -> str:
         '''Escape a string for correct rendering in a LEXC file.'''

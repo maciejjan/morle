@@ -188,7 +188,7 @@ def build_graph_fstfastss(
         words :List[str] = None) -> Iterable[Tuple[str, str, str]]:
 
     logging.getLogger('main').info('Building the FastSS cascade...')
-    max_word_len = max([len(e.word) for e in lexicon.entries()])
+    max_word_len = max([len(e.word) for e in lexicon])
     algorithms.fstfastss.build_fastss_cascade(lex_tr_file,
                                               max_word_len=max_word_len)
 
@@ -213,7 +213,7 @@ def build_graph_fstfastss(
                 output_fun((v1.literal, results_for_v1))
 
     if words is None:
-        words = sorted(list(set(e.symstr for e in lexicon.entries())))
+        words = sorted(list(set(e.symstr for e in lexicon)))
     transducer_path = shared.filenames['fastss-tr']
     num_processes = shared.config['preprocess'].getint('num_processes')
     extractor = parallel_execute(function=_extract_candidate_edges,
@@ -256,9 +256,12 @@ def compute_rule_domsizes(lexicon_tr :HfstTransducer,
         yield rule, domsize
 
 
-def run_standard() -> None:
+### MAIN FUNCTIONS ###
+
+
+def run() -> None:
     logging.getLogger('main').info('Loading lexicon...')
-    lexicon = Lexicon(filename=shared.filenames['wordlist'])
+    lexicon = Lexicon.load(shared.filenames['wordlist'])
     logging.getLogger('main').info('Building the lexicon transducer...')
     lexicon_tr = lexicon.to_fst()
     algorithms.fst.save_transducer(lexicon_tr, shared.filenames['lexicon-tr'])
@@ -296,46 +299,4 @@ def run_standard() -> None:
                    ((str(rule), domsize)\
                     for rule, domsize in \
                         compute_rule_domsizes(lexicon_tr, rules)))
-
-
-def run_bipartite() -> None:
-    logging.getLogger('main').info('Loading lexicon...')
-    lexicon = Lexicon(filename=shared.filenames['wordlist'])
-    wordlist_left = load_normalized_wordlist(
-                        shared.filenames['wordlist.left'])
-    wordlist_right = load_normalized_wordlist(
-                         shared.filenames['wordlist.right'])
-    logging.getLogger('main').info('Building the lexicon transducers...')
-    compile_lexicon_transducer(list(lexicon[word] for word in wordlist_left),
-                               shared.filenames['left-tr'])
-    compile_lexicon_transducer(lexicon, shared.filenames['right-tr'],\
-                               node_keys=wordlist_right)
-
-    logging.getLogger('main').info('Building graph...')
-    build_graph_fstfastss(lexicon, shared.filenames['right-tr'], 
-                          shared.filenames['graph'],
-                          node_keys=wordlist_left)
-
-    update_file_size(shared.filenames['graph'])
-    run_filters(shared.filenames['graph'])
-    update_file_size(shared.filenames['graph'])
-    aggregate_file(shared.filenames['graph'],\
-                   shared.filenames['rules'], 3)
-    update_file_size(shared.filenames['rules'])
-
-    logging.getLogger('main').info('Computing rule domain sizes...')
-    compute_rule_domsizes(shared.filenames['left-tr'], 
-                          shared.filenames['rules'])
-
-### MAIN FUNCTIONS ###
-
-def run() -> None:
-    if file_exists(shared.filenames['wordlist.left']) and\
-       file_exists(shared.filenames['wordlist.right']):
-        run_bipartite()
-    elif file_exists(shared.filenames['wordlist']):
-        run_standard()
-    else:
-        raise RuntimeError('No input file supplied!')
-
 

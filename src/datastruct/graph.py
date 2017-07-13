@@ -41,7 +41,7 @@ class EdgeSet:
     def __init__(self) -> None:
         self.items = []     # type: List[GraphEdge]
         self.index = {}     # type: Dict[GraphEdge, int]
-        self.next_id = 1
+        self.next_id = 0
 
     def __iter__(self) -> Iterable[GraphEdge]:
         return iter(self.items)
