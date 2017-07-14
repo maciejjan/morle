@@ -114,7 +114,8 @@ class EdgeModel:
     def recompute_costs(self) -> None:
         raise NotImplementedError()
 
-    def fit_to_sample(self, sample :np.ndarray) -> None:
+    def fit_to_sample(self, root_weights :np.ndarray, 
+                      edge_weights :np.ndarray) -> None:
         raise NotImplementedError()
 
     def save(self, filename :str) -> None:
@@ -154,10 +155,11 @@ class BernoulliEdgeModel(EdgeModel):
         # from rule costs
         pass
 
-    def fit_to_sample(self, sample :np.ndarray) -> None:
+    def fit_to_sample(self, root_weights :np.ndarray, 
+                      edge_weights :np.ndarray) -> None:
         # compute rule frequencies
         rule_freq = np.zeros(len(self.rule_set))
-        for i in range(sample.shape[0]):
+        for i in range(edge_weights.shape[0]):
             rule_id = self.rule_set.get_id(self.edge_set[i].rule)
             rule_freq[rule_id] += sample[i]
         # fit
@@ -196,7 +198,8 @@ class FeatureModel:
     def recompute_costs(self) -> None:
         raise NotImplementedError()
 
-    def fit_to_sample(self, sample :np.ndarray) -> None:
+    def fit_to_sample(self, root_weights :np.ndarray, 
+                      edge_weights :np.ndarray) -> None:
         raise NotImplementedError()
 
     def save(self, filename :str) -> None:
@@ -230,12 +233,9 @@ class NeuralFeatureModel(FeatureModel):
             -multivariate_normal.logpdf(error, np.zeros(self.y.shape[1]),
                                         self.error_cov)
 
-    def fit_to_sample(self, sample :np.ndarray) -> None:
-        root_weights = np.ones(len(self.lexicon))
-        for idx in range(sample.shape[0]):
-            root_idx = self.lexicon.get_id(self.edge_set[idx].target)
-            root_weights[root_idx] -= sample[idx]
-        weights = np.hstack((root_weights, sample))
+    def fit_to_sample(self, root_weights :np.ndarray, 
+                      edge_weights :np.ndarray) -> None:
+        weights = np.hstack((root_weights, edge_weights))
         self.model.fit([self.X_attr, self.X_rule], self.y, 
                        epochs=10, sample_weight=weights,
                        batch_size=1000, verbose=1)
@@ -352,33 +352,32 @@ class NeuralFeatureModel(FeatureModel):
 # TODO refactor according to the new indexing
 
 class GaussianFeatureModel(FeatureModel):
-    def __init__(self, graph :FullGraph) -> None:
-        roots = list(graph.nodes_iter())
-        edges_by_rule = {}
-        for edge in graph.iter_edges():
-            if edge.rule not in self.edges_by_rule:
-                self.edges_by_rule[edge.rule] = []
-            self.edges_by_rule[edge.rule].append(edge)
-        # create attribute matrices and indices: roots and edges by rule
+    def __init__(self, lexicon :Lexicon, edge_set :EdgeSet,
+                 rule_set :RuleSet) -> None:
+        self.lexicon = lexicon
+        self.edge_set = edge_set
+        self.rule_set = rule_set
+        # group edge ids by rule
+        self.edge_ids_by_rule = [[] for i in range(len(rule_set))]
+        for edge_id, edge in enumerate(edge_set):
+            rule_id = self.rule_set.get_id(edge.rule)
+            self.edge_ids_by_rule[rule_id].append(edge_id)
+        # create a feature value matrix for roots and for each rule
         dim = shared.config['Features'].getint('word_vec_dim')
-        self.root_idx, self.edge_idx = {}, {}
-        self.attr_matrices = {}
-        self.attr_matrices['ROOT'] = np.empty((len(roots), dim))
-        for i, root in enumerate(roots):
-            self.attr_matrices['ROOT'][i,:] = root.vec
-            self.root_idx[root] = i
-        for rule, edges in edges_by_rule.items():
-            self.attr_matrices[rule] = np.empty((len(edges), dim))
-            for i, edge in enumerate(edges):
-                self.attr_matrices[rule][i,:] = \
-                    edge.target.vec - edge.source.vec
-                self.edge_idx[edge] = i
-        # initial fit
-        self.means, self.vars = {}, {}
-        for rule in self.attr_matrices:
-            self._fit_rule(rule)
-        self.recompute_costs()
-        self.save_costs_to_file('costs-gaussian.txt')
+        self.attr = []
+        root_attr_matrix = np.empty((len(lexicon), dim))
+        for i, entry in enumerate(lexicon):
+            root_attr_matrix[i,] = entry.vec
+        self.attr.append(root_attr_matrix)
+        for edges in self.edge_ids_by_rule:
+            attr_matrix = np.empty((len(edges), dim))
+            for i, edge_id in enumerate(edges):
+                edge = self.edge_set[edge_id]
+                attr_matrix[i,] = edge.target.vec - edge.source.vec
+            self.attr.append(attr_matrix)
+#         # initial parameter values
+        self.means = np.zeros((len(rule_set)+1, dim))
+        self.vars = np.zeros((len(rule_set)+1, dim))
 
     def root_cost(self, entry :LexiconEntry) -> float:
         return self.costs['ROOT'][self.root_idx[entry]]
@@ -393,15 +392,21 @@ class GaussianFeatureModel(FeatureModel):
                                   m, self.means[rule], 
                                   np.diag(self.vars[rule]))
 
-    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
-        weights_by_rule = { rule : np.zeros(m.shape[0]) if rule != 'ROOT' \
-                                   else np.ones(m.shape[0]) \
-                            for rule, m in self.attr_matrices.items() }
-        for edge, weight in sample:
-            weights_by_rule[rule][self.edge_idx[edge]] = weight
-            weights_by_rule['ROOT'][self.root_idx[edge.target]] -= weight
-        for rule, weights in weights_by_rule.items():
-            self._fit_rule(rule, weights=weights)
+    def fit_to_sample(self, root_weights :np.ndarray, 
+                      edge_weights :np.ndarray) -> None:
+        weights_by_rule = [root_weights] +\
+                          [np.zeros(len(edge_ids)) \
+                             for edge_ids in self.edge_ids_by_rule]
+        # group edge weights by rule
+        for rule_id, edge_ids in enumerate(self.edge_ids_by_rule):
+            for idx, edge_id in enumerate(edge_ids):
+                rule_id = self.rule_set.get_id(self.edge_set[edge_id].rule)
+                weights_by_rule[rule_id+1][idx] = edge_weights[edge_id]
+        for rule_id, weights in enumerate(weights_by_rule):
+            self.means[rule_id] = np.average(self.attr[rule_id],
+                                             weights=weights, axis=0)
+            self.vars[rule_id] = np.average(self.attr[rule_id]**2,
+                                            weights=weights, axis=0)
 
     def save_costs_to_file(self, filename :str) -> None:
         with open_to_write(filename) as fp:
@@ -414,15 +419,15 @@ class GaussianFeatureModel(FeatureModel):
                     write_line(fp, (str(edge.source), str(edge.target),
                                     str(edge.rule), edge_cost, edge_gain))
 
-    def _fit_rule(self, rule, weights=None) -> None:
-        m = self.matrices[rule]
-        if weights is None:
-            self.means[rule] = np.sum(m, axis=0) / m.shape[0]
-            self.vars[rule] = np.diag(np.dot(m.T, m)) / m.shape[0]
-        else:
-            sum_weights = np.sum(weights)
-            self.means[rule] = np.sum(weights * m.T, axis=1) / sum_weights
-            self.vars[rule] = np.diag(np.dot(weights * m.T, m) / sum_weights)
+#     def _fit_rule(self, rule, weights=None) -> None:
+#         m = self.matrices[rule]
+#         if weights is None:
+#             self.means[rule] = np.sum(m, axis=0) / m.shape[0]
+#             self.vars[rule] = np.diag(np.dot(m.T, m)) / m.shape[0]
+#         else:
+#             sum_weights = np.sum(weights)
+#             self.means[rule] = np.sum(weights * m.T, axis=1) / sum_weights
+#             self.vars[rule] = np.diag(np.dot(weights * m.T, m) / sum_weights)
 
     def save(self, filename :str) -> None:
         # for each rule -- save mean and variance
@@ -495,11 +500,11 @@ class ModelSuite:
                         for entry in self.lexicon) +\
                     self.edge_model.null_cost()
 
-#     def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
-    def fit_to_sample(self, sample :np.ndarray) -> None:
-        self.edge_model.fit_to_sample(sample)
+    def fit_to_sample(self, root_weights :np.ndarray, 
+                      edge_weights :np.ndarray) -> None:
+        self.edge_model.fit_to_sample(root_weights, edge_weights)
         if self.feature_model is not None:
-            self.feature_model.fit_to_sample(sample)
+            self.feature_model.fit_to_sample(root_weights, edge_weights)
 
     def fit_to_branching(self, branching :Branching) -> None:
         self.reset()
@@ -522,124 +527,4 @@ class ModelSuite:
     @staticmethod
     def load() -> 'ModelSuite':
         raise NotImplementedError()
-
-
-# TODO this class is deprecated
-# class NeuralModel(Model):
-#     def __init__(self, edges :List[GraphEdge]):
-#         self.model_type = 'neural'
-#         # create rule and edge index
-#         self.word_idx = { } # TODO word -> root edge idx
-#         self.edge_idx = { edge: idx for idx, edge in enumerate(edges, len(self.word_idx)) }
-#         self.rule_idx = { rule: idx for idx, rule in \
-#                           enumerate(set(edge.rule for edge in edges)) }
-#         self.ngram_features = self.select_ngram_features(edges)
-#         print(self.ngram_features)
-#         self.features = self.ngram_features
-#         self.X_attr, self.X_rule = self.extract_features_from_edges(edges)
-#         self.network = self.compile()
-#         self.recompute_edge_prob()
-# 
-#     def fit_to_sample(self, edge_freq :List[Tuple[GraphEdge, float]]) -> None:
-#         y = np.empty((len(edge_freq),))
-#         for edge, prob in edge_freq:
-#             y[self.edge_idx[edge]] = prob
-#         self.network.fit([self.X_attr, self.X_rule], y, epochs=5,\
-#                          batch_size=100, verbose=1)
-# 
-#     # TODO rename -> recompute_edge_costs
-#     def recompute_edge_prob(self) -> None:
-#         self.y_pred = self.network.predict([self.X_attr, self.X_rule])
-# 
-#     def edge_prob(self, edge :GraphEdge) -> float:
-#         return float(self.y_pred[self.edge_idx[edge]])
-# 
-#     def root_prob(self, node :LexiconEntry) -> float:
-#         raise NotImplementedError()
-# 
-#     def cost() -> float:
-#         raise NotImplementedError()
-# 
-#     def cost_of_change() -> float:
-#         raise NotImplementedError()
-# 
-#     def apply_change() -> None:
-#         raise NotImplementedError()
-# 
-#     def fit_to_branching() -> None:
-#         # TODO set the cost to the branching cost
-#         raise NotImplementedError()
-# 
-#     def extract_n_grams(self, word :Iterable[str]) -> Iterable[Iterable[str]]:
-#         result = []
-#         max_n = min(MAX_NGRAM_LENGTH, len(word))+1
-#         result.extend('^'+''.join(word[:i]) for i in range(1, max_n))
-#         result.extend(''.join(word[-i:])+'$' for i in range(1, max_n))
-#         return result
-# 
-#     def select_ngram_features(self, edges :List[GraphEdge]) -> List[str]:
-#         # count n-gram frequencies
-#         ngram_freqs = defaultdict(lambda: 0)
-#         for edge in edges:
-#             source_seq = edge.source.word + edge.source.tag
-#             for ngram in self.extract_n_grams(source_seq):
-#                 ngram_freqs[ngram] += 1
-#         # select most common n-grams
-#         ngram_features = \
-#             list(map(itemgetter(0), 
-#                      sorted(ngram_freqs.items(), 
-#                             reverse=True, key=itemgetter(1))))[:MAX_NUM_NGRAMS]
-#         return ngram_features
-# 
-#     def extract_features_from_edges(self, edges :List[GraphEdge]) -> None:
-#         attributes = np.zeros((len(edges), len(self.features)))
-#         rule_ids = np.zeros((len(edges), 1))
-#         ngram_features_hash = {}
-#         for i, ngram in enumerate(self.ngram_features):
-#             ngram_features_hash[ngram] = i
-#         print('Memory allocation OK.', file=sys.stderr)
-#         for i, edge in enumerate(edges):
-#             source_seq = edge.source.word + edge.source.tag
-#             for ngram in self.extract_n_grams(source_seq):
-#                 if ngram in ngram_features_hash:
-#                     attributes[i, ngram_features_hash[ngram]] = 1
-#             rule_ids[i, 0] = self.rule_idx[edge.rule]
-#         print('attributes.nbytes =', attributes.nbytes)
-#         print('rule_ids.nbytes =', rule_ids.nbytes)
-#         return attributes, rule_ids
-# 
-#     def sample_negative_examples(self):
-#         # shuffle the wordlist
-#         # for word in wordlist:
-#         #   lookup the word in lexicon .o. rules transducer
-#         #   for word2:
-#         #     extract all rules from (word, word2)
-#         #     for rule:
-#         #       if rule in ruleset:
-#         #         add (word, rule) to negative examples
-#         #         if length(negative examples) >= MAX_NEGATIVE_EXAMPLES:
-#         #           prepare the weights vector
-#         #           return
-#         # if number of examples < MAX_NEGATIVE_EXAMPLES:
-#         #   resize the array
-#         # prepare the weights vector
-#         # return
-#         raise NotImplementedError()
-# 
-#     def compile(self):
-#         num_features, num_rules = len(self.features), len(self.rule_idx)
-#         input_attr = Input(shape=(num_features,), name='input_attr')
-#         dense_attr = Dense(100, activation='softplus', name='dense_attr')(input_attr)
-#         input_rule = Input(shape=(1,), name='input_rule')
-#         rule_emb = Embedding(input_dim=num_rules, output_dim=100,\
-#                              input_length=1)(input_rule)
-#         rule_emb_fl = Flatten(name='rule_emb_fl')(rule_emb)
-#         concat = keras.layers.concatenate([dense_attr, rule_emb_fl])
-#         dense = Dense(100, activation='softplus', name='dense')(concat)
-#         output = Dense(1, activation='sigmoid', name='output')(dense)
-# 
-#         model = Model(inputs=[input_attr, input_rule], outputs=[output])
-#         model.compile(optimizer='adam', loss='binary_crossentropy')
-#         return model
-
 

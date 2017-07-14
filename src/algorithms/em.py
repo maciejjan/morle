@@ -60,7 +60,13 @@ def softem(full_graph :FullGraph, model :ModelSuite) -> None:
         # maximization step
 #         sample = list((edge, sampler.stats['exp_edge_freq'].value(edge))\
 #                       for edge in sampler.edge_index)
-        model.fit_to_sample(sampler.stats['exp_edge_freq'].value())
+        edge_weights = sampler.stats['exp_edge_freq'].value()
+        root_weights = np.ones(len(full_graph.lexicon))
+        for idx in range(edge_weights.shape[0]):
+            root_id = \
+                full_graph.lexicon.get_id(full_graph.edge_set[idx].target)
+            root_weights[root_id] -= edge_weights[idx]
+        model.fit_to_sample(root_weights, edge_weights)
 #         model.save_rules_to_file(shared.filenames['rules-fit'])
         model.save()
 
