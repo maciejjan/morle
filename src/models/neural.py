@@ -161,7 +161,7 @@ class BernoulliEdgeModel(EdgeModel):
         rule_freq = np.zeros(len(self.rule_set))
         for i in range(edge_weights.shape[0]):
             rule_id = self.rule_set.get_id(self.edge_set[i].rule)
-            rule_freq[rule_id] += sample[i]
+            rule_freq[rule_id] += edge_weights[i]
         # fit
         self.rule_prob = \
             (rule_freq + np.repeat(self.alpha-1, len(self.rule_set))) /\
@@ -375,22 +375,29 @@ class GaussianFeatureModel(FeatureModel):
                 edge = self.edge_set[edge_id]
                 attr_matrix[i,] = edge.target.vec - edge.source.vec
             self.attr.append(attr_matrix)
-#         # initial parameter values
+        # initial parameter values
         self.means = np.zeros((len(rule_set)+1, dim))
         self.vars = np.zeros((len(rule_set)+1, dim))
 
     def root_cost(self, entry :LexiconEntry) -> float:
-        return self.costs['ROOT'][self.root_idx[entry]]
+        return self.costs[self.lexicon.get_id(entry)]
 
     def edge_cost(self, edge :GraphEdge) -> float:
-        return self.costs[edge.rule][self.edge_idx[edge]]
+        return self.costs[len(self.lexicon) + self.edge_set.get_id(edge)]
 
+    # TODO needs optimization?
     def recompute_costs(self) -> None:
-        self.costs = {}
-        for rule, m in self.attr_matrices.items():
-            self.costs[rule] = -multivariate_normal.logpdf(\
-                                  m, self.means[rule], 
-                                  np.diag(self.vars[rule]))
+        self.costs = np.empty(len(self.lexicon) + len(self.edge_set))
+        for idx, entry in enumerate(self.lexicon):
+            self.costs[idx,] = -multivariate_normal.logpdf(\
+                                  self.attr[0][idx,], self.means[0], 
+                                  np.diag(self.vars[0]))
+        for rule_id, edge_ids in enumerate(self.edge_ids_by_rule):
+            for idx, edge_id in enumerate(edge_ids):
+                self.costs[len(self.lexicon)+edge_id,] =\
+                    -multivariate_normal.logpdf(self.attr[rule_id][idx,],
+                                                self.means[rule_id],
+                                                np.diag(self.vars[rule_id]))
 
     def fit_to_sample(self, root_weights :np.ndarray, 
                       edge_weights :np.ndarray) -> None:
@@ -407,6 +414,7 @@ class GaussianFeatureModel(FeatureModel):
                                              weights=weights, axis=0)
             self.vars[rule_id] = np.average(self.attr[rule_id]**2,
                                             weights=weights, axis=0)
+        self.recompute_costs()
 
     def save_costs_to_file(self, filename :str) -> None:
         with open_to_write(filename) as fp:
@@ -447,13 +455,17 @@ class ModelSuite:
         self.root_model = AlergiaRootModel(lexicon)
         self.root_model.fit()
         self.edge_model = BernoulliEdgeModel(edge_set, rule_set)
-        self.edge_model.fit_to_sample(np.ones(len(edge_set)))
+        self.edge_model.fit_to_sample(np.ones(len(lexicon)),
+                                      np.ones(len(edge_set)))
         self.feature_model = None
         if shared.config['Features'].getfloat('word_vec_weight') > 0:
-            self.feature_model = NeuralFeatureModel(edge_set, rule_set)
-            self.feature_model.compile()
-            self.feature_model.fit_to_sample(np.ones(len(edge_set)))
-#             self.feature_model = GaussianFeatureModel(graph)
+#             self.feature_model = NeuralFeatureModel(edge_set, rule_set)
+#             self.feature_model.compile()
+#             self.feature_model.fit_to_sample(np.ones(len(edge_set)))
+            self.feature_model =\
+                GaussianFeatureModel(lexicon, edge_set, rule_set)
+            self.feature_model.fit_to_sample(np.ones(len(lexicon)),
+                                             np.ones(len(edge_set)))
         self.reset()
 
     def cost_of_change(self, edges_to_add :List[GraphEdge],
