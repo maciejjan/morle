@@ -3,7 +3,7 @@ from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import GraphEdge, EdgeSet, FullGraph, Branching
 from datastruct.rules import Rule, RuleSet
 from models.generic import Model
-from utils.files import open_to_write, write_line, write_tsv_file
+from utils.files import file_exists, open_to_write, write_line, write_tsv_file
 import shared
 
 from collections import defaultdict
@@ -196,7 +196,7 @@ class FeatureModel:
     def recompute_costs(self) -> None:
         raise NotImplementedError()
 
-    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
+    def fit_to_sample(self, sample :np.ndarray) -> None:
         raise NotImplementedError()
 
     def save(self, filename :str) -> None:
@@ -208,19 +208,19 @@ class FeatureModel:
 
 
 class NeuralFeatureModel(FeatureModel):
-    def __init__(self, graph :FullGraph) -> None:
-        self._prepare_data(graph)
-        self._compile_model()
-        self.model.fit([self.X_attr, self.X_rule], self.y, epochs=10,
-                       batch_size=1000, verbose=1)
-        self.recompute_costs()
-        self.save_costs_to_file('costs-neural.txt')
+    def __init__(self, lexicon :Lexicon, edge_set :EdgeSet, rule_set :RuleSet)\
+                -> None:
+        self.lexicon = lexicon
+        self.edge_set = edge_set
+        self.rule_set = rule_set
+        self._prepare_data(lexicon, edge_set, rule_set)
 
     def root_cost(self, entry :LexiconEntry) -> float:
-        return float(self.costs[self.word_idx[entry]])
+        return float(self.costs[self.lexicon.get_id(entry)])
 
     def edge_cost(self, edge :GraphEdge) -> float:
-        return float(self.costs[self.edge_idx[edge]])
+        return float(self.costs[len(self.lexicon) +\
+                                self.edge_set.get_id(edge)])
 
     def recompute_costs(self) -> None:
         self.y_pred = self.model.predict([self.X_attr, self.X_rule])
@@ -230,13 +230,12 @@ class NeuralFeatureModel(FeatureModel):
             -multivariate_normal.logpdf(error, np.zeros(self.y.shape[1]),
                                         self.error_cov)
 
-    def fit_to_sample(self, sample :List[Tuple[GraphEdge, float]]) -> None:
-        weights = np.empty(self.y.shape[0])
-        for idx in self.word_idx.values():
-            weights[idx] = 1.0
-        for edge, weight in sample:
-            weights[self.edge_idx[edge]] = weight
-            weights[self.word_idx[edge.target]] -= weight
+    def fit_to_sample(self, sample :np.ndarray) -> None:
+        root_weights = np.ones(len(self.lexicon))
+        for idx in range(sample.shape[0]):
+            root_idx = self.lexicon.get_id(self.edge_set[idx].target)
+            root_weights[root_idx] -= sample[idx]
+        weights = np.hstack((root_weights, sample))
         self.model.fit([self.X_attr, self.X_rule], self.y, 
                        epochs=10, sample_weight=weights,
                        batch_size=1000, verbose=1)
@@ -251,40 +250,36 @@ class NeuralFeatureModel(FeatureModel):
                 write_line(fp, (str(edge.source), str(edge.target),
                                 str(edge.rule), edge_cost, edge_gain))
 
-    def _prepare_data(self, graph :FullGraph):
+    def _prepare_data(self, lexicon :Lexicon, edge_set :EdgeSet,
+                      rule_set :RuleSet) -> None:
         self.ngram_features = self._select_ngram_features(graph.nodes_iter())
         ngram_features_hash = {}
         for i, ngram in enumerate(self.ngram_features):
             ngram_features_hash[ngram] = i
-        self.word_idx = { entry : idx for idx, entry in enumerate(graph.nodes_iter()) }
-        self.edge_idx = { edge : idx for idx, edge in \
-                                enumerate(graph.iter_edges(), len(self.word_idx)) }
-        self.rule_idx = { rule : idx for idx, rule in \
-                                enumerate(set(edge.rule for edge in self.edge_idx), 1) }
         vector_dim = shared.config['Features'].getint('word_vec_dim')
-        sample_size = len(self.word_idx) + len(self.edge_idx)
+        sample_size = len(self.word_set) + len(self.edge_set)
         num_features = len(self.ngram_features) +\
                        shared.config['Features'].getint('word_vec_dim')
         self.X_attr = np.zeros((sample_size, num_features))
         self.X_rule = np.empty(sample_size)
         self.y = np.empty((sample_size, vector_dim))
-        for entry, idx in self.word_idx.items():
-            for ngram in self._extract_n_grams(entry.word + entry.tag):
+        for idx, entry in enumerate(self.lexicon):
+            for ngram in self._extract_n_grams(entry.word):
                 if ngram in ngram_features_hash:
                     self.X_attr[idx, ngram_features_hash[ngram]] = 1
             self.X_rule[idx] = 0
             self.y[idx] = entry.vec
-        for edge, idx in self.edge_idx.items():
-            for ngram in self._extract_n_grams(edge.source.word + edge.source.tag):
+        for idx, edge in enumerate(self.edge_set, len(self.lexicon)):
+            for ngram in self._extract_n_grams(edge.source.word):
                 if ngram in ngram_features_hash:
                     self.X_attr[idx, ngram_features_hash[ngram]] = 1
             self.X_attr[idx, len(ngram_features_hash):] = edge.source.vec
-            self.X_rule[idx] = self.rule_idx[edge.rule]
+            self.X_rule[idx] = self.rule_set.get_id(edge.rule) + 1
             self.y[idx] = edge.target.vec
 
-    def _compile_model(self) -> None:
+    def compile(self) -> None:
         vector_dim = shared.config['Features'].getint('word_vec_dim')
-        num_rules = len(self.rule_idx)+1
+        num_rules = len(self.rule_set)+1
         num_features = len(self.ngram_features) + vector_dim
         input_attr = Input(shape=(num_features,), name='input_attr')
         dense_attr = Dense(100, activation='softplus', name='dense_attr')\
@@ -299,16 +294,17 @@ class NeuralFeatureModel(FeatureModel):
         self.model = Model(inputs=[input_attr, input_rule], outputs=[output])
         self.model.compile(optimizer='adam', loss='mse')
 
-    def _fit_error(self):
+    def _fit_error(self) -> None:
         n = self.y.shape[0]
         error = self.y - self.y_pred
         self.error_cov = np.dot(error.T, error)/n
 
-    def _select_ngram_features(self, entries :Iterable[LexiconEntry]) -> List[str]:
+    def _select_ngram_features(self, entries :Iterable[LexiconEntry]) \
+                              -> List[str]:
         # count n-gram frequencies
         ngram_freqs = defaultdict(lambda: 0)
         for entry in entries:
-            for ngram in self._extract_n_grams(entry.word + entry.tag):
+            for ngram in self._extract_n_grams(entry.word):
                 ngram_freqs[ngram] += 1
         # select most common n-grams
         ngram_features = \
@@ -317,7 +313,7 @@ class NeuralFeatureModel(FeatureModel):
                             reverse=True, key=itemgetter(1))))[:MAX_NUM_NGRAMS]
         return ngram_features
 
-    def _extract_n_grams(self, word :Iterable[str]) -> Iterable[Iterable[str]]:
+    def _extract_n_grams(self, word :List[str]) -> List[List[str]]:
         result = []
         max_n = min(MAX_NGRAM_LENGTH, len(word))+1
         result.extend('^'+''.join(word[:i]) for i in range(1, max_n))
@@ -325,15 +321,35 @@ class NeuralFeatureModel(FeatureModel):
         return result
 
     def save(self, filename :str) -> None:
-        # needed for saving: rule IDs
-        # (word and edge IDs only needed for preparing the dataset)
-        # if present -- save the network and n-gram features
+        self.model.save(filename)
+        # TODO n-gram features
+        raise NotImplementedError()
+        self.save_ngram_features(filename + '.ngrams')
+
+    def save_ngram_features(self, filename :str) -> None:
+        with open_to_write(filename) as fp:
+            for ngram in self.ngram_features:
+                write_line(fp, (ngram,))
+
+    @staticmethod
+    def load(filename :str, lexicon :Lexicon, edge_set :EdgeSet,
+             rule_set :RuleSet) -> 'NeuralFeatureModel':
+        result = NeuralFeatureModel(lexicon, edge_set, rule_set)
+        result.model = keras.models.load_model(filename)
+        result.ngrams = load_ngram_features(filename + '.ngrams')
+        # TODO ngram_features_hash
+        # TODO isolate all n-gram-related things to a new class
+        # (NGramFeatureSet or sth)
         raise NotImplementedError()
 
     @staticmethod
-    def load(filename :str) -> 'NeuralFeatureModel':
-        raise NotImplementedError()
+    def load_ngram_features(filename :str) -> List[List[str]]:
+        result = []
+        for ngram in read_tsv_file(filename):
+            result.append(ngram)
+        return result
 
+# TODO refactor according to the new indexing
 
 class GaussianFeatureModel(FeatureModel):
     def __init__(self, graph :FullGraph) -> None:
@@ -426,10 +442,12 @@ class ModelSuite:
         self.root_model = AlergiaRootModel(lexicon)
         self.root_model.fit()
         self.edge_model = BernoulliEdgeModel(edge_set, rule_set)
-        self.edge_model.fit_to_sample(np.ones(len(rule_set)))
+        self.edge_model.fit_to_sample(np.ones(len(edge_set)))
         self.feature_model = None
         if shared.config['Features'].getfloat('word_vec_weight') > 0:
             self.feature_model = NeuralFeatureModel(edge_set, rule_set)
+            self.feature_model.compile()
+            self.feature_model.fit_to_sample(np.ones(len(edge_set)))
 #             self.feature_model = GaussianFeatureModel(graph)
         self.reset()
 
@@ -487,11 +505,19 @@ class ModelSuite:
         self.reset()
         self.apply_change(sum(branching.edges_by_rule.values(), []), [])
 
+
     def save(self) -> None:
         self.root_model.save(shared.filenames['root-model'])
         self.edge_model.save(shared.filenames['edge-model'])
         if self.feature_model is not None:
             self.feature_model.save(shared.filenames['feature-model'])
+
+    @staticmethod
+    def is_loadable() -> bool:
+        return file_exists(shared.filenames['root-model']) and \
+               file_exists(shared.filenames['edge-model']) and \
+               (shared.config['Features'].getfloat('word_vec_weight') == 0 or \
+                file_exists(shared.filenames['feature-model']))
 
     @staticmethod
     def load() -> 'ModelSuite':
