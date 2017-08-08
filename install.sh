@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BASEDIR=$(dirname $0)
+BASEDIR=$(dirname $(realpath $0))
 PREFIX=/usr
 
 for i in "$@"
@@ -15,6 +15,6 @@ case $i in
 esac
 done
 
-sed "s/BASEDIR=.*$/BASEDIR=$BASEDIR/" $BASEDIR/morle > $PREFIX/bin/morle
+sed "s:BASEDIR=.*$:BASEDIR=$BASEDIR:" $BASEDIR/morle > $PREFIX/bin/morle
 chmod a+x $PREFIX/bin/morle
 
