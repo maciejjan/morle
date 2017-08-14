@@ -375,9 +375,9 @@ class GaussianFeatureModel(FeatureModel):
                 edge = self.edge_set[edge_id]
                 attr_matrix[i,] = edge.target.vec - edge.source.vec
             self.attr.append(attr_matrix)
-        # initial parameter values
-        self.means = np.zeros((len(rule_set)+1, dim))
-        self.vars = np.zeros((len(rule_set)+1, dim))
+        # random initial parameter values
+        self.means = np.random.random_sample((len(rule_set)+1, dim))
+        self.vars = np.random.random_sample((len(rule_set)+1, dim))
 
     def root_cost(self, entry :LexiconEntry) -> float:
         return self.costs[self.lexicon.get_id(entry)]
@@ -392,7 +392,7 @@ class GaussianFeatureModel(FeatureModel):
             self.costs[idx,] = -multivariate_normal.logpdf(\
                                   self.attr[0][idx,], self.means[0], 
                                   np.diag(self.vars[0]))
-        for rule_id, edge_ids in enumerate(self.edge_ids_by_rule):
+        for rule_id, edge_ids in enumerate(self.edge_ids_by_rule, 1):
             for idx, edge_id in enumerate(edge_ids):
                 self.costs[len(self.lexicon)+edge_id,] =\
                     -multivariate_normal.logpdf(self.attr[rule_id][idx,],
@@ -410,10 +410,11 @@ class GaussianFeatureModel(FeatureModel):
                 rule_id = self.rule_set.get_id(self.edge_set[edge_id].rule)
                 weights_by_rule[rule_id+1][idx] = edge_weights[edge_id]
         for rule_id, weights in enumerate(weights_by_rule):
-            self.means[rule_id] = np.average(self.attr[rule_id],
-                                             weights=weights, axis=0)
-            self.vars[rule_id] = np.average(self.attr[rule_id]**2,
-                                            weights=weights, axis=0)
+            if sum(weights) > 0:
+                self.means[rule_id] = np.average(self.attr[rule_id],
+                                                 weights=weights, axis=0)
+                self.vars[rule_id] = np.average(self.attr[rule_id]**2,
+                                                weights=weights, axis=0)
         self.recompute_costs()
 
     def save_costs_to_file(self, filename :str) -> None:

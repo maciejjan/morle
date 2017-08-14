@@ -6,6 +6,7 @@ from models.point import PointModel
 from models.neural import ModelSuite
 import shared
 
+import numpy as np
 import logging
 
 
