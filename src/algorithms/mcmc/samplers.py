@@ -11,6 +11,7 @@ import logging
 import math
 from operator import itemgetter
 import random
+import sys
 import tqdm
 from typing import List, Tuple
 
@@ -208,10 +209,31 @@ class MCMCGraphSampler:
                               edge.target)
         return [edge], edges_to_remove, 1
 
-    def compute_acc_prob(self, edges_to_add, edges_to_remove, prop_prob_ratio):
-        return math.exp(\
-                -self.model.cost_of_change(edges_to_add, edges_to_remove)) *\
-               prop_prob_ratio
+    def compute_acc_prob(self, edges_to_add :List[GraphEdge], 
+                         edges_to_remove :List[GraphEdge], 
+                         prop_prob_ratio :float) -> float:
+        try:
+            return math.exp(\
+                    -self.model.cost_of_change(edges_to_add, edges_to_remove)) *\
+                   prop_prob_ratio
+        except OverflowError as e:
+            logging.getLogger('main').debug('OverflowError')
+            cost = -self.model.cost_of_change(edges_to_add, edges_to_remove)
+            if edges_to_add:
+                logging.getLogger('main').debug('adding:')
+                for edge in edges_to_add:
+                    logging.getLogger('main').debug(
+                        '{} {} {} {}'.format(edge.source, edge.target,
+                                             edge.rule, self.model.edge_cost(edge)))
+            if edges_to_remove:
+                logging.getLogger('main').debug('deleting:')
+                for edge in edges_to_remove:
+                    logging.getLogger('main').debug(
+                        '{} {} {} {}'.format(edge.source, edge.target,
+                                             edge.rule, -self.model.edge_cost(edge)))
+            logging.getLogger('main').debug('total cost: {}'.format(cost))
+            return 1.0
+#             raise e
 
     def accept_move(self, edges_to_add, edges_to_remove):
 #            print('Accepted')

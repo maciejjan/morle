@@ -210,6 +210,7 @@ class FeatureModel:
         raise NotImplementedError()
 
 
+# TODO also: NeuralFeatureModel with an individual per-rule variance?
 class NeuralFeatureModel(FeatureModel):
     def __init__(self, lexicon :Lexicon, edge_set :EdgeSet, rule_set :RuleSet)\
                 -> None:
@@ -375,9 +376,9 @@ class GaussianFeatureModel(FeatureModel):
                 edge = self.edge_set[edge_id]
                 attr_matrix[i,] = edge.target.vec - edge.source.vec
             self.attr.append(attr_matrix)
-        # random initial parameter values
-        self.means = np.random.random_sample((len(rule_set)+1, dim))
-        self.vars = np.random.random_sample((len(rule_set)+1, dim))
+        # initial parameter values
+        self.means = np.zeros((len(rule_set)+1, dim))
+        self.vars = np.ones((len(rule_set)+1, dim))
 
     def root_cost(self, entry :LexiconEntry) -> float:
         return self.costs[self.lexicon.get_id(entry)]
@@ -410,11 +411,12 @@ class GaussianFeatureModel(FeatureModel):
                 rule_id = self.rule_set.get_id(self.edge_set[edge_id].rule)
                 weights_by_rule[rule_id+1][idx] = edge_weights[edge_id]
         for rule_id, weights in enumerate(weights_by_rule):
-            if sum(weights) > 0:
+            if np.sum(weights > 0) > 1:
                 self.means[rule_id] = np.average(self.attr[rule_id],
                                                  weights=weights, axis=0)
-                self.vars[rule_id] = np.average(self.attr[rule_id]**2,
-                                                weights=weights, axis=0)
+                self.vars[rule_id] = \
+                    np.average((self.attr[rule_id]-self.means[rule_id])**2,
+                               weights=weights, axis=0) + 1 #TODO a proper prior!!!
         self.recompute_costs()
 
     def save_costs_to_file(self, filename :str) -> None:
@@ -428,20 +430,11 @@ class GaussianFeatureModel(FeatureModel):
                     write_line(fp, (str(edge.source), str(edge.target),
                                     str(edge.rule), edge_cost, edge_gain))
 
-#     def _fit_rule(self, rule, weights=None) -> None:
-#         m = self.matrices[rule]
-#         if weights is None:
-#             self.means[rule] = np.sum(m, axis=0) / m.shape[0]
-#             self.vars[rule] = np.diag(np.dot(m.T, m)) / m.shape[0]
-#         else:
-#             sum_weights = np.sum(weights)
-#             self.means[rule] = np.sum(weights * m.T, axis=1) / sum_weights
-#             self.vars[rule] = np.diag(np.dot(weights * m.T, m) / sum_weights)
-
     def save(self, filename :str) -> None:
         # for each rule -- save mean and variance
         # also -- save mean and variance of the ROOT "rule"
-        raise NotImplementedError()
+        # rules in the order of IDs
+        np.savez(filename, means=self.means, vars=self.vars)
 
     @staticmethod
     def load(filename :str) -> 'GaussianFeatureModel':
