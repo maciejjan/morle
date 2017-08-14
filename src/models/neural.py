@@ -155,6 +155,9 @@ class BernoulliEdgeModel(EdgeModel):
         # from rule costs
         pass
 
+    def initial_fit(self):
+        self.fit_to_sample(None, np.ones(len(self.edge_set)))
+
     def fit_to_sample(self, root_weights :np.ndarray, 
                       edge_weights :np.ndarray) -> None:
         # compute rule frequencies
@@ -400,6 +403,10 @@ class GaussianFeatureModel(FeatureModel):
                                                 self.means[rule_id],
                                                 np.diag(self.vars[rule_id]))
 
+    def initial_fit(self):
+        self.fit_to_sample(np.ones(len(self.lexicon)),
+                           np.ones(len(self.edge_set)))
+
     def fit_to_sample(self, root_weights :np.ndarray, 
                       edge_weights :np.ndarray) -> None:
         weights_by_rule = [root_weights] +\
@@ -449,8 +456,7 @@ class ModelSuite:
         self.root_model = AlergiaRootModel(lexicon)
         self.root_model.fit()
         self.edge_model = BernoulliEdgeModel(edge_set, rule_set)
-        self.edge_model.fit_to_sample(np.ones(len(lexicon)),
-                                      np.ones(len(edge_set)))
+        self.edge_model.initial_fit()
         self.feature_model = None
         if shared.config['Features'].getfloat('word_vec_weight') > 0:
 #             self.feature_model = NeuralFeatureModel(edge_set, rule_set)
@@ -458,8 +464,7 @@ class ModelSuite:
 #             self.feature_model.fit_to_sample(np.ones(len(edge_set)))
             self.feature_model =\
                 GaussianFeatureModel(lexicon, edge_set, rule_set)
-            self.feature_model.fit_to_sample(np.ones(len(lexicon)),
-                                             np.ones(len(edge_set)))
+            self.feature_model.initial_fit()
         self.reset()
 
     def cost_of_change(self, edges_to_add :List[GraphEdge],
