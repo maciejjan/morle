@@ -438,14 +438,14 @@ class GaussianFeatureModel(FeatureModel):
                                     str(edge.rule), edge_cost, edge_gain))
 
     def save(self, filename :str) -> None:
-        # for each rule -- save mean and variance
-        # also -- save mean and variance of the ROOT "rule"
-        # rules in the order of IDs
-        np.savez(filename, means=self.means, vars=self.vars)
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        np.savez(file_full_path, means=self.means, vars=self.vars)
 
-    @staticmethod
-    def load(filename :str) -> 'GaussianFeatureModel':
-        raise NotImplementedError()
+    def load(self, filename :str) -> None:
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        with np.load(file_full_path) as data:
+            self.means = data['means']
+            self.vars = data['vars']
 
 
 class ModelSuite:
