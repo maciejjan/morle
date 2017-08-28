@@ -2,7 +2,7 @@ import algorithms.fst
 from datastruct.lexicon import LexiconEntry
 from datastruct.rules import Rule
 from models.features.generic import AlergiaStringFeature
-from utils.files import read_tsv_file
+from utils.files import file_exists, read_tsv_file
 import shared
 
 import hfst
@@ -13,14 +13,27 @@ from typing import List, Tuple
 
 
 def load_rules() -> List[Tuple[Rule, float]]:
-    rules_filename = shared.filenames['rules-fit']
-    return [(Rule.from_string(rule), -math.log(prod))\
-            for rule, domsize, prod in\
-                read_tsv_file(rules_filename,
-                              (str, int, float))] +\
-           [(Rule.from_string(':/:___:'), 0.0)]
+    rules_filename = None
+    if shared.config['compile'].getboolean('weighted'):
+        if shared.config['Models'].get('edge_model') == 'bernoulli':
+            rules_filename = shared.filenames['edge-model']
+            return [(Rule.from_string(rule), -math.log(prod))\
+                    for rule, prod in\
+                        read_tsv_file(rules_filename, (str, float))] +\
+                   [(Rule.from_string(':/:___:'), 0.0)]
+        else:
+            raise Exception('Compiling a weighted analyzer is only possible'
+                            ' for the Bernoulli edge model.')
+    else:
+        rules_filename = shared.filenames['rules-modsel']
+        if not file_exists(rules_filename):
+            rules_filename = shared.filenames['rules']
+        return [(Rule.from_string(rule), 0.0)\
+                for (rule,) in read_tsv_file(rules_filename, (str,))] +\
+               [(Rule.from_string(':/:___:'), 0.0)]
 
 
+# TODO load the root model
 def load_roots() -> List[LexiconEntry]:
 
     def root_reader():
@@ -75,7 +88,7 @@ def run() -> None:
         roots_tr = build_root_transducer(roots)
         algorithms.fst.save_transducer(roots_tr, shared.filenames['roots-tr'])
 
-    logging.getLogger('main').info('Building the root generator transducer...')
-    rootgen_tr = build_rootgen_transducer(roots)
-    algorithms.fst.save_transducer(rootgen_tr, shared.filenames['rootgen-tr'])
+#     logging.getLogger('main').info('Building the root generator transducer...')
+#     rootgen_tr = algorithms.fst.load_transducer(shared.filenames['root-model'])
+#     algorithms.fst.save_transducer(rootgen_tr, shared.filenames['rootgen-tr'])
 

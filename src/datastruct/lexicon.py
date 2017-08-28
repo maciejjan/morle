@@ -219,25 +219,13 @@ class Lexicon:
         remove_file(lexc_file)
         return transducer
 
-    # deprecated -- probably not needed
-#     def remove(self, item :LexiconEntry) -> None:
-#         if str(item) not in self.items:
-#             raise KeyError(str(item))
-#         del self.items[str(item)]
-#         if item.symstr in self.items_by_symstr:
-#             self.items_by_symstr[item.symstr].remove(item)
-#             if not self.items_by_symstr[item.symstr]:
-#                 del self.items_by_symstr[item.symstr]
-
     @staticmethod
     def load(filename :str) -> 'Lexicon':
-#         for row in read_tsv_file(filename, get_wordlist_format()):
         lexicon = Lexicon()
         for row in read_tsv_file(filename):
             try:
                 lexicon.add(LexiconEntry(*row))
             except Exception as e:
-#                 raise e
                 logging.getLogger('main').warning('ignoring %s: %s' %\
                                                   (row[0], str(e)))
         return lexicon

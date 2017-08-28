@@ -58,7 +58,7 @@ def analyze(lexicon :Lexicon, ruleset :Set[Rule],
 
 
 def run():
-    lexicon = Lexicon(filename=shared.filenames['analyze.wordlist'])
+    lexicon = Lexicon.load(shared.filenames['analyze.wordlist'])
     analyzer = prepare_analyzer(lexicon)
     rules = load_rule_set()
     analyze(lexicon, rules, analyzer)
