@@ -1,14 +1,15 @@
-from algorithms.align import extract_all_rules
+# from algorithms.align import extract_all_rules
 import algorithms.fst
 from datastruct.lexicon import Lexicon
-from datastruct.rules import Rule
+from models.neural import ModelSuite
+# from datastruct.rules import Rule
 from utils.files import file_exists, open_to_write, read_tsv_file, write_line
-import shared
+# import shared
 
 import hfst
 import logging
 import tqdm
-from typing import Set
+# from typing import Set
 
 
 def prepare_analyzer(lexicon :Lexicon) -> hfst.HfstTransducer:
@@ -19,23 +20,23 @@ def prepare_analyzer(lexicon :Lexicon) -> hfst.HfstTransducer:
     logging.getLogger('main').info('Composing with rules...')
     analyzer.compose(rules_tr)
     analyzer.minimize()
-    logging.getLogger('main').info('Composing again with lexicon...')
-    analyzer.compose(lexicon_tr)
-    analyzer.minimize()
+#     logging.getLogger('main').info('Composing again with lexicon...')
+#     analyzer.compose(lexicon_tr)
+#     analyzer.minimize()
     analyzer.convert(hfst.ImplementationType.HFST_OLW_TYPE)
     return analyzer
 
 
-def load_rule_set() -> Set[Rule]:
-    filename = shared.filenames['rules-fit']
-    if not file_exists(filename):
-        filename = shared.filenames['rules-modsel']
-    if not file_exists(filename):
-        filename = shared.filenames['rules']
-    ruleset = set()
-    for (rule,) in read_tsv_file(filename, types=(str,)):
-        ruleset.add(rule)
-    return ruleset
+# def load_rule_set() -> Set[Rule]:
+#     filename = shared.filenames['rules-fit']
+#     if not file_exists(filename):
+#         filename = shared.filenames['rules-modsel']
+#     if not file_exists(filename):
+#         filename = shared.filenames['rules']
+#     ruleset = set()
+#     for (rule,) in read_tsv_file(filename, types=(str,)):
+#         ruleset.add(rule)
+#     return ruleset
 
 
 def analyze(lexicon :Lexicon, ruleset :Set[Rule], 
@@ -60,6 +61,7 @@ def analyze(lexicon :Lexicon, ruleset :Set[Rule],
 def run():
     lexicon = Lexicon.load(shared.filenames['analyze.wordlist'])
     analyzer = prepare_analyzer(lexicon)
-    rules = load_rule_set()
+#     rules = load_rule_set()
+    model = ModelSuite.load()
     analyze(lexicon, rules, analyzer)
 
