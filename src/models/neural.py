@@ -8,10 +8,13 @@ import shared
 
 from collections import defaultdict
 import hfst
+import logging
 import math
 import numpy as np
 from operator import itemgetter
+import os.path
 from scipy.stats import multivariate_normal
+import tqdm
 from typing import Dict, Iterable, List, Tuple
 import sys
 
@@ -391,17 +394,21 @@ class GaussianFeatureModel(FeatureModel):
 
     # TODO needs optimization?
     def recompute_costs(self) -> None:
+        logging.getLogger('main').info('Recomputing costs...')
         self.costs = np.empty(len(self.lexicon) + len(self.edge_set))
         for idx, entry in enumerate(self.lexicon):
             self.costs[idx,] = -multivariate_normal.logpdf(\
                                   self.attr[0][idx,], self.means[0], 
                                   np.diag(self.vars[0]))
+        progressbar = tqdm.tqdm(total=len(self.edge_ids_by_rule))
         for rule_id, edge_ids in enumerate(self.edge_ids_by_rule, 1):
             for idx, edge_id in enumerate(edge_ids):
                 self.costs[len(self.lexicon)+edge_id,] =\
                     -multivariate_normal.logpdf(self.attr[rule_id][idx,],
                                                 self.means[rule_id],
                                                 np.diag(self.vars[rule_id]))
+            progressbar.update()
+        progressbar.close()
 
     def initial_fit(self):
         self.fit_to_sample(np.ones(len(self.lexicon)),
