@@ -78,8 +78,9 @@ def prepare_analyzer(lexicon :Lexicon) -> hfst.HfstTransducer:
 def run():
     lexicon_to_analyze = Lexicon.load(shared.filenames['analyze.wordlist'])
     analyzer = Analyzer()
-#     for lexitem in lexicon_to_analyze:
-#         analyses = analyzer.analyze(lexitem)
-#         for a in analyses:
+    for lexitem in lexicon_to_analyze:
+        analyses = analyzer.analyze(lexitem)
+        for a in analyses:
 #             print(a.source, a.target, a.rule, a.attr['cost'])
+            print(a.source, a.target, a.rule)
 
