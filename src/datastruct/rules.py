@@ -4,6 +4,7 @@ import hfst
 import re
 from operator import itemgetter
 
+
 class Rule:
     def __init__(self, subst, tag_subst=None, string=None):
         self.subst = subst
@@ -34,6 +35,7 @@ class Rule:
         return Rule(self.subst, self.tag_subst)
     
     # TODO more meaningful name
+    # TODO proposition: check_constraints()
     def check(self, max_affix_length, max_infix_length, infix_slots):
         if len(self.subst) > infix_slots+2:
             return False
