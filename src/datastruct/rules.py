@@ -100,6 +100,8 @@ class Rule:
                 x_seq += (x,) if x != hfst.EPSILON else ()
                 y_seq += (y,) if y != hfst.EPSILON else ()
         subst.append((x_seq, y_seq))
+        tx, ty = tag_subst
+        tag_subst = (tuple(tx), tuple(ty))
         return Rule(tuple(subst), tag_subst)
     
     def reverse(self):

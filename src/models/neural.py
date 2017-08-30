@@ -457,22 +457,23 @@ class GaussianFeatureModel(FeatureModel):
 
 class ModelSuite:
     def __init__(self, lexicon :Lexicon, edge_set :EdgeSet,
-                 rule_set :RuleSet) -> None:
+                 rule_set :RuleSet, initialize_models=True) -> None:
         self.lexicon = lexicon
         self.rule_set = rule_set
-        self.root_model = AlergiaRootModel(lexicon)
-        self.root_model.fit()
-        self.edge_model = BernoulliEdgeModel(edge_set, rule_set)
-        self.edge_model.initial_fit()
-        self.feature_model = None
-        if shared.config['Features'].getfloat('word_vec_weight') > 0:
+        if initialize_models:
+            self.root_model = AlergiaRootModel(lexicon)
+            self.root_model.fit()
+            self.edge_model = BernoulliEdgeModel(edge_set, rule_set)
+            self.edge_model.initial_fit()
+            self.feature_model = None
+            if shared.config['Features'].getfloat('word_vec_weight') > 0:
 #             self.feature_model = NeuralFeatureModel(edge_set, rule_set)
 #             self.feature_model.compile()
 #             self.feature_model.fit_to_sample(np.ones(len(edge_set)))
-            self.feature_model =\
-                GaussianFeatureModel(lexicon, edge_set, rule_set)
-            self.feature_model.initial_fit()
-        self.reset()
+                self.feature_model =\
+                    GaussianFeatureModel(lexicon, edge_set, rule_set)
+                self.feature_model.initial_fit()
+            self.reset()
 
     def cost_of_change(self, edges_to_add :List[GraphEdge],
                        edges_to_delete :List[GraphEdge]) -> float:
@@ -543,6 +544,15 @@ class ModelSuite:
                 file_exists(shared.filenames['feature-model']))
 
     @staticmethod
-    def load() -> 'ModelSuite':
-        raise NotImplementedError()
+    def load(lexicon :Lexicon, edge_set :EdgeSet, rule_set :RuleSet) \
+            -> 'ModelSuite':
+        result = ModelSuite(lexicon, edge_set, rule_set)
+        result.root_model = \
+            AlergiaRootModel.load(shared.filenames['root-model'], lexicon)
+        result.edge_model = \
+            BernoulliEdgemodel.load(shared.filenames['edge-model'])
+        if shared.config['Models'].get('feature_model') == 'gaussian':
+            result.feature_model = \
+                GaussianFeatureModel.load(shared.filenames['feature-model'])
+        return result
 
