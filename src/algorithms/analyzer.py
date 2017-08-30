@@ -26,7 +26,7 @@ class Analyzer:
         logging.getLogger('main').info('Loaded %d rules.' % len(self.rule_set))
 #         edge_set = EdgeSet.load(shared.filenames['graph', lexicon, rule_set)
         # TODO empty edge set???
-#         self.model = ModelSuite.load(lexicon, edge_set, rule_set)
+        self.model = ModelSuite.load()
         self._compile_fst()
 
     def analyze(self, target :LexiconEntry, **kwargs) -> List[GraphEdge]:
@@ -36,23 +36,25 @@ class Analyzer:
         # GraphEdge with the given target and weights
         # algorithm:
         # TODO 1a. if predict_tag: get possible tags from the tag predictor
-        # TODO 1. get possible sources for the given target (self.fst.lookup)
+        # 1. get possible sources for the given target
         sources = set(sum([self.lexicon.get_by_symstr(word) \
                            for word, cost in self.fst.lookup(target.symstr)],
                           []))
-        results = []
-        # TODO 2. get possible (source, rule) pairs (extract rules)
+        result_set = EdgeSet()
+        # 2. get possible (source, rule) pairs (extract rules)
         for source in sources:
             rules = extract_all_rules(source, target)
             for rule in rules:
-#                 print(rule, type(rule), rule in self.rule_set)
                 if rule in self.rule_set:
-                    results.append(GraphEdge(source, target, rule))
-            # TODO take only rules present in the model
-        # TODO 3. rescore the analyses with the model
-#         raise NotImplementedError()
-#         print(results)
-#         print()
+                    result_set.add(GraphEdge(source, target, rule))
+        # 3. rescore the analyses using the model
+        costs = self.model.edges_cost(result_set)
+        results = []
+        for i, edge in enumerate(result_set):
+            edge.attr['cost'] = costs[i]
+            results.append(edge)
+        results.sort(key=lambda r: r.attr['cost'])
+        # 4. sort the analyses according to the cost
         return results
 
     def _compile_fst(self):

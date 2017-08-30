@@ -455,6 +455,12 @@ class GaussianFeatureModel(FeatureModel):
             self.vars = data['vars']
 
 
+# TODO re-structuring the classes:
+# - costs are cached in external classes (e.g. EdgeCostCache)
+# - models store neither costs nor objects (edges/words)
+# - but some models must store the rule set!
+# - EdgeSet implements indexing edges by rule
+
 class ModelSuite:
     def __init__(self, lexicon :Lexicon, edge_set :EdgeSet,
                  rule_set :RuleSet, initialize_models=True) -> None:
@@ -502,6 +508,10 @@ class ModelSuite:
         if self.feature_model is not None:
             result += self.feature_model.edge_cost(edge)
         return result
+
+    def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
+        # TODO cost of an edge set
+        raise NotImplementedError()
 
     def recompute_costs(self) -> None:
         self.edge_model.recompute_costs()
