@@ -19,11 +19,10 @@ class Analyzer:
         # predict_vec :bool
         # TODO pass those things as parameters rather than loading them here!!!
         self.lexicon = Lexicon.load(shared.filenames['wordlist'])
-        rules_file = shared.filenames['rules-modsel']
-        if not file_exists(rules_file):
-            rules_file = shared.filenames['rules']
-        self.rule_set = RuleSet.load(rules_file)
-        logging.getLogger('main').info('Loaded %d rules.' % len(self.rule_set))
+#         rules_file = shared.filenames['rules-modsel']
+#         if not file_exists(rules_file):
+#             rules_file = shared.filenames['rules']
+#         self.rule_set = RuleSet.load(rules_file)
 #         edge_set = EdgeSet.load(shared.filenames['graph', lexicon, rule_set)
         # TODO empty edge set???
         self.model = ModelSuite.load()
@@ -45,7 +44,7 @@ class Analyzer:
         for source in sources:
             rules = extract_all_rules(source, target)
             for rule in rules:
-                if rule in self.rule_set:
+                if rule in self.model.rule_set:
                     result_set.add(GraphEdge(source, target, rule))
         # 3. rescore the analyses using the model
         costs = self.model.edges_cost(result_set)

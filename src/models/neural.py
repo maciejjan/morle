@@ -50,16 +50,17 @@ class RootModel:
 
 class AlergiaRootModel(RootModel):
 
-    def __init__(self, lexicon :Lexicon = None) -> None:
-        self.lexicon = lexicon
-        if self.lexicon is None:
-            self.automaton = hfst.empty_fst()
-        else:
-            self.fit()
+    def __init__(self) -> None:
+#         self.lexicon = lexicon
+        self.automaton = hfst.empty_fst()
+#         if self.lexicon is None:
+#             self.automaton = hfst.empty_fst()
+#         else:
+#             self.fit()
 
-    def fit(self) -> None:
+    def fit(self, lexicon :Lexicon) -> None:
         word_seqs, tag_seqs = [], []
-        for entry in self.lexicon:
+        for entry in lexicon:
             word_seqs.append(entry.word)
             tag_seqs.append(entry.tag)
 
@@ -78,23 +79,21 @@ class AlergiaRootModel(RootModel):
         self.automaton.convert(hfst.ImplementationType.HFST_OLW_TYPE)
         self.recompute_costs()
             
-    def recompute_costs(self) -> None:
-        self.costs = np.empty(len(self.lexicon))
-        for i, entry in enumerate(self.lexicon):
-            self.costs[i] = self.automaton.lookup(entry.symstr)[0][1]
+#     def recompute_costs(self) -> None:
+#         self.costs = np.empty(len(self.lexicon))
+#         for i, entry in enumerate(self.lexicon):
+#             self.costs[i] = self.automaton.lookup(entry.symstr)[0][1]
 
     def root_cost(self, entry :LexiconEntry) -> float:
-        return self.costs[self.lexicon.get_id(entry)]
+        return self.automaton.lookup(entry.symstr)[0][1]
 
     def save(self, filename :str) -> None:
         algorithms.fst.save_transducer(self.automaton, filename)
 
     @staticmethod
-    def load(filename :str, lexicon :Lexicon) -> 'AlergiaRootModel':
+    def load(filename :str) -> 'AlergiaRootModel':
         result = AlergiaRootModel()
-        result.lexicon = lexicon
         result.automaton = algorithms.fst.load_transducer(filename)
-        result.recompute_costs()
         return result
 
 
@@ -130,14 +129,12 @@ class EdgeModel:
 
 
 class BernoulliEdgeModel(EdgeModel):
-    def __init__(self, edge_set :EdgeSet, rule_set :RuleSet,
-                 alpha=1.1, beta=1.1) -> None:
-        self.edge_set = edge_set
+    def __init__(self, rule_set :RuleSet, alpha=1.1, beta=1.1) -> None:
+#         self.edge_set = edge_set
         self.rule_set = rule_set
         self.rule_domsize = np.empty(len(rule_set))
         for i in range(len(rule_set)):
             self.rule_domsize[i] = rule_set.get_domsize(rule_set[i])
-        # actually alpha-1 and beta-1: the prior hyperparameters
         self.alpha = alpha
         self.beta = beta
 #         self.fit_to_sample(np.ones(len(edge_set)))
@@ -153,20 +150,19 @@ class BernoulliEdgeModel(EdgeModel):
         'Cost of having a rule in the model.'
         return -self._rule_cost[self.rule_set.get_id(rule)]
 
-    def recompute_costs(self) -> None:
-        # no edge costs are cached, because they are readily obtained
-        # from rule costs
-        pass
+#     def recompute_costs(self) -> None:
+#         # no edge costs are cached, because they are readily obtained
+#         # from rule costs
+#         pass
+# 
+#     def initial_fit(self):
+#         self.fit_to_sample(None, np.ones(len(self.edge_set)))
 
-    def initial_fit(self):
-        self.fit_to_sample(None, np.ones(len(self.edge_set)))
-
-    def fit_to_sample(self, root_weights :np.ndarray, 
-                      edge_weights :np.ndarray) -> None:
+    def fit(self, edge_set :EdgeSet, edge_weights :np.ndarray) -> None:
         # compute rule frequencies
         rule_freq = np.zeros(len(self.rule_set))
         for i in range(edge_weights.shape[0]):
-            rule_id = self.rule_set.get_id(self.edge_set[i].rule)
+            rule_id = self.rule_set.get_id(edge_set[i].rule)
             rule_freq[rule_id] += edge_weights[i]
         # fit
         self.rule_prob = \
@@ -190,6 +186,12 @@ class BernoulliEdgeModel(EdgeModel):
 class NeuralEdgeModel(EdgeModel):
     pass
 
+
+class RootFeatureModel:
+    pass
+
+class EdgeFeatureModel:
+    pass
 
 class FeatureModel:
     def __init__(self, graph :FullGraph) -> None:
@@ -218,29 +220,28 @@ class FeatureModel:
 
 # TODO also: NeuralFeatureModel with an individual per-rule variance?
 class NeuralFeatureModel(FeatureModel):
-    def __init__(self, lexicon :Lexicon, edge_set :EdgeSet, rule_set :RuleSet)\
-                -> None:
-        self.lexicon = lexicon
-        self.edge_set = edge_set
+    def __init__(self, rule_set :RuleSet) -> None:
+#         self.lexicon = lexicon
+#         self.edge_set = edge_set
         self.rule_set = rule_set
         self._prepare_data(lexicon, edge_set, rule_set)
 
-    def root_cost(self, entry :LexiconEntry) -> float:
-        return float(self.costs[self.lexicon.get_id(entry)])
+#     def root_cost(self, entry :LexiconEntry) -> float:
+#         return float(self.costs[self.lexicon.get_id(entry)])
+# 
+#     def edge_cost(self, edge :GraphEdge) -> float:
+#         return float(self.costs[len(self.lexicon) +\
+#                                 self.edge_set.get_id(edge)])
 
-    def edge_cost(self, edge :GraphEdge) -> float:
-        return float(self.costs[len(self.lexicon) +\
-                                self.edge_set.get_id(edge)])
+#     def recompute_costs(self) -> None:
+#         self.y_pred = self.model.predict([self.X_attr, self.X_rule])
+#         self._fit_error()
+#         error = self.y - self.y_pred
+#         self.costs = \
+#             -multivariate_normal.logpdf(error, np.zeros(self.y.shape[1]),
+#                                         self.error_cov)
 
-    def recompute_costs(self) -> None:
-        self.y_pred = self.model.predict([self.X_attr, self.X_rule])
-        self._fit_error()
-        error = self.y - self.y_pred
-        self.costs = \
-            -multivariate_normal.logpdf(error, np.zeros(self.y.shape[1]),
-                                        self.error_cov)
-
-    def fit_to_sample(self, root_weights :np.ndarray, 
+    def fit(self, root_weights :np.ndarray, 
                       edge_weights :np.ndarray) -> None:
         weights = np.hstack((root_weights, edge_weights))
         self.model.fit([self.X_attr, self.X_rule], self.y, 
@@ -554,11 +555,14 @@ class ModelSuite:
                 file_exists(shared.filenames['feature-model']))
 
     @staticmethod
-    def load(lexicon :Lexicon, edge_set :EdgeSet, rule_set :RuleSet) \
-            -> 'ModelSuite':
-        result = ModelSuite(lexicon, edge_set, rule_set)
+    def load() -> 'ModelSuite':
+        rules_file = shared.filenames['rules-modsel']
+        if not file_exists(rules_file):
+            rules_file = shared.filenames['rules']
+        rule_set = RuleSet.load(rules_file)
+        result = ModelSuite(rule_set)
         result.root_model = \
-            AlergiaRootModel.load(shared.filenames['root-model'], lexicon)
+            AlergiaRootModel.load(shared.filenames['root-model'])
         result.edge_model = \
             BernoulliEdgemodel.load(shared.filenames['edge-model'])
         if shared.config['Models'].get('feature_model') == 'gaussian':
