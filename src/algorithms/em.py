@@ -44,10 +44,15 @@ def softem(full_graph :FullGraph, model :ModelSuite) -> None:
     iter_num = 0
 #     model.recompute_root_costs(full_graph.nodes_iter())
 #     model.recompute_costs()
+    # initialize the models
+    model.root_model.fit(full_graph.lexicon, np.ones(len(full_graph.lexicon)))
+    model.edge_model.fit(full_graph.edge_set,
+                         np.ones(len(full_graph.edge_set)))
+    # EM iteration
     while iter_num < shared.config['fit'].getint('iterations'):
         iter_num += 1
         logging.getLogger('main').info('Iteration %d' % iter_num)
-        model.recompute_costs()
+#         model.recompute_costs()
 
         # expectation step
         sampler = MCMCGraphSampler(full_graph, model,
@@ -67,7 +72,8 @@ def softem(full_graph :FullGraph, model :ModelSuite) -> None:
             root_id = \
                 full_graph.lexicon.get_id(full_graph.edge_set[idx].target)
             root_weights[root_id] -= edge_weights[idx]
-        model.fit_to_sample(root_weights, edge_weights)
+        model.fit(sampler.lexicon, sampler.edge_set, 
+                  root_weights, edge_weights)
 #         model.save_rules_to_file(shared.filenames['rules-fit'])
         model.save()
 

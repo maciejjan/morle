@@ -9,6 +9,7 @@ import shared
 
 import logging
 import math
+import numpy as np
 from operator import itemgetter
 import random
 import sys
@@ -32,14 +33,19 @@ class MCMCGraphSampler:
         self.edge_set = full_graph.edge_set
         self.rule_set = model.rule_set
         self.model = model
+        self.root_cost_cache = np.empty(len(self.lexicon))
+        self.edge_cost_cache = np.empty(len(self.edge_set))
         self.warmup_iter = warmup_iter
         self.sampling_iter = sampling_iter
         self.iter_stat_interval = iter_stat_interval
         self.stats = {}               # type: Dict[str, MCMCStatistic]
         self.iter_num = 0
+        self.reset()
 
         self.branching = self.full_graph.random_branching()
-        self.model.fit_to_branching(self.branching)
+        self.set_initial_branching(self.branching)
+        logging.getLogger('main').debug(\
+            'initial log-likelihood: {}'.format(self._logl))
 
         # TODO deprecated
 #         self.edge_index = Index()
@@ -62,7 +68,12 @@ class MCMCGraphSampler:
         self.stats[name] = stat
 
     def logl(self) -> float:
-        return self.model.cost()
+        return self._logl
+
+    def set_initial_branching(self, branching :Branching) -> None:
+        self._logl = np.sum(self.root_cost_cache) +\
+                     sum(self.edge_cost_cache[self.edge_set.get_id(e)] \
+                         for e in branching.edges_iter())
 
     def run_sampling(self) -> None:
         logging.getLogger('main').info('Warming up the sampler...')
@@ -214,7 +225,7 @@ class MCMCGraphSampler:
                          prop_prob_ratio :float) -> float:
         try:
             return math.exp(\
-                    -self.model.cost_of_change(edges_to_add, edges_to_remove)) *\
+                    -self.cost_of_change(edges_to_add, edges_to_remove)) *\
                    prop_prob_ratio
         except OverflowError as e:
             logging.getLogger('main').debug('OverflowError')
@@ -235,18 +246,36 @@ class MCMCGraphSampler:
             return 1.0
 #             raise e
 
+    def cache_costs(self) -> None:
+        for i, entry in enumerate(self.lexicon):
+            self.root_cost_cache[i] = self.model.root_cost(entry)
+        for i, entry in enumerate(self.edge_set):
+            self.edge_cost_cache[i] = self.model.edge_cost(entry)
+
+    def cost_of_change(self, edges_to_add :List[GraphEdge], 
+                       edges_to_remove :List[GraphEdge]) -> float:
+        result = 0.0
+        for e in edges_to_add:
+            result += self.edge_cost_cache[self.edge_set.get_id(e)]
+            result -= self.root_cost_cache[self.lexicon.get_id(e.target)]
+        for e in edges_to_remove:
+            result -= self.edge_cost_cache[self.edge_set.get_id(e)]
+            result += self.root_cost_cache[self.lexicon.get_id(e.target)]
+        return result
+
     def accept_move(self, edges_to_add, edges_to_remove):
 #            print('Accepted')
+        self._logl += self.cost_of_change(edges_to_add, edges_to_remove)
         # remove edges and update stats
         for e in edges_to_remove:
             self.branching.remove_edge(e)
-            self.model.apply_change([], [e])
+#             self.model.apply_change([], [e])
             for stat in self.stats.values():
                 stat.edge_removed(e)
         # add edges and update stats
         for e in edges_to_add:
             self.branching.add_edge(e)
-            self.model.apply_change([e], [])
+#             self.model.apply_change([e], [])
             for stat in self.stats.values():
                 stat.edge_added(e)
     
@@ -254,6 +283,7 @@ class MCMCGraphSampler:
         self.iter_num = 0
         for stat in self.stats.values():
             stat.reset()
+        self.cache_costs()
 
     def update_stats(self):
         for stat in self.stats.values():

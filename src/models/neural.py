@@ -58,7 +58,8 @@ class AlergiaRootModel(RootModel):
 #         else:
 #             self.fit()
 
-    def fit(self, lexicon :Lexicon) -> None:
+    # TODO weights are presently ignored, should it be so?!
+    def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
         word_seqs, tag_seqs = [], []
         for entry in lexicon:
             word_seqs.append(entry.word)
@@ -77,7 +78,7 @@ class AlergiaRootModel(RootModel):
         self.automaton.concatenate(tag_automaton)
         self.automaton.remove_epsilons()
         self.automaton.convert(hfst.ImplementationType.HFST_OLW_TYPE)
-        self.recompute_costs()
+#         self.recompute_costs()
             
 #     def recompute_costs(self) -> None:
 #         self.costs = np.empty(len(self.lexicon))
@@ -95,6 +96,10 @@ class AlergiaRootModel(RootModel):
         result = AlergiaRootModel()
         result.automaton = algorithms.fst.load_transducer(filename)
         return result
+
+
+class RNNRootModel(RootModel):
+    pass    # TODO
 
 
 class EdgeModel:
@@ -158,12 +163,12 @@ class BernoulliEdgeModel(EdgeModel):
 #     def initial_fit(self):
 #         self.fit_to_sample(None, np.ones(len(self.edge_set)))
 
-    def fit(self, edge_set :EdgeSet, edge_weights :np.ndarray) -> None:
+    def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
         # compute rule frequencies
         rule_freq = np.zeros(len(self.rule_set))
-        for i in range(edge_weights.shape[0]):
+        for i in range(weights.shape[0]):
             rule_id = self.rule_set.get_id(edge_set[i].rule)
-            rule_freq[rule_id] += edge_weights[i]
+            rule_freq[rule_id] += weights[i]
         # fit
         self.rule_prob = \
             (rule_freq + np.repeat(self.alpha-1, len(self.rule_set))) /\
@@ -190,8 +195,42 @@ class NeuralEdgeModel(EdgeModel):
 class RootFeatureModel:
     pass
 
+
+class NeuralRootFeatureModel(RootFeatureModel):
+    def __init__(self) -> None:
+        raise NotImplementedError()
+
+    def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
+        raise NotImplementedError()
+
+
+class GaussianRootFeatureModel(RootFeatureModel):
+    def __init__(self) -> None:
+        raise NotImplementedError()
+
+    def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
+        raise NotImplementedError()
+
+
 class EdgeFeatureModel:
     pass
+
+
+class NeuralEdgeFeatureModel(EdgeFeatureModel):
+    def __init__(self) -> None:
+        raise NotImplementedError()
+
+    def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
+        raise NotImplementedError()
+
+
+class GaussianEdgeFeatureModel(EdgeFeatureModel):
+    def __init__(self) -> None:
+        raise NotImplementedError()
+
+    def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
+        raise NotImplementedError()
+
 
 class FeatureModel:
     def __init__(self, graph :FullGraph) -> None:
@@ -463,42 +502,46 @@ class GaussianFeatureModel(FeatureModel):
 # - EdgeSet implements indexing edges by rule
 
 class ModelSuite:
-    def __init__(self, lexicon :Lexicon, edge_set :EdgeSet,
-                 rule_set :RuleSet, initialize_models=True) -> None:
-        self.lexicon = lexicon
+    def __init__(self, rule_set :RuleSet, initialize_models=True) -> None:
+#         self.lexicon = lexicon
         self.rule_set = rule_set
         if initialize_models:
-            self.root_model = AlergiaRootModel(lexicon)
-            self.root_model.fit()
-            self.edge_model = BernoulliEdgeModel(edge_set, rule_set)
-            self.edge_model.initial_fit()
-            self.feature_model = None
-            if shared.config['Features'].getfloat('word_vec_weight') > 0:
+            self.root_model = AlergiaRootModel()
+            edge_model_type = shared.config['Models'].get('edge_model')
+            if edge_model_type == 'bernoulli':
+                self.edge_model = BernoulliEdgeModel(rule_set)
+#                 self.edge_model.initial_fit()
+            else:
+                # TODO a special exception class
+                raise Exception('Unknown edge model: %s' % edge_model_type)
+            self.root_feature_model = None   # TODO initialize feature models
+            self.edge_feature_model = None   # TODO initialize feature models
+#             if shared.config['Features'].getfloat('word_vec_weight') > 0:
 #             self.feature_model = NeuralFeatureModel(edge_set, rule_set)
 #             self.feature_model.compile()
 #             self.feature_model.fit_to_sample(np.ones(len(edge_set)))
-                self.feature_model =\
-                    GaussianFeatureModel(lexicon, edge_set, rule_set)
-                self.feature_model.initial_fit()
-            self.reset()
+#                 self.feature_model =\
+#                     GaussianFeatureModel(lexicon, edge_set, rule_set)
+#                 self.feature_model.initial_fit()
+#             self.reset()
 
-    def cost_of_change(self, edges_to_add :List[GraphEdge],
-                       edges_to_delete :List[GraphEdge]) -> float:
-        result = 0.0
-        for edge in edges_to_add:
-            result += self.edge_cost(edge) - self.root_cost(edge.target)
-        for edge in edges_to_delete:
-            result -= self.edge_cost(edge) - self.root_cost(edge.target)
-        return result
-
-    def apply_change(self, edges_to_add :List[GraphEdge],
-                     edges_to_delete :List[GraphEdge]) -> None:
-        self._cost += self.cost_of_change(edges_to_add, edges_to_delete)
+#     def cost_of_change(self, edges_to_add :List[GraphEdge],
+#                        edges_to_delete :List[GraphEdge]) -> float:
+#         result = 0.0
+#         for edge in edges_to_add:
+#             result += self.edge_cost(edge) - self.root_cost(edge.target)
+#         for edge in edges_to_delete:
+#             result -= self.edge_cost(edge) - self.root_cost(edge.target)
+#         return result
+# 
+#     def apply_change(self, edges_to_add :List[GraphEdge],
+#                      edges_to_delete :List[GraphEdge]) -> None:
+#         self._cost += self.cost_of_change(edges_to_add, edges_to_delete)
 
     def root_cost(self, entry :LexiconEntry) -> float:
         result = self.root_model.root_cost(entry)
-        if self.feature_model is not None:
-            result += self.feature_model.root_cost(entry)
+        if self.root_feature_model is not None:
+            result += self.root_feature_model.root_cost(entry)
         return result
 
     def rule_cost(self, rule :Rule) -> float:
@@ -506,46 +549,48 @@ class ModelSuite:
 
     def edge_cost(self, edge :GraphEdge) -> float:
         result = self.edge_model.edge_cost(edge)
-        if self.feature_model is not None:
-            result += self.feature_model.edge_cost(edge)
+        if self.edge_feature_model is not None:
+            result += self.edge_feature_model.edge_cost(edge)
         return result
 
     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
-        # TODO cost of an edge set
+        # TODO cost of an edge set -- optimized computation
         raise NotImplementedError()
 
-    def recompute_costs(self) -> None:
-        self.edge_model.recompute_costs()
-        if self.feature_model is not None:
-            self.feature_model.recompute_costs()
+#     def recompute_costs(self) -> None:
+#         self.edge_model.recompute_costs()
+#         if self.feature_model is not None:
+#             self.feature_model.recompute_costs()
 
     def iter_rules(self) -> Iterable[Rule]:
         return iter(self.rule_set)
         
-    def cost(self) -> float:
-        return self._cost
+#     def cost(self) -> float:
+#         return self._cost
 
-    def reset(self) -> None:
-        self._cost = sum(self.root_cost(entry)\
-                        for entry in self.lexicon) +\
-                    self.edge_model.null_cost()
+#     def reset(self) -> None:
+#         self._cost = sum(self.root_cost(entry)\
+#                         for entry in self.lexicon) +\
+#                     self.edge_model.null_cost()
 
-    def fit_to_sample(self, root_weights :np.ndarray, 
-                      edge_weights :np.ndarray) -> None:
-        self.edge_model.fit_to_sample(root_weights, edge_weights)
-        if self.feature_model is not None:
-            self.feature_model.fit_to_sample(root_weights, edge_weights)
+    def fit(self, lexicon :Lexicon, edge_set :EdgeSet, 
+            root_weights :np.ndarray, edge_weights :np.ndarray) -> None:
+        self.edge_model.fit(edge_set, edge_weights)
+#         if self.feature_model is not None:
+#             self.feature_model.fit_to_sample(root_weights, edge_weights)
 
-    def fit_to_branching(self, branching :Branching) -> None:
-        self.reset()
-        self.apply_change(sum(branching.edges_by_rule.values(), []), [])
+#     def fit_to_branching(self, branching :Branching) -> None:
+#         self.reset()
+#         self.apply_change(sum(branching.edges_by_rule.values(), []), [])
 
 
     def save(self) -> None:
         self.root_model.save(shared.filenames['root-model'])
         self.edge_model.save(shared.filenames['edge-model'])
-        if self.feature_model is not None:
-            self.feature_model.save(shared.filenames['feature-model'])
+        if self.root_feature_model is not None:
+            self.root_feature_model.save(shared.filenames['root-feature-model'])
+        if self.edge_feature_model is not None:
+            self.edge_feature_model.save(shared.filenames['edge-feature-model'])
 
     @staticmethod
     def is_loadable() -> bool:

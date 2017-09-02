@@ -31,7 +31,9 @@ class GraphEdge:
         return self.key() == other.key()
 
     def to_tuple(self) -> Tuple[LexiconEntry, LexiconEntry, Rule, Dict]:
-        return (self.source, self.target, self.rule, self.attr)
+        attr = self.attr
+        attr['object'] = self
+        return (self.source, self.target, self.rule, attr)
 
 
 class EdgeSet:
@@ -86,6 +88,10 @@ class Graph(nx.MultiDiGraph):
         super().remove_edge(edge.source, edge.target, edge.rule)
         if self.find_edges(edge.source, edge.target):
             raise Exception('remove_edge apparently didn\'t work')
+
+    def edges_iter(self) -> Iterable[GraphEdge]:
+        return (attr['object'] for source, target, rule, attr in \
+                                   super().edges_iter(keys=True, data=True))
 
     def find_edges(self, source :LexiconEntry, target :LexiconEntry) \
                   -> List[GraphEdge]:
