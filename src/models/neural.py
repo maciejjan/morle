@@ -188,6 +188,9 @@ class BernoulliEdgeModel(EdgeModel):
         raise NotImplementedError()
 
 
+# TODO sampling of negative examples:
+# use the automaton (L .o. R - L .o. R .o. L), not necessarily minimized
+# also: try passing alignments to a RNN instead of rule embedding
 class NeuralEdgeModel(EdgeModel):
     pass
 
@@ -205,6 +208,15 @@ class NeuralRootFeatureModel(RootFeatureModel):
 
 
 class GaussianRootFeatureModel(RootFeatureModel):
+    def __init__(self) -> None:
+        raise NotImplementedError()
+
+    def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
+        raise NotImplementedError()
+
+
+class RNNRootFeatureModel(RootFeatureModel):
+    # TODO a character-level RNN for predicting vector features
     def __init__(self) -> None:
         raise NotImplementedError()
 
@@ -496,47 +508,47 @@ class GaussianFeatureModel(FeatureModel):
 
 
 # TODO re-structuring the classes:
-# - costs are cached in external classes (e.g. EdgeCostCache)
-# - models store neither costs nor objects (edges/words)
-# - but some models must store the rule set!
-# - EdgeSet implements indexing edges by rule
+# - move n-gram features (and maybe other features?) to ModelSuite
+#   (shared among model components)
+# - add feature extraction functionality to ModelSuite
 
 class ModelSuite:
+    # TODO break up in smaller methods
     def __init__(self, rule_set :RuleSet, initialize_models=True) -> None:
-#         self.lexicon = lexicon
         self.rule_set = rule_set
         if initialize_models:
             self.root_model = AlergiaRootModel()
             edge_model_type = shared.config['Models'].get('edge_model')
             if edge_model_type == 'bernoulli':
                 self.edge_model = BernoulliEdgeModel(rule_set)
-#                 self.edge_model.initial_fit()
             else:
-                # TODO a special exception class
                 raise Exception('Unknown edge model: %s' % edge_model_type)
-            self.root_feature_model = None   # TODO initialize feature models
-            self.edge_feature_model = None   # TODO initialize feature models
-#             if shared.config['Features'].getfloat('word_vec_weight') > 0:
-#             self.feature_model = NeuralFeatureModel(edge_set, rule_set)
-#             self.feature_model.compile()
-#             self.feature_model.fit_to_sample(np.ones(len(edge_set)))
-#                 self.feature_model =\
-#                     GaussianFeatureModel(lexicon, edge_set, rule_set)
-#                 self.feature_model.initial_fit()
-#             self.reset()
-
-#     def cost_of_change(self, edges_to_add :List[GraphEdge],
-#                        edges_to_delete :List[GraphEdge]) -> float:
-#         result = 0.0
-#         for edge in edges_to_add:
-#             result += self.edge_cost(edge) - self.root_cost(edge.target)
-#         for edge in edges_to_delete:
-#             result -= self.edge_cost(edge) - self.root_cost(edge.target)
-#         return result
-# 
-#     def apply_change(self, edges_to_add :List[GraphEdge],
-#                      edges_to_delete :List[GraphEdge]) -> None:
-#         self._cost += self.cost_of_change(edges_to_add, edges_to_delete)
+            self.root_feature_model = None
+            root_feature_model_type = \
+                shared.config['Models'].get('root_feature_model')
+            if root_feature_model_type == 'gaussian':
+                self.root_feature_model = GaussianRootFeatureModel()
+            elif root_feature_model_type == 'neural':
+                self.root_feature_model = NeuralRootFeatureModel()
+            elif root_feature_model_type == 'rnn':
+                self.root_feature_model = RNNRootFeatureModel()
+            elif root_feature_model_type == 'none':
+                pass
+            else:
+                raise Exception('Unknown root feature model: %s' \
+                                % edge_model_type)
+            self.edge_feature_model = None
+            edge_feature_model_type = \
+                shared.config['Models'].get('root_feature_model')
+            if edge_feature_model_type == 'gaussian':
+                self.edge_feature_model = GaussianEdgeFeatureModel()
+            elif edge_feature_model_type == 'neural':
+                self.edge_feature_model = NeuralEdgeFeatureModel()
+            elif edge_feature_model_type == 'none':
+                pass
+            else:
+                raise Exception('Unknown edge feature model: %s' \
+                                % edge_model_type)
 
     def root_cost(self, entry :LexiconEntry) -> float:
         result = self.root_model.root_cost(entry)
@@ -557,31 +569,16 @@ class ModelSuite:
         # TODO cost of an edge set -- optimized computation
         raise NotImplementedError()
 
-#     def recompute_costs(self) -> None:
-#         self.edge_model.recompute_costs()
-#         if self.feature_model is not None:
-#             self.feature_model.recompute_costs()
-
     def iter_rules(self) -> Iterable[Rule]:
         return iter(self.rule_set)
         
-#     def cost(self) -> float:
-#         return self._cost
-
-#     def reset(self) -> None:
-#         self._cost = sum(self.root_cost(entry)\
-#                         for entry in self.lexicon) +\
-#                     self.edge_model.null_cost()
-
     def fit(self, lexicon :Lexicon, edge_set :EdgeSet, 
             root_weights :np.ndarray, edge_weights :np.ndarray) -> None:
         self.edge_model.fit(edge_set, edge_weights)
-#         if self.feature_model is not None:
-#             self.feature_model.fit_to_sample(root_weights, edge_weights)
-
-#     def fit_to_branching(self, branching :Branching) -> None:
-#         self.reset()
-#         self.apply_change(sum(branching.edges_by_rule.values(), []), [])
+        if self.root_feature_model is not None:
+            self.root_feature_model.fit(lexicon, root_weights)
+        if self.edge_feature_model is not None:
+            self.edge_feature_model.fit(edge_set, edge_weights)
 
 
     def save(self) -> None:
