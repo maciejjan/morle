@@ -196,7 +196,12 @@ class NeuralEdgeModel(EdgeModel):
 
 
 # TODO also using sampling of negative examples
-class LogLinearEdgeModel(EdgeModel):
+class LogisticEdgeModel(EdgeModel):
+    pass
+
+
+# TODO pass alignments on character level to an RNN instead of rule embedding
+class AlignmentRNNEdgeModel(EdgeModel):
     pass
 
 
