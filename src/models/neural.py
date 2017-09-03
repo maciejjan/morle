@@ -195,6 +195,11 @@ class NeuralEdgeModel(EdgeModel):
     pass
 
 
+# TODO also using sampling of negative examples
+class LogLinearEdgeModel(EdgeModel):
+    pass
+
+
 class RootFeatureModel:
     pass
 
