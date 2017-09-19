@@ -1,6 +1,6 @@
 from algorithms.analyzer import Analyzer
 from datastruct.lexicon import Lexicon
-from models.neural import ModelSuite
+from models.suite import ModelSuite
 import shared
 
 

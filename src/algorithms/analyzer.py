@@ -3,7 +3,7 @@ import algorithms.fst
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.graph import GraphEdge, EdgeSet
 from datastruct.rules import RuleSet
-from models.neural import ModelSuite
+from models.suite import ModelSuite
 from utils.files import file_exists
 import shared
 
