@@ -16,13 +16,13 @@ from typing import List
 # - tag prediction
 
 class Analyzer:
-    def __init__(self, **kwargs):
+    def __init__(self, lexicon :Lexicon, model :ModelSuite, **kwargs):
         # kwargs:
         # predict_tag :bool
         # predict_vec :bool
         # TODO pass those things as parameters rather than loading them here!!!
-        self.lexicon = Lexicon.load(shared.filenames['wordlist'])
-        self.model = ModelSuite.load()
+        self.lexicon = lexicon
+        self.model = model
         self._compile_fst()
 
     def analyze(self, target :LexiconEntry, **kwargs) -> List[GraphEdge]:
@@ -45,7 +45,7 @@ class Analyzer:
         # (TODO max_results etc.)
         return results
 
-    def _compile_fst(self):
+    def _compile_fst(self) -> None:
         rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
         logging.getLogger('main').info('Building lexicon transducer...')
         lexicon_tr = algorithms.fst.load_transducer(\
