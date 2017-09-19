@@ -3,7 +3,8 @@ from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import GraphEdge, EdgeSet, FullGraph, Branching
 from datastruct.rules import Rule, RuleSet
 from models.generic import Model
-from utils.files import file_exists, open_to_write, write_line, write_tsv_file
+from utils.files import file_exists, open_to_write, read_tsv_file, write_line,\
+                        write_tsv_file
 import shared
 
 from collections import defaultdict
@@ -163,6 +164,12 @@ class BernoulliEdgeModel(EdgeModel):
 #     def initial_fit(self):
 #         self.fit_to_sample(None, np.ones(len(self.edge_set)))
 
+    def set_probs(self, probs :np.ndarray) -> None:
+        self.rule_prob = probs
+        self._rule_appl_cost = -np.log(probs) + np.log(1-probs)
+        self._rule_cost = -np.log(1-probs) * self.rule_domsize
+        self._null_cost = -np.sum(self._rule_cost)
+
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
         # compute rule frequencies
         rule_freq = np.zeros(len(self.rule_set))
@@ -170,22 +177,27 @@ class BernoulliEdgeModel(EdgeModel):
             rule_id = self.rule_set.get_id(edge_set[i].rule)
             rule_freq[rule_id] += weights[i]
         # fit
-        self.rule_prob = \
-            (rule_freq + np.repeat(self.alpha-1, len(self.rule_set))) /\
-            (self.rule_domsize + np.repeat(self.alpha+self.beta-2,
-                                           len(self.rule_set)))
-        self._rule_appl_cost = -np.log(self.rule_prob) +\
-                                np.log(1-self.rule_prob)
-        self._rule_cost = -np.log(1-self.rule_prob) * self.rule_domsize
-        self._null_cost = -np.sum(self._rule_cost)
+        probs = (rule_freq + np.repeat(self.alpha-1, len(self.rule_set))) /\
+                 (self.rule_domsize + np.repeat(self.alpha+self.beta-2,
+                                                len(self.rule_set)))
+        self.set_probs(probs)
+#         self._rule_appl_cost = -np.log(self.rule_prob) +\
+#                                 np.log(1-self.rule_prob)
+#         self._rule_cost = -np.log(1-self.rule_prob) * self.rule_domsize
+#         self._null_cost = -np.sum(self._rule_cost)
 
     def save(self, filename :str) -> None:
         write_tsv_file(filename, ((rule, self.rule_prob[i])\
                                   for i, rule in enumerate(self.rule_set)))
 
     @staticmethod
-    def load(filename :str) -> 'BernoulliEdgeModel':
-        raise NotImplementedError()
+    def load(filename :str, rule_set :RuleSet) -> 'BernoulliEdgeModel':
+        result = BernoulliEdgeModel(rule_set)
+        probs = np.zeros(len(rule_set))
+        for rule, prob in read_tsv_file(filename, (str, float)):
+            probs[rule_set.get_id(rule_set[rule])] = prob
+        result.set_probs(probs)
+        return result
 
 
 # TODO sampling of negative examples:
@@ -573,11 +585,12 @@ class ModelSuite:
         result = self.edge_model.edge_cost(edge)
         if self.edge_feature_model is not None:
             result += self.edge_feature_model.edge_cost(edge)
+            result -= self.root_feature_model.root_cost(edge.target)
         return result
 
-    def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
-        # TODO cost of an edge set -- optimized computation
-        raise NotImplementedError()
+#     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
+#         # TODO cost of an edge set -- optimized computation
+#         raise NotImplementedError()
 
     def iter_rules(self) -> Iterable[Rule]:
         return iter(self.rule_set)
@@ -613,12 +626,50 @@ class ModelSuite:
             rules_file = shared.filenames['rules']
         rule_set = RuleSet.load(rules_file)
         result = ModelSuite(rule_set)
-        result.root_model = \
-            AlergiaRootModel.load(shared.filenames['root-model'])
-        result.edge_model = \
-            BernoulliEdgemodel.load(shared.filenames['edge-model'])
-        if shared.config['Models'].get('feature_model') == 'gaussian':
-            result.feature_model = \
-                GaussianFeatureModel.load(shared.filenames['feature-model'])
+        result.root_model = AlergiaRootModel.load(\
+                                shared.filenames['root-model'])
+        edge_model_type = shared.config['Models'].get('edge_model')
+        if edge_model_type == 'bernoulli':
+            result.edge_model = BernoulliEdgeModel.load(\
+                                  shared.filenames['edge-model'], rule_set)
+        else:
+            raise RuntimeError('Unknown edge model: %s' % edge_model_type)
+        result.root_feature_model = None
+        root_feature_model_type = \
+            shared.config['Models'].get('root_feature_model')
+        # load models
+        if root_feature_model_type == 'gaussian':
+            result.root_feature_model =\
+                GaussianRootFeatureModel.load(
+                    shared.filenames['root-feature-model'])
+        elif root_feature_model_type == 'neural':
+            result.root_feature_model =\
+                NeuralRootFeatureModel.load(
+                    shared.filenames['root-feature-model'])
+        elif root_feature_model_type == 'rnn':
+            result.root_feature_model =\
+                RNNRootFeatureModel.load(
+                    shared.filenames['root-feature-model'])
+        elif root_feature_model_type == 'none':
+            pass
+        else:
+            raise Exception('Unknown root feature model: %s' \
+                            % root_model_type)
+        result.edge_feature_model = None
+        edge_feature_model_type = \
+            shared.config['Models'].get('edge_feature_model')
+        if edge_feature_model_type == 'gaussian':
+            result.edge_feature_model =\
+                GaussianEdgeFeatureModel.load(
+                    shared.filenames['edge-feature-model'])
+        elif edge_feature_model_type == 'neural':
+            result.edge_feature_model =\
+                NeuralEdgeFeatureModel.load(
+                    shared.filenames['edge-feature-model'])
+        elif edge_feature_model_type == 'none':
+            pass
+        else:
+            raise Exception('Unknown edge feature model: %s' \
+                            % edge_model_type)
         return result
 
