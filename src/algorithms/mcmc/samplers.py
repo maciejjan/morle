@@ -3,7 +3,7 @@ from algorithms.mcmc.statistics import \
     RuleStatistic, UnorderedWordPairStatistic
 from datastruct.lexicon import LexiconEntry
 from datastruct.graph import GraphEdge, Branching, FullGraph
-from models.neural import ModelSuite
+from models.suite import ModelSuite
 from utils.files import open_to_write, write_line
 import shared
 

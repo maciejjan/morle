@@ -1,6 +1,7 @@
 import algorithms.alergia
 import algorithms.fst
 from datastruct.lexicon import LexiconEntry, Lexicon
+import shared
 
 import hfst
 import numpy as np

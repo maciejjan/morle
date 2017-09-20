@@ -3,7 +3,7 @@ from datastruct.graph import FullGraph, EdgeSet
 from datastruct.lexicon import Lexicon
 from datastruct.rules import Rule, RuleSet
 # from models.point import PointModel
-from models.neural import ModelSuite
+from models.suite import ModelSuite
 from utils.files import file_exists, read_tsv_file
 import shared
 

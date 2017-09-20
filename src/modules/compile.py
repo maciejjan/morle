@@ -1,7 +1,6 @@
 import algorithms.fst
 from datastruct.lexicon import LexiconEntry
 from datastruct.rules import Rule
-from models.features.generic import AlergiaStringFeature
 from utils.files import file_exists, read_tsv_file
 import shared
 
@@ -12,6 +11,7 @@ from operator import itemgetter
 from typing import List, Tuple
 
 
+# TODO use RuleSet instead!
 def load_rules() -> List[Tuple[Rule, float]]:
     rules_filename = None
     if shared.config['compile'].getboolean('weighted'):
@@ -33,7 +33,7 @@ def load_rules() -> List[Tuple[Rule, float]]:
                [(Rule.from_string(':/:___:'), 0.0)]
 
 
-# TODO load the root model
+# TODO use Lexicon instead!
 def load_roots() -> List[LexiconEntry]:
 
     def root_reader():
@@ -69,10 +69,10 @@ def build_root_transducer(roots :List[LexiconEntry]) -> hfst.HfstTransducer:
     return result
 
 
-def build_rootgen_transducer(roots :List[LexiconEntry]) -> hfst.HfstTransducer:
-    alergia = AlergiaStringFeature()
-    alergia.fit(roots)
-    return alergia.automaton
+# def build_rootgen_transducer(roots :List[LexiconEntry]) -> hfst.HfstTransducer:
+#     alergia = AlergiaStringFeature()
+#     alergia.fit(roots)
+#     return alergia.automaton
 
 
 def run() -> None:
