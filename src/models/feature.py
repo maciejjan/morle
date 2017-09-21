@@ -12,7 +12,7 @@ class RootFeatureModel:
 
 class NeuralRootFeatureModel(RootFeatureModel):
     def __init__(self) -> None:
-        raise NotImplementedError()
+        pass
 
     def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
         raise NotImplementedError()
@@ -23,6 +23,11 @@ class GaussianRootFeatureModel(RootFeatureModel):
         raise NotImplementedError()
 
     def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
+        self.mean = np.average(lexicon.feature_matrix, weights=weights)
+        err = lexicon.feature_matrix - self.mean
+        self.var = np.average(err**2, weights=weights)
+
+    def root_cost(self, vec :np.ndarray) -> float:
         raise NotImplementedError()
 
 
@@ -49,9 +54,23 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
 
 class GaussianEdgeFeatureModel(EdgeFeatureModel):
     def __init__(self) -> None:
-        raise NotImplementedError()
+        self.means = {}
+        self.vars = {}
+
+    def fit_rule(self, rule :Rule, feature_matrix :np.ndarray,
+                 weights :np.ndarray) -> None:
+        self.means[rule] = np.average(feature_matrix, weights=weights)
+        err = feature_matrix - self.means[rule]
+        self.vars[rule] = np.average(err**2, weights=weights)
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
+        for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
+            edge_ids = tuple(edge_ids)
+            feature_matrix = edge_set.feature_matrix[edge_ids,:]
+            weights = weights[edge_ids,]
+            self.fit_rule(rule, feature_matrix, weights)
+
+    def edge_cost(self, vec :np.ndarray) -> float:
         raise NotImplementedError()
 
 

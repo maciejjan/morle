@@ -41,8 +41,9 @@ class EdgeSet:
        and indexing (i.e. assigning IDs to) the edges.'''
 
     def __init__(self) -> None:
-        self.items = []     # type: List[GraphEdge]
-        self.index = {}     # type: Dict[GraphEdge, int]
+        self.items = []               # type: List[GraphEdge]
+        self.index = {}               # type: Dict[GraphEdge, int]
+        self.edge_ids_by_rule = {}    # type: Dict[Rule, List[int]]
         self.next_id = 0
 
     def __iter__(self) -> Iterable[GraphEdge]:
@@ -60,10 +61,16 @@ class EdgeSet:
     def add(self, edge :GraphEdge) -> None:
         self.items.append(edge)
         self.index[edge] = self.next_id
+        if edge.rule not in self.edge_ids_by_rule:
+            self.edge_ids_by_rule[edge.rule] = []
+        self.edge_ids_by_rule[edge.rule].append(self.next_id)
         self.next_id += 1
 
     def get_id(self, edge :GraphEdge) -> int:
         return self.index[edge]
+
+    def get_edge_ids_by_rule(self) -> Dict[Rule, List[int]]:
+        return self.edge_ids_by_rule
 
     def save(self, filename :str) -> None:
         with open_to_write(filename) as fp:
