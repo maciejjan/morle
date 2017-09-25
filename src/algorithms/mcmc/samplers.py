@@ -244,13 +244,20 @@ class MCMCGraphSampler:
                                              edge.rule, -self.model.edge_cost(edge)))
             logging.getLogger('main').debug('total cost: {}'.format(cost))
             return 1.0
-#             raise e
 
     def cache_costs(self) -> None:
+        logging.getLogger('main').info('Computing root costs...')
+        progressbar = tqdm.tqdm(total=len(self.lexicon))
         for i, entry in enumerate(self.lexicon):
             self.root_cost_cache[i] = self.model.root_cost(entry)
-        for i, entry in enumerate(self.edge_set):
-            self.edge_cost_cache[i] = self.model.edge_cost(entry)
+            progressbar.update()
+        progressbar.close()
+        logging.getLogger('main').info('Computing edge costs...')
+        progressbar = tqdm.tqdm(total=len(self.edge_set))
+        for i, edge in enumerate(self.edge_set):
+            self.edge_cost_cache[i] = self.model.edge_cost(edge)
+            progressbar.update()
+        progressbar.close()
 
     def cost_of_change(self, edges_to_add :List[GraphEdge], 
                        edges_to_remove :List[GraphEdge]) -> float:
@@ -264,7 +271,6 @@ class MCMCGraphSampler:
         return result
 
     def accept_move(self, edges_to_add, edges_to_remove):
-#            print('Accepted')
         self._logl += self.cost_of_change(edges_to_add, edges_to_remove)
         # remove edges and update stats
         for e in edges_to_remove:

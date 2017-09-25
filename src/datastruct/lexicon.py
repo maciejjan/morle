@@ -11,19 +11,6 @@ import logging
 from typing import Any, Dict, Callable, Iterable, List, Tuple, Union
 
 
-# def get_wordlist_format() -> List[Callable[[Any], Any]]:
-#     result = [str]  # type: List[Callable[[Any], Any]]
-#     if shared.config['General'].getboolean('supervised'):
-#         result.append(str)
-#     if shared.config['Features'].getfloat('word_freq_weight') > 0:
-#         result.append(int)
-#     if shared.config['Features'].getfloat('word_vec_weight') > 0:
-#         vector_sep = shared.format['vector_sep']
-#         result.append(\
-#             lambda x: np.array(list(map(float, x.split(vector_sep)))))
-#     return result
-
-
 def tokenize_word(string :str) -> Tuple[List[str], List[str], str]:
     '''Separate a string into a word and a POS-tag,
        both expressed as sequences of symbols.'''
@@ -156,6 +143,9 @@ class Lexicon:
         self.items_by_key = {}    # type: Dict[str, LexiconEntry]
         self.items_by_symstr = {} # type: Dict[str, List[LexiconEntry]]
         self.next_id = 0
+        if shared.config['Models'].get('root_feature_model') != 'none':
+            dim = shared.config['Features'].getint('word_vec_dim')
+            self.feature_matrix = np.ndarray((0, dim))
 
     def __contains__(self, key :Union[str, LexiconEntry]) -> bool:
         if isinstance(key, LexiconEntry):
@@ -191,16 +181,25 @@ class Lexicon:
     def symstrs(self) -> Iterable[str]:
         return self.items_by_symstr.keys()
 
-    def add(self, item :LexiconEntry) -> None:
-        if str(item) in self.items_by_key:
-            raise ValueError('{} already in vocabulary'.format(str(item)))
-        if not item.symstr in self.items_by_symstr:
-            self.items_by_symstr[item.symstr] = []
-        self.items.append(item)
-        self.index[item] = self.next_id
-        self.items_by_key[str(item)] = item
-        self.items_by_symstr[item.symstr].append(item)
-        self.next_id += 1
+    def add(self, items :Union[LexiconEntry, Iterable[LexiconEntry]]) -> None:
+        if isinstance(items, LexiconEntry):
+            items = [items]
+        if not isinstance(items, list):
+            items = list(items)
+        for item in items:
+            if str(item) in self.items_by_key:
+                raise ValueError('{} already in vocabulary'.format(str(item)))
+            if not item.symstr in self.items_by_symstr:
+                self.items_by_symstr[item.symstr] = []
+            self.items.append(item)
+            self.index[item] = self.next_id
+            self.items_by_key[str(item)] = item
+            self.items_by_symstr[item.symstr].append(item)
+            self.next_id += 1
+        if shared.config['Models'].get('root_feature_model') != 'none':
+            self.feature_matrix = \
+                np.vstack((self.feature_matrix,
+                           np.array([item.vec for item in items])))
 
     def to_fst(self) -> hfst.HfstTransducer:
         lexc_file = shared.filenames['lexicon-tr'] + '.lex'
@@ -222,12 +221,14 @@ class Lexicon:
     @staticmethod
     def load(filename :str) -> 'Lexicon':
         lexicon = Lexicon()
+        items_to_add = []
         for row in read_tsv_file(filename):
             try:
-                lexicon.add(LexiconEntry(*row))
+                items_to_add.append(LexiconEntry(*row))
             except Exception as e:
                 logging.getLogger('main').warning('ignoring %s: %s' %\
                                                   (row[0], str(e)))
+        lexicon.add(items_to_add)
         return lexicon
 
     def _lexc_escape(self, string :str) -> str:

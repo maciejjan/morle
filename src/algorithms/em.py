@@ -42,17 +42,15 @@ import logging
 
 def softem(full_graph :FullGraph, model :ModelSuite) -> None:
     iter_num = 0
-#     model.recompute_root_costs(full_graph.nodes_iter())
-#     model.recompute_costs()
     # initialize the models
     model.root_model.fit(full_graph.lexicon, np.ones(len(full_graph.lexicon)))
-    model.edge_model.fit(full_graph.edge_set,
-                         np.ones(len(full_graph.edge_set)))
+    model.fit(full_graph.lexicon, full_graph.edge_set,
+              np.ones(len(full_graph.lexicon)),
+              np.ones(len(full_graph.edge_set)))
     # EM iteration
     while iter_num < shared.config['fit'].getint('iterations'):
         iter_num += 1
         logging.getLogger('main').info('Iteration %d' % iter_num)
-#         model.recompute_costs()
 
         # expectation step
         sampler = MCMCGraphSampler(full_graph, model,
@@ -64,8 +62,6 @@ def softem(full_graph :FullGraph, model :ModelSuite) -> None:
         sampler.run_sampling()
 
         # maximization step
-#         sample = list((edge, sampler.stats['exp_edge_freq'].value(edge))\
-#                       for edge in sampler.edge_index)
         edge_weights = sampler.stats['exp_edge_freq'].value()
         root_weights = np.ones(len(full_graph.lexicon))
         for idx in range(edge_weights.shape[0]):
@@ -74,13 +70,9 @@ def softem(full_graph :FullGraph, model :ModelSuite) -> None:
             root_weights[root_id] -= edge_weights[idx]
         model.fit(sampler.lexicon, sampler.edge_set, 
                   root_weights, edge_weights)
-#         model.save_rules_to_file(shared.filenames['rules-fit'])
         model.save()
 
         logging.getLogger('main').info('cost = %f' %\
                 sampler.stats['exp_cost'].value())
-#         logging.getLogger('main').debug('roots_cost = %f' % model.roots_cost)
-#         logging.getLogger('main').debug('rules_cost = %f' % model.rules_cost)
-#         logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
 
 

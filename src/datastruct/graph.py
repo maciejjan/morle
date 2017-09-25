@@ -1,11 +1,13 @@
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import Rule, RuleSet
 from utils.files import open_to_write, read_tsv_file, write_line
+import shared
 
 from collections import defaultdict
 import networkx as nx
+import numpy as np
 import random
-from typing import Dict, Iterable, List, Set, Tuple
+from typing import Dict, Iterable, List, Set, Tuple, Union
 
 
 
@@ -45,6 +47,9 @@ class EdgeSet:
         self.index = {}               # type: Dict[GraphEdge, int]
         self.edge_ids_by_rule = {}    # type: Dict[Rule, List[int]]
         self.next_id = 0
+        if shared.config['Models'].get('edge_feature_model') != 'none':
+            dim = shared.config['Features'].getint('word_vec_dim')
+            self.feature_matrix = np.ndarray((0, dim))
 
     def __iter__(self) -> Iterable[GraphEdge]:
         return iter(self.items)
@@ -58,13 +63,24 @@ class EdgeSet:
     def __len__(self) -> int:
         return len(self.items)
 
-    def add(self, edge :GraphEdge) -> None:
-        self.items.append(edge)
-        self.index[edge] = self.next_id
-        if edge.rule not in self.edge_ids_by_rule:
-            self.edge_ids_by_rule[edge.rule] = []
-        self.edge_ids_by_rule[edge.rule].append(self.next_id)
-        self.next_id += 1
+    def add(self, edges :Union[GraphEdge, Iterable[GraphEdge]]) -> None:
+        if isinstance(edges, GraphEdge):
+            edges = [edges]
+        if not isinstance(edges, list):
+            edges = list(edges)             # because we need two iterations
+        for edge in edges:
+            self.items.append(edge)
+            self.index[edge] = self.next_id
+            if edge.rule not in self.edge_ids_by_rule:
+                self.edge_ids_by_rule[edge.rule] = []
+            self.edge_ids_by_rule[edge.rule].append(self.next_id)
+            self.next_id += 1
+        if shared.config['Models'].get('edge_feature_model') != 'none':
+            for edge in edges:
+                edge.attr['vec'] = edge.target.vec-edge.source.vec
+            self.feature_matrix = \
+                np.vstack((self.feature_matrix,
+                           np.array([edge.attr['vec'] for edge in edges])))
 
     def get_id(self, edge :GraphEdge) -> int:
         return self.index[edge]
@@ -80,9 +96,8 @@ class EdgeSet:
     @staticmethod
     def load(filename :str, lexicon :Lexicon, rule_set :RuleSet) -> 'EdgeSet':
         result = EdgeSet()
-        for source, target, rule in read_tsv_file(filename):
-            result.add(GraphEdge(lexicon[source], lexicon[target], 
-                                 rule_set[rule]))
+        result.add(GraphEdge(lexicon[source], lexicon[target], rule_set[rule])\
+                   for source, target, rule in read_tsv_file(filename))
         return result
 
 

@@ -1,8 +1,10 @@
 from datastruct.graph import EdgeSet, FullGraph, GraphEdge
 from datastruct.lexicon import Lexicon, LexiconEntry
-from datastruct.rules import RuleSet
+from datastruct.rules import RuleSet, Rule
+import shared
 
 import numpy as np
+from scipy.stats import multivariate_normal
 from typing import Iterable, List
 
 
@@ -20,15 +22,18 @@ class NeuralRootFeatureModel(RootFeatureModel):
 
 class GaussianRootFeatureModel(RootFeatureModel):
     def __init__(self) -> None:
-        raise NotImplementedError()
+        dim = shared.config['Features'].getint('word_vec_dim')
+        self.mean = np.zeros(dim)
+        self.var = np.ones(dim)
 
     def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
-        self.mean = np.average(lexicon.feature_matrix, weights=weights)
+        self.mean = np.average(lexicon.feature_matrix, weights=weights, axis=0)
         err = lexicon.feature_matrix - self.mean
-        self.var = np.average(err**2, weights=weights)
+        self.var = np.average(err**2, weights=weights, axis=0)
 
-    def root_cost(self, vec :np.ndarray) -> float:
-        raise NotImplementedError()
+    def root_cost(self, entry :LexiconEntry) -> float:
+        return -multivariate_normal.logpdf(entry.vec, self.mean,
+                                           np.diag(self.var))
 
 
 class RNNRootFeatureModel(RootFeatureModel):
@@ -59,19 +64,21 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
 
     def fit_rule(self, rule :Rule, feature_matrix :np.ndarray,
                  weights :np.ndarray) -> None:
-        self.means[rule] = np.average(feature_matrix, weights=weights)
+        self.means[rule] = np.average(feature_matrix, weights=weights, axis=0)
         err = feature_matrix - self.means[rule]
-        self.vars[rule] = np.average(err**2, weights=weights)
+        self.vars[rule] = np.average(err**2, weights=weights, axis=0) +\
+                          np.ones(err.shape[1])
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
             edge_ids = tuple(edge_ids)
-            feature_matrix = edge_set.feature_matrix[edge_ids,:]
-            weights = weights[edge_ids,]
-            self.fit_rule(rule, feature_matrix, weights)
+            self.fit_rule(rule, edge_set.feature_matrix[edge_ids,:], 
+                          weights[edge_ids,])
 
-    def edge_cost(self, vec :np.ndarray) -> float:
-        raise NotImplementedError()
+    def edge_cost(self, edge :GraphEdge) -> float:
+        return -multivariate_normal.logpdf(edge.attr['vec'],
+                                           self.means[edge.rule],
+                                           np.diag(self.vars[edge.rule]))
 
 
 class FeatureModel:
