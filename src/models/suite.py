@@ -64,7 +64,7 @@ class ModelSuite:
         result = self.edge_model.edge_cost(edge)
         if self.edge_feature_model is not None:
             result += self.edge_feature_model.edge_cost(edge)
-            result -= self.root_feature_model.root_cost(edge.target)
+#             result -= self.root_feature_model.root_cost(edge.target)
         return result
 
 #     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:

@@ -3,7 +3,9 @@ from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import RuleSet, Rule
 import shared
 
+import logging
 import numpy as np
+import os.path
 from scipy.stats import multivariate_normal
 from typing import Iterable, List
 
@@ -35,6 +37,17 @@ class GaussianRootFeatureModel(RootFeatureModel):
         return -multivariate_normal.logpdf(entry.vec, self.mean,
                                            np.diag(self.var))
 
+    def save(self, filename):
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        np.savez(file_full_path, mean=self.mean, var=self.var)
+
+    @staticmethod
+    def load(filename):
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        with np.load(file_full_path) as data:
+            self.mean = data['mean']
+            self.var = data['var']
+
 
 class RNNRootFeatureModel(RootFeatureModel):
     # TODO a character-level RNN for predicting vector features
@@ -64,6 +77,11 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
 
     def fit_rule(self, rule :Rule, feature_matrix :np.ndarray,
                  weights :np.ndarray) -> None:
+        if np.sum(weights > 0) <= 1:
+            logging.getLogger('main').debug(
+                'GaussianEdgeFeatureModel: rule {} cannot be fitted:'
+                ' not enough edges.'.format(rule))
+            return;
         self.means[rule] = np.average(feature_matrix, weights=weights, axis=0)
         err = feature_matrix - self.means[rule]
         self.vars[rule] = np.average(err**2, weights=weights, axis=0) +\
@@ -79,6 +97,17 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
         return -multivariate_normal.logpdf(edge.attr['vec'],
                                            self.means[edge.rule],
                                            np.diag(self.vars[edge.rule]))
+
+    def save(self, filename):
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        np.savez(file_full_path, means=self.means, vars=self.vars)
+
+    @staticmethod
+    def load(filename):
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        with np.load(file_full_path) as data:
+            self.means = data['means']
+            self.varS = data['vars']
 
 
 class FeatureModel:

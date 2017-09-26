@@ -76,6 +76,7 @@ class MCMCGraphSampler:
                          for e in branching.edges_iter())
 
     def run_sampling(self) -> None:
+        self.cache_costs()
         logging.getLogger('main').info('Warming up the sampler...')
 #         pp = progress_printer(self.warmup_iter)
 #         progressbar = tqdm.tqdm(total=self.warmup_iter)
@@ -229,7 +230,7 @@ class MCMCGraphSampler:
                    prop_prob_ratio
         except OverflowError as e:
             logging.getLogger('main').debug('OverflowError')
-            cost = -self.model.cost_of_change(edges_to_add, edges_to_remove)
+            cost = -self.cost_of_change(edges_to_add, edges_to_remove)
             if edges_to_add:
                 logging.getLogger('main').debug('adding:')
                 for edge in edges_to_add:
@@ -258,6 +259,13 @@ class MCMCGraphSampler:
             self.edge_cost_cache[i] = self.model.edge_cost(edge)
             progressbar.update()
         progressbar.close()
+        print(self.root_cost_cache)
+        if (np.any(np.isnan(self.root_cost_cache))):
+            logging.getLogger('main').warn('NaN in root costs!')
+        print(self.edge_cost_cache)
+        if (np.any(np.isnan(self.edge_cost_cache))):
+            logging.getLogger('main').warn('NaN in edge costs!')
+       
 
     def cost_of_change(self, edges_to_add :List[GraphEdge], 
                        edges_to_remove :List[GraphEdge]) -> float:
@@ -289,7 +297,6 @@ class MCMCGraphSampler:
         self.iter_num = 0
         for stat in self.stats.values():
             stat.reset()
-        self.cache_costs()
 
     def update_stats(self):
         for stat in self.stats.values():

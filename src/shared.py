@@ -57,7 +57,8 @@ filenames = {\
     'wordlist.right' : 'wordlist-right.training',
     'root-model' : 'root.model',
     'edge-model' : 'edge.model',
-    'feature-model' : 'feature.model'
+    'root-feature-model' : 'root-feature.model',
+    'edge-feature-model' : 'edge-feature.model'
 }
 
 format = {\
