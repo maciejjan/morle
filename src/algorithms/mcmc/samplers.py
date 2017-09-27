@@ -42,15 +42,6 @@ class MCMCGraphSampler:
         self.iter_num = 0
         self.reset()
 
-        self.branching = self.full_graph.random_branching()
-        self.set_initial_branching(self.branching)
-        logging.getLogger('main').debug(\
-            'initial log-likelihood: {}'.format(self._logl))
-
-        # TODO deprecated
-#         self.edge_index = Index()
-#         for source, target, rule in self.full_graph.edges_iter(keys=True):
-#             self.edge_index.add(GraphEdge(source, target, rule))
         self.unordered_word_pair_index = {}
         next_id = 0
         for e in self.edge_set:
@@ -58,9 +49,6 @@ class MCMCGraphSampler:
             if key not in self.unordered_word_pair_index:
                 self.unordered_word_pair_index[key] = next_id
                 next_id += 1
-#         self.rule_index = Index()
-#         for rule in self.model.iter_rules():
-#             self.rule_index.add(rule)
     
     def add_stat(self, name: str, stat :MCMCStatistic) -> None:
         if name in self.stats:
@@ -71,30 +59,28 @@ class MCMCGraphSampler:
         return self._logl
 
     def set_initial_branching(self, branching :Branching) -> None:
-        self._logl = np.sum(self.root_cost_cache) +\
-                     sum(self.edge_cost_cache[self.edge_set.get_id(e)] \
-                         for e in branching.edges_iter())
+        self._logl = np.sum(self.root_cost_cache) + self.model.null_cost() +\
+                     self.cost_of_change(list(branching.edges_iter()), [])
+        logging.getLogger('main').debug('roots cost = {}'\
+            .format(np.sum(self.root_cost_cache)))
+        logging.getLogger('main').debug('null cost = {}'\
+            .format(self.model.null_cost()))
+        logging.getLogger('main').debug('initial branching cost = {}'\
+            .format(self.cost_of_change(list(branching.edges_iter()), [])))
 
     def run_sampling(self) -> None:
         self.cache_costs()
+        self.branching = self.full_graph.random_branching()
+        self.set_initial_branching(self.branching)
+        logging.getLogger('main').debug(\
+            'initial log-likelihood: {}'.format(self._logl))
         logging.getLogger('main').info('Warming up the sampler...')
-#         pp = progress_printer(self.warmup_iter)
-#         progressbar = tqdm.tqdm(total=self.warmup_iter)
-#         while self.iter_num < self.warmup_iter:
-#             if self.next():
-#                 progressbar.update()
-#         progressbar.close()
         for i in tqdm.tqdm(range(self.warmup_iter)):
             self.next()
         self.reset()
         logging.getLogger('main').info('Sampling...')
         for i in tqdm.tqdm(range(self.sampling_iter)):
             self.next()
-#         progressbar = tqdm.tqdm(total=self.sampling_iter)
-#         while self.iter_num < self.sampling_iter:
-#             if self.next():
-#                 progressbar.update()
-#         progressbar.close()
         self.update_stats()
 
     def next(self) -> None:
@@ -102,7 +88,6 @@ class MCMCGraphSampler:
         self.iter_num += 1
 
         # select an edge randomly
-#         edge_idx = random.randrange(self.len_edges)
         edge = self.full_graph.random_edge()
 
         # try the move determined by the selected edge
@@ -115,14 +100,11 @@ class MCMCGraphSampler:
                 self.accept_move(edges_to_add, edges_to_remove)
             for stat in self.stats.values():
                 stat.next_iter()
-#             return True
         # if move impossible -- propose staying in the current graph
         # (the acceptance probability for that is 1, so this move
         # is automatically accepted and nothing needs to be done
         except ImpossibleMoveException:
             pass
-#             self.iter_num -= 1
-#             return False
 
     # TODO fit to the new Branching class
     # TODO a more reasonable return value?
@@ -280,6 +262,9 @@ class MCMCGraphSampler:
 
     def accept_move(self, edges_to_add, edges_to_remove):
         self._logl += self.cost_of_change(edges_to_add, edges_to_remove)
+        if np.isnan(self._logl):
+            raise RuntimeError('NaN log-likelihood at iteration {}'\
+                               .format(self.iter_num))
         # remove edges and update stats
         for e in edges_to_remove:
             self.branching.remove_edge(e)

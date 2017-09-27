@@ -71,7 +71,7 @@ class BernoulliEdgeModel(EdgeModel):
         self.rule_prob = probs
         self._rule_appl_cost = -np.log(probs) + np.log(1-probs)
         self._rule_cost = -np.log(1-probs) * self.rule_domsize
-        self._null_cost = -np.sum(self._rule_cost)
+        self._null_cost = np.sum(self._rule_cost)
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
         # compute rule frequencies

@@ -67,6 +67,9 @@ class ModelSuite:
 #             result -= self.root_feature_model.root_cost(edge.target)
         return result
 
+    def null_cost(self) -> float:
+        return self.edge_model.null_cost()
+
 #     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
 #         # TODO cost of an edge set -- optimized computation
 #         raise NotImplementedError()
