@@ -85,7 +85,7 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
         self.means[rule] = np.average(feature_matrix, weights=weights, axis=0)
         err = feature_matrix - self.means[rule]
         self.vars[rule] = np.average(err**2, weights=weights, axis=0) +\
-                          np.ones(err.shape[1])
+                          0.001 * np.ones(err.shape[1])
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():

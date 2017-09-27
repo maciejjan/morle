@@ -241,10 +241,10 @@ class MCMCGraphSampler:
             self.edge_cost_cache[i] = self.model.edge_cost(edge)
             progressbar.update()
         progressbar.close()
-        print(self.root_cost_cache)
+        print(self.root_cost_cache[:10])
         if (np.any(np.isnan(self.root_cost_cache))):
             logging.getLogger('main').warn('NaN in root costs!')
-        print(self.edge_cost_cache)
+        print(self.edge_cost_cache[:10])
         if (np.any(np.isnan(self.edge_cost_cache))):
             logging.getLogger('main').warn('NaN in edge costs!')
        
