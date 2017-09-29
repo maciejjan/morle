@@ -8,7 +8,7 @@ from typing import Dict, Tuple
 class MCMCStatistic:
     def __init__(self, sampler :'MCMCGraphSampler') -> None:
         self.sampler = sampler
-        self.reset()
+#         self.reset()
     
     def reset(self) -> None:
         pass

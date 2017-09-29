@@ -4,7 +4,7 @@ from datastruct.graph import EdgeSet, FullGraph
 from datastruct.lexicon import Lexicon
 from datastruct.rules import Rule, RuleSet
 # from models.marginal import MarginalModel
-from models.neural import ModelSuite
+from models.suite import ModelSuite
 from utils.files import file_exists, read_tsv_file
 import algorithms.mcmc
 import shared
@@ -29,8 +29,8 @@ def run() -> None:
     full_graph = FullGraph(lexicon, edge_set)
 
     # initialize a ModelSuite
-    logging.getLogger('main').info('Initializing the model...')
-    model = ModelSuite(lexicon, edge_set, rule_set)
+    logging.getLogger('main').info('Loading the model...')
+    model = ModelSuite.load()
 
     # setup the sampler
     logging.getLogger('main').info('Setting up the sampler...')

@@ -40,7 +40,7 @@ class MCMCGraphSampler:
         self.iter_stat_interval = iter_stat_interval
         self.stats = {}               # type: Dict[str, MCMCStatistic]
         self.iter_num = 0
-        self.reset()
+#         self.reset()
 
         self.unordered_word_pair_index = {}
         next_id = 0
@@ -75,6 +75,7 @@ class MCMCGraphSampler:
         logging.getLogger('main').debug(\
             'initial log-likelihood: {}'.format(self._logl))
         logging.getLogger('main').info('Warming up the sampler...')
+        self.reset()
         for i in tqdm.tqdm(range(self.warmup_iter)):
             self.next()
         self.reset()
@@ -241,10 +242,10 @@ class MCMCGraphSampler:
             self.edge_cost_cache[i] = self.model.edge_cost(edge)
             progressbar.update()
         progressbar.close()
-        print(self.root_cost_cache[:10])
+        print(self.root_cost_cache)
         if (np.any(np.isnan(self.root_cost_cache))):
             logging.getLogger('main').warn('NaN in root costs!')
-        print(self.edge_cost_cache[:10])
+        print(self.edge_cost_cache)
         if (np.any(np.isnan(self.edge_cost_cache))):
             logging.getLogger('main').warn('NaN in edge costs!')
        

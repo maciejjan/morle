@@ -44,9 +44,11 @@ class GaussianRootFeatureModel(RootFeatureModel):
     @staticmethod
     def load(filename):
         file_full_path = os.path.join(shared.options['working_dir'], filename)
+        result = GaussianRootFeatureModel()
         with np.load(file_full_path) as data:
-            self.mean = data['mean']
-            self.var = data['var']
+            result.mean = data['mean']
+            result.var = data['var']
+        return result
 
 
 class RNNRootFeatureModel(RootFeatureModel):
@@ -72,28 +74,37 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
 
 class GaussianEdgeFeatureModel(EdgeFeatureModel):
     def __init__(self) -> None:
-        self.means = {}
-        self.vars = {}
+        self.dim = shared.config['Features'].getint('word_vec_dim')
+        self.means = None
+        self.vars = None
 
-    def fit_rule(self, rule :Rule, feature_matrix :np.ndarray,
+    def fit_rule(self, rule_id :int, feature_matrix :np.ndarray,
                  weights :np.ndarray) -> None:
         if np.sum(weights > 0) <= 1:
             logging.getLogger('main').debug(
                 'GaussianEdgeFeatureModel: rule {} cannot be fitted:'
                 ' not enough edges.'.format(rule))
             return;
-        self.means[rule] = np.average(feature_matrix, weights=weights, axis=0)
+        self.means[rule_id,] = np.average(feature_matrix, weights=weights,
+                                          axis=0)
         err = feature_matrix - self.means[rule]
-        self.vars[rule] = np.average(err**2, weights=weights, axis=0) +\
-                          0.001 * np.ones(err.shape[1])
+        self.vars[rule_id,] = np.average(err**2, weights=weights, axis=0) +\
+                              0.001 * np.ones(err.shape[1])
 
-    def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
+    def fit(self, rule_set :RuleSet, edge_set :EdgeSet, weights :np.ndarray) \
+           -> None:
+        if self.means is None:
+            self.means = np.empty((len(rule_set), self.dim))
+        if self.vars is None:
+            self.means = np.empty((len(rule_set), self.dim))
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
             edge_ids = tuple(edge_ids)
-            self.fit_rule(rule, edge_set.feature_matrix[edge_ids,:], 
+            self.fit_rule(rule_set.get_id(rule),
+                          edge_set.feature_matrix[edge_ids,:], 
                           weights[edge_ids,])
 
     def edge_cost(self, edge :GraphEdge) -> float:
+        # TODO getting rule id from somewhere
         return -multivariate_normal.logpdf(edge.attr['vec'],
                                            self.means[edge.rule],
                                            np.diag(self.vars[edge.rule]))
@@ -105,9 +116,11 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
     @staticmethod
     def load(filename):
         file_full_path = os.path.join(shared.options['working_dir'], filename)
+        result = GaussianEdgeFeatureModel()
         with np.load(file_full_path) as data:
-            self.means = data['means']
-            self.varS = data['vars']
+            result.means = data['means']
+            result.vars = data['vars']
+        return result
 
 
 class FeatureModel:
