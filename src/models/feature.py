@@ -54,16 +54,50 @@ class GaussianRootFeatureModel(RootFeatureModel):
 
 
 class RNNRootFeatureModel(RootFeatureModel):
-    # TODO neural network
-    # inputs:
-    # - characters
-    # output:
-    # - predicted word vector
-    def __init__(self) -> None:
-        raise NotImplementedError()
+    def __init__(self, alphabet :Iterable[str]) -> None:
+        self.alphabet = alphabet
+        self.alphabet_hash = dict((y, x) for (x, y) in enumerate(alphabet))
+        self._compile_network()
 
     def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
+        # prepare data
+        X, y = [], []
+        for entry in lexicon:
+            X.append([self.alphabet_hash(sym) for sym in entry.symstr])
+            y.append(entry.vec)
+        # TODO pad_sequences(X)
+        y = np.vstack(y)
+        # fit
+        self.nn.fit(X, y, epochs=20, sample_weights=weights, batch_size=1000,
+                    verbose=0)
+        # TODO fit error variance
+
+    def root_cost(self, entry :LexiconEntry) -> float:
+        X = [self.alphabet_hash(sym) for sym in entry.symstr]
+        # TODO pad_sequences(X)
+        y_pred = self.nn.predict(X)
         raise NotImplementedError()
+        return -multivariate_normal.logpdf(entry.vec-y_pred,
+                                           np.zeros(y_pred.shape[0]),
+                                           np.diag(self.err_var))
+
+    def save(self, filename) -> None:
+        raise NotImplementedError()
+        
+    @staticmethod
+    def load(filename) -> 'RNNRootFeatureModel':
+        raise NotImplementedError()
+
+    def _compile_network(self) -> None:
+        dim = shared.config['Features'].getint('word_vec_dim')
+        self.nn = Sequential()
+        self.nn.add(Embedding(input_dim=len(self.alphabet), 
+                              output_dim=dim, mask_zero=True,
+                              input_length=self.input_length))
+        self.nn.add(SimpleRNN(self.dim, activation='sigmoid',
+                              return_sequences=False))
+        self.nn.add(Dense(dim, use_bias=False, activation='softmax'))
+        self.nn.compile(loss='mse', optimizer='adam')
 
 
 class EdgeFeatureModel:
@@ -87,7 +121,7 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         X_rule = np.array(X_rule)
         y = np.vstack(y)
         # fit the predictor
-        self.nn.fit([X_attr, X_rule], y, epochs=100, sample_weight=weights,
+        self.nn.fit([X_attr, X_rule], y, epochs=20, sample_weight=weights,
                      batch_size=1000, verbose=0)
         # fit the error
         y_pred = self.nn.predict([X_attr, X_rule])
