@@ -37,7 +37,7 @@ class EdgeModel:
         raise NotImplementedError()
 
 
-class BernoulliEdgeModel(EdgeModel):
+class SimpleEdgeModel(EdgeModel):
     def __init__(self, rule_set :RuleSet, alpha=1.1, beta=1.1) -> None:
 #         self.edge_set = edge_set
         self.rule_set = rule_set
@@ -94,8 +94,8 @@ class BernoulliEdgeModel(EdgeModel):
                                   for i, rule in enumerate(self.rule_set)))
 
     @staticmethod
-    def load(filename :str, rule_set :RuleSet) -> 'BernoulliEdgeModel':
-        result = BernoulliEdgeModel(rule_set)
+    def load(filename :str, rule_set :RuleSet) -> 'SimpleEdgeModel':
+        result = SimpleEdgeModel(rule_set)
         probs = np.zeros(len(rule_set))
         for rule, prob in read_tsv_file(filename, (str, float)):
             probs[rule_set.get_id(rule_set[rule])] = prob

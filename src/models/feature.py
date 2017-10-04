@@ -73,8 +73,9 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
 
 
 class GaussianEdgeFeatureModel(EdgeFeatureModel):
-    def __init__(self) -> None:
+    def __init__(self, rule_set :RuleSet) -> None:
         self.dim = shared.config['Features'].getint('word_vec_dim')
+        self.rule_set = rule_set
         self.means = None
         self.vars = None
 
@@ -83,38 +84,39 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
         if np.sum(weights > 0) <= 1:
             logging.getLogger('main').debug(
                 'GaussianEdgeFeatureModel: rule {} cannot be fitted:'
-                ' not enough edges.'.format(rule))
-            return;
+                ' not enough edges.'.format(self.rule_set[rule_id]))
+            return
         self.means[rule_id,] = np.average(feature_matrix, weights=weights,
                                           axis=0)
-        err = feature_matrix - self.means[rule]
+        err = feature_matrix - self.means[rule_id,]
         self.vars[rule_id,] = np.average(err**2, weights=weights, axis=0) +\
-                              0.001 * np.ones(err.shape[1])
+                              0.001 * np.ones(self.dim)
 
-    def fit(self, rule_set :RuleSet, edge_set :EdgeSet, weights :np.ndarray) \
+    def fit(self, edge_set :EdgeSet, weights :np.ndarray) \
            -> None:
         if self.means is None:
-            self.means = np.empty((len(rule_set), self.dim))
+            self.means = np.empty((len(self.rule_set), self.dim))
         if self.vars is None:
-            self.means = np.empty((len(rule_set), self.dim))
+            self.vars = np.empty((len(self.rule_set), self.dim))
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
             edge_ids = tuple(edge_ids)
-            self.fit_rule(rule_set.get_id(rule),
+            feature_matrix = edge_set.feature_matrix[edge_ids,:]
+            self.fit_rule(self.rule_set.get_id(rule),
                           edge_set.feature_matrix[edge_ids,:], 
                           weights[edge_ids,])
 
     def edge_cost(self, edge :GraphEdge) -> float:
-        # TODO getting rule id from somewhere
+        rule_id = self.rule_set.get_id(edge.rule)
         return -multivariate_normal.logpdf(edge.attr['vec'],
-                                           self.means[edge.rule],
-                                           np.diag(self.vars[edge.rule]))
+                                           self.means[rule_id,],
+                                           np.diag(self.vars[rule_id,]))
 
-    def save(self, filename):
+    def save(self, filename) -> None:
         file_full_path = os.path.join(shared.options['working_dir'], filename)
         np.savez(file_full_path, means=self.means, vars=self.vars)
 
     @staticmethod
-    def load(filename):
+    def load(filename, rule_set :RuleSet) -> 'GaussianEdgeFeatureModel':
         file_full_path = os.path.join(shared.options['working_dir'], filename)
         result = GaussianEdgeFeatureModel()
         with np.load(file_full_path) as data:

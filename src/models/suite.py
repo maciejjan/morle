@@ -2,7 +2,7 @@ from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import EdgeSet, GraphEdge
 from datastruct.rules import Rule, RuleSet
 from models.root import AlergiaRootModel
-from models.edge import BernoulliEdgeModel
+from models.edge import SimpleEdgeModel
 from models.feature import \
      GaussianRootFeatureModel, NeuralRootFeatureModel, RNNRootFeatureModel, \
      GaussianEdgeFeatureModel, NeuralEdgeFeatureModel
@@ -20,8 +20,8 @@ class ModelSuite:
         if initialize_models:
             self.root_model = AlergiaRootModel()
             edge_model_type = shared.config['Models'].get('edge_model')
-            if edge_model_type == 'bernoulli':
-                self.edge_model = BernoulliEdgeModel(rule_set)
+            if edge_model_type == 'simple':
+                self.edge_model = SimpleEdgeModel(rule_set)
             else:
                 raise Exception('Unknown edge model: %s' % edge_model_type)
             self.root_feature_model = None
@@ -42,7 +42,8 @@ class ModelSuite:
             edge_feature_model_type = \
                 shared.config['Models'].get('root_feature_model')
             if edge_feature_model_type == 'gaussian':
-                self.edge_feature_model = GaussianEdgeFeatureModel()
+                self.edge_feature_model = \
+                    GaussianEdgeFeatureModel(self.rule_set)
             elif edge_feature_model_type == 'neural':
                 self.edge_feature_model = NeuralEdgeFeatureModel()
             elif edge_feature_model_type == 'none':
@@ -111,8 +112,8 @@ class ModelSuite:
         result.root_model = AlergiaRootModel.load(\
                                 shared.filenames['root-model'])
         edge_model_type = shared.config['Models'].get('edge_model')
-        if edge_model_type == 'bernoulli':
-            result.edge_model = BernoulliEdgeModel.load(\
+        if edge_model_type == 'simple':
+            result.edge_model = SimpleEdgeModel.load(\
                                   shared.filenames['edge-model'], rule_set)
         else:
             raise RuntimeError('Unknown edge model: %s' % edge_model_type)
@@ -143,7 +144,7 @@ class ModelSuite:
         if edge_feature_model_type == 'gaussian':
             result.edge_feature_model =\
                 GaussianEdgeFeatureModel.load(
-                    shared.filenames['edge-feature-model'])
+                    shared.filenames['edge-feature-model'], self.rule_set)
         elif edge_feature_model_type == 'neural':
             result.edge_feature_model =\
                 NeuralEdgeFeatureModel.load(
