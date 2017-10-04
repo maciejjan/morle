@@ -40,12 +40,12 @@ class ModelSuite:
                                 % edge_model_type)
             self.edge_feature_model = None
             edge_feature_model_type = \
-                shared.config['Models'].get('root_feature_model')
+                shared.config['Models'].get('edge_feature_model')
             if edge_feature_model_type == 'gaussian':
                 self.edge_feature_model = \
                     GaussianEdgeFeatureModel(self.rule_set)
             elif edge_feature_model_type == 'neural':
-                self.edge_feature_model = NeuralEdgeFeatureModel()
+                self.edge_feature_model = NeuralEdgeFeatureModel(self.rule_set)
             elif edge_feature_model_type == 'none':
                 pass
             else:
