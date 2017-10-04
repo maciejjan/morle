@@ -87,7 +87,7 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         X_rule = np.array(X_rule)
         y = np.vstack(y)
         # fit the predictor
-        self.nn.fit([X_attr, X_rule], y, epochs=20, sample_weight=weights,
+        self.nn.fit([X_attr, X_rule], y, epochs=100, sample_weight=weights,
                      batch_size=1000, verbose=0)
         # fit the error
         y_pred = self.nn.predict([X_attr, X_rule])
@@ -119,7 +119,7 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         num_rules = len(self.rule_set)
         input_attr = Input(shape=(dim,), name='input_attr')
         input_rule = Input(shape=(1,), name='input_rule')
-        rule_emb = Embedding(input_dim=num_rules, output_dim=30,\
+        rule_emb = Embedding(input_dim=num_rules, output_dim=100,\
                              input_length=1)(input_rule)
         rule_emb_fl = Flatten(name='rule_emb_fl')(rule_emb)
         concat = concatenate([input_attr, rule_emb_fl])
