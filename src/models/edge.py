@@ -39,14 +39,12 @@ class EdgeModel:
 
 class SimpleEdgeModel(EdgeModel):
     def __init__(self, rule_set :RuleSet, alpha=1.1, beta=1.1) -> None:
-#         self.edge_set = edge_set
         self.rule_set = rule_set
         self.rule_domsize = np.empty(len(rule_set))
         for i in range(len(rule_set)):
             self.rule_domsize[i] = rule_set.get_domsize(rule_set[i])
         self.alpha = alpha
         self.beta = beta
-#         self.fit_to_sample(np.ones(len(edge_set)))
 
     def edge_cost(self, edge :GraphEdge) -> float:
         return self._rule_appl_cost[self.rule_set.get_id(edge.rule)]
@@ -58,14 +56,6 @@ class SimpleEdgeModel(EdgeModel):
     def rule_cost(self, rule :Rule) -> float:
         'Cost of having a rule in the model.'
         return -self._rule_cost[self.rule_set.get_id(rule)]
-
-#     def recompute_costs(self) -> None:
-#         # no edge costs are cached, because they are readily obtained
-#         # from rule costs
-#         pass
-# 
-#     def initial_fit(self):
-#         self.fit_to_sample(None, np.ones(len(self.edge_set)))
 
     def set_probs(self, probs :np.ndarray) -> None:
         self.rule_prob = probs
@@ -84,10 +74,6 @@ class SimpleEdgeModel(EdgeModel):
                  (self.rule_domsize + np.repeat(self.alpha+self.beta-2,
                                                 len(self.rule_set)))
         self.set_probs(probs)
-#         self._rule_appl_cost = -np.log(self.rule_prob) +\
-#                                 np.log(1-self.rule_prob)
-#         self._rule_cost = -np.log(1-self.rule_prob) * self.rule_domsize
-#         self._null_cost = -np.sum(self._rule_cost)
 
     def save(self, filename :str) -> None:
         write_tsv_file(filename, ((rule, self.rule_prob[i])\

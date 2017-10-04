@@ -57,3 +57,10 @@ class Analyzer:
         self.fst.invert()
         self.fst.convert(hfst.ImplementationType.HFST_OLW_TYPE)
 
+    def save(self, filename :str) -> None:
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(filename :str) -> None:
+        raise NotImplementedError()
+
