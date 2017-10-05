@@ -231,17 +231,19 @@ class MCMCGraphSampler:
 
     def cache_costs(self) -> None:
         logging.getLogger('main').info('Computing root costs...')
-        progressbar = tqdm.tqdm(total=len(self.lexicon))
-        for i, entry in enumerate(self.lexicon):
-            self.root_cost_cache[i] = self.model.root_cost(entry)
-            progressbar.update()
-        progressbar.close()
+        self.root_cost_cache = self.model.root_costs(self.lexicon)
+#         progressbar = tqdm.tqdm(total=len(self.lexicon))
+#         for i, entry in enumerate(self.lexicon):
+#             self.root_cost_cache[i] = self.model.root_cost(entry)
+#             progressbar.update()
+#         progressbar.close()
         logging.getLogger('main').info('Computing edge costs...')
-        progressbar = tqdm.tqdm(total=len(self.edge_set))
-        for i, edge in enumerate(self.edge_set):
-            self.edge_cost_cache[i] = self.model.edge_cost(edge)
-            progressbar.update()
-        progressbar.close()
+        self.edge_cost_cache = self.model.edges_cost(self.edge_set)
+#         progressbar = tqdm.tqdm(total=len(self.edge_set))
+#         for i, edge in enumerate(self.edge_set):
+#             self.edge_cost_cache[i] = self.model.edge_cost(edge)
+#             progressbar.update()
+#         progressbar.close()
         if (np.any(np.isnan(self.root_cost_cache))):
             logging.getLogger('main').warn('NaN in root costs!')
         if (np.any(np.isnan(self.edge_cost_cache))):

@@ -3,8 +3,10 @@ from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import RuleSet, Rule
 import shared
 
-from keras.models import Model
-from keras.layers import concatenate, Dense, Embedding, Flatten, Input
+from keras.models import Model, Sequential
+from keras.layers import concatenate, Dense, Embedding, Flatten, Input, \
+                         SimpleRNN
+import keras
 import logging
 import numpy as np
 import os.path
@@ -65,28 +67,43 @@ class RNNRootFeatureModel(RootFeatureModel):
         # prepare data
         X, y = [], []
         for entry in lexicon:
-            X.append([self.alphabet_hash(sym) for sym in entry.symstr])
+            X.append([self.alphabet_hash[sym] for sym in entry.word+entry.tag])
             y.append(entry.vec)
         X = keras.preprocessing.sequence.pad_sequences(X, maxlen=self.maxlen)
         y = np.vstack(y)
         # fit the neural network
-        self.nn.fit(X, y, epochs=20, sample_weights=weights, batch_size=1000,
-                    verbose=0)
+        self.nn.fit(X, y, epochs=20, sample_weight=weights, batch_size=64,
+                    verbose=1)
         # fit error variance
         y_pred = self.nn.predict(X)
         err = y-y_pred
         self.err_var = np.average(err**2, axis=0, weights=weights)
 
-    def root_cost(self, entry :LexiconEntry) -> float:
-        X = [[self.alphabet_hash(sym) for sym in entry.symstr]]
+    def root_costs(self, entries :Iterable[LexiconEntry]) -> np.ndarray:
+        X, y = [], []
+        for entry in entries:
+            X.append([self.alphabet_hash[sym] for sym in entry.word+entry.tag])
+            y.append(entry.vec)
         X = keras.preprocessing.sequence.pad_sequences(X, maxlen=self.maxlen)
+        y = np.vstack(y)
         y_pred = self.nn.predict(X)
-        return -multivariate_normal.logpdf(entry.vec-y_pred,
-                                           np.zeros(y_pred.shape[0]),
+        return -multivariate_normal.logpdf(y-y_pred,
+                                           np.zeros(self.dim),
                                            np.diag(self.err_var))
 
+#     def root_cost(self, entry :LexiconEntry) -> float:
+#         X = [[self.alphabet_hash[sym] for sym in entry.word+entry.tag]]
+#         X = keras.preprocessing.sequence.pad_sequences(X, maxlen=self.maxlen)
+#         y_pred = self.nn.predict(X)
+#         return -multivariate_normal.logpdf(entry.vec-y_pred,
+#                                            np.zeros(self.dim),
+#                                            np.diag(self.err_var))
+
     def save(self, filename) -> None:
-        raise NotImplementedError()
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        iw = self.nn.get_weights()
+        np.savez(file_full_path, emb=iw[0], internal=iw[1], output=iw[2],
+                 err_var=self.err_var)
         
     @staticmethod
     def load(filename) -> 'RNNRootFeatureModel':
@@ -94,12 +111,13 @@ class RNNRootFeatureModel(RootFeatureModel):
 
     def _compile_network(self) -> None:
         self.nn = Sequential()
-        self.nn.add(Embedding(input_dim=len(self.alphabet), 
-                              output_dim=dim, mask_zero=True,
-                              input_length=self.input_length))
-        self.nn.add(SimpleRNN(self.dim, activation='sigmoid',
+        self.nn.add(Embedding(input_dim=len(self.alphabet)+1,
+                              output_dim=self.dim, mask_zero=True,
+                              input_length=self.maxlen))
+        self.nn.add(SimpleRNN(self.dim, activation='relu',
                               return_sequences=False))
-        self.nn.add(Dense(dim, use_bias=False, activation='softmax'))
+        self.nn.add(Dense(self.dim, use_bias=True, activation='tanh'))
+        self.nn.add(Dense(self.dim, use_bias=False, activation='linear'))
         self.nn.compile(loss='mse', optimizer='adam')
 
 
@@ -137,6 +155,19 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         X_attr = np.array([edge.source.vec])
         X_rule = np.array([self.rule_set.get_id(edge.rule)])
         y = np.array([edge.target.vec])
+        y_pred = self.nn.predict([X_attr, X_rule])
+        return -multivariate_normal.logpdf(y-y_pred, np.zeros(y.shape[1]),
+                                           np.diag(self.err_var))
+
+    def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
+        X_attr, X_rule, y = [], [], []
+        for edge in edge_set:
+            X_attr.append(edge.source.vec)
+            X_rule.append(self.rule_set.get_id(edge.rule))
+            y.append(edge.target.vec)
+        X_attr = np.vstack(X_attr)
+        X_rule = np.array(X_rule)
+        y = np.vstack(y)
         y_pred = self.nn.predict([X_attr, X_rule])
         return -multivariate_normal.logpdf(y-y_pred, np.zeros(y.shape[1]),
                                            np.diag(self.err_var))

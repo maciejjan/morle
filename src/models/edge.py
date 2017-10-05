@@ -49,6 +49,12 @@ class SimpleEdgeModel(EdgeModel):
     def edge_cost(self, edge :GraphEdge) -> float:
         return self._rule_appl_cost[self.rule_set.get_id(edge.rule)]
 
+    def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
+        result = np.zeros(len(edge_set))
+        for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
+            result[edge_ids] = self._rule_appl_cost[self.rule_set.get_id(rule)]
+        return result
+
     def null_cost(self) -> float:
         'Cost of a graph without any edges.'
         return self._null_cost

@@ -63,6 +63,9 @@ class AlergiaRootModel(RootModel):
     def root_cost(self, entry :LexiconEntry) -> float:
         return self.automaton.lookup(entry.symstr)[0][1]
 
+    def root_costs(self, entries :Iterable[LexiconEntry]) -> np.ndarray:
+        return np.array([self.root_cost(entry) for entry in entries])
+
     def save(self, filename :str) -> None:
         algorithms.fst.save_transducer(self.automaton, filename)
 

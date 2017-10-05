@@ -1,3 +1,4 @@
+import algorithms.fst
 from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import EdgeSet, GraphEdge
 from datastruct.rules import Rule, RuleSet
@@ -9,6 +10,7 @@ from models.feature import \
 from utils.files import file_exists
 import shared
 
+import logging
 import numpy as np
 from typing import Iterable
 
@@ -32,7 +34,15 @@ class ModelSuite:
             elif root_feature_model_type == 'neural':
                 self.root_feature_model = NeuralRootFeatureModel()
             elif root_feature_model_type == 'rnn':
-                self.root_feature_model = RNNRootFeatureModel()
+                lexicon_tr = algorithms.fst.load_transducer(\
+                                 shared.filenames['lexicon-tr'])
+                alphabet = tuple(sorted(list(lexicon_tr.get_alphabet())))
+                longest_paths = lexicon_tr.extract_longest_paths(
+                                    max_number=1, output='raw')
+                maxlen = len(longest_paths[0][1])
+                logging.getLogger('main').debug(\
+                    'Detected maximum word length: {}'.format(maxlen))
+                self.root_feature_model = RNNRootFeatureModel(alphabet, maxlen)
             elif root_feature_model_type == 'none':
                 pass
             else:
@@ -58,6 +68,12 @@ class ModelSuite:
             result += self.root_feature_model.root_cost(entry)
         return result
 
+    def root_costs(self, entries :Iterable[LexiconEntry]) -> np.ndarray:
+        result = self.root_model.root_costs(entries)
+        if self.root_feature_model is not None:
+            result += self.root_feature_model.root_costs(entries)
+        return result
+
     def rule_cost(self, rule :Rule) -> float:
         return self.edge_model.rule_cost(rule)
 
@@ -65,7 +81,12 @@ class ModelSuite:
         result = self.edge_model.edge_cost(edge)
         if self.edge_feature_model is not None:
             result += self.edge_feature_model.edge_cost(edge)
-#             result -= self.root_feature_model.root_cost(edge.target)
+        return result
+
+    def edges_cost(self, edges :EdgeSet) -> np.ndarray:
+        result = self.edge_model.edges_cost(edges)
+        if self.edge_feature_model is not None:
+            result += self.edge_feature_model.edges_cost(edges)
         return result
 
     def null_cost(self) -> float:
