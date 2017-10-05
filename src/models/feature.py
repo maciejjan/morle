@@ -54,9 +54,11 @@ class GaussianRootFeatureModel(RootFeatureModel):
 
 
 class RNNRootFeatureModel(RootFeatureModel):
-    def __init__(self, alphabet :Iterable[str]) -> None:
+    def __init__(self, alphabet :Iterable[str], maxlen :int) -> None:
         self.alphabet = alphabet
-        self.alphabet_hash = dict((y, x) for (x, y) in enumerate(alphabet))
+        self.alphabet_hash = dict((y, x) for (x, y) in enumerate(alphabet, 1))
+        self.dim = shared.config['Features'].getint('word_vec_dim')
+        self.maxlen = maxlen                        
         self._compile_network()
 
     def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
@@ -65,18 +67,20 @@ class RNNRootFeatureModel(RootFeatureModel):
         for entry in lexicon:
             X.append([self.alphabet_hash(sym) for sym in entry.symstr])
             y.append(entry.vec)
-        # TODO pad_sequences(X)
+        X = keras.preprocessing.sequence.pad_sequences(X, maxlen=self.maxlen)
         y = np.vstack(y)
-        # fit
+        # fit the neural network
         self.nn.fit(X, y, epochs=20, sample_weights=weights, batch_size=1000,
                     verbose=0)
-        # TODO fit error variance
+        # fit error variance
+        y_pred = self.nn.predict(X)
+        err = y-y_pred
+        self.err_var = np.average(err**2, axis=0, weights=weights)
 
     def root_cost(self, entry :LexiconEntry) -> float:
-        X = [self.alphabet_hash(sym) for sym in entry.symstr]
-        # TODO pad_sequences(X)
+        X = [[self.alphabet_hash(sym) for sym in entry.symstr]]
+        X = keras.preprocessing.sequence.pad_sequences(X, maxlen=self.maxlen)
         y_pred = self.nn.predict(X)
-        raise NotImplementedError()
         return -multivariate_normal.logpdf(entry.vec-y_pred,
                                            np.zeros(y_pred.shape[0]),
                                            np.diag(self.err_var))
@@ -89,7 +93,6 @@ class RNNRootFeatureModel(RootFeatureModel):
         raise NotImplementedError()
 
     def _compile_network(self) -> None:
-        dim = shared.config['Features'].getint('word_vec_dim')
         self.nn = Sequential()
         self.nn.add(Embedding(input_dim=len(self.alphabet), 
                               output_dim=dim, mask_zero=True,

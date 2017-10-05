@@ -178,6 +178,13 @@ class Lexicon:
     def keys(self) -> Iterable[str]:
         return self.items_by_key.keys()
 
+    def get_alphabet(self) -> Tuple[str]:
+        alphabet = set()
+        for item in self:
+            alphabet |= set(item.word)
+            alphabet |= set(item.tag)
+        return tuple(sorted(list(alphabet)))
+
     def symstrs(self) -> Iterable[str]:
         return self.items_by_symstr.keys()
 
