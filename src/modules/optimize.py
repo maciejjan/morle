@@ -9,6 +9,9 @@ import shared
 from collections import defaultdict
 import logging
 
+# TODO instead of the hard EM algorithm -- just a single optimization!!!
+# (find the optimal branching given a model)
+
 
 def run() -> None:
     # load the lexicon
