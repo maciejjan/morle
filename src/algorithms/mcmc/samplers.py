@@ -240,7 +240,7 @@ class MCMCGraphSampler:
 
     def cache_costs(self) -> None:
         logging.getLogger('main').info('Computing root costs...')
-        self.root_cost_cache = self.model.root_costs(self.lexicon)
+        self.root_cost_cache = self.model.roots_cost(self.lexicon)
         logging.getLogger('main').info('Computing edge costs...')
         self.edge_cost_cache = self.model.edges_cost(self.edge_set)
         if (np.any(np.isnan(self.root_cost_cache))):

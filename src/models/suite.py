@@ -68,7 +68,7 @@ class ModelSuite:
             result += self.root_feature_model.root_cost(entry)
         return result
 
-    def root_costs(self, entries :Iterable[LexiconEntry]) -> np.ndarray:
+    def roots_cost(self, entries :Iterable[LexiconEntry]) -> np.ndarray:
         result = self.root_model.root_costs(entries)
         if self.root_feature_model is not None:
             result += self.root_feature_model.root_costs(entries)

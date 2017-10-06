@@ -1,13 +1,13 @@
 import algorithms.em
-from datastruct.graph import FullGraph
+from datastruct.graph import EdgeSet, FullGraph
 from datastruct.lexicon import Lexicon
-from datastruct.rules import Rule, RuleSet
+from datastruct.rules import RuleSet
 from models.suite import ModelSuite
-# from utils.files import read_tsv_file
+from utils.files import file_exists
 import shared
 
 # from collections import defaultdict
-# import logging
+import logging
 
 # TODO instead of the hard EM algorithm -- just a single optimization!!!
 # (find the optimal branching given a model)
@@ -28,12 +28,14 @@ def run() -> None:
     logging.getLogger('main').info('Loading the graph...')
     edge_set = EdgeSet.load(edges_file, lexicon, rule_set)
     full_graph = FullGraph(lexicon, edge_set)
-    # TODO load EdgeSet
-    # TODO load ModelSuite
-    # TODO 
-    # TODO create FullGraph
-    # 
-    pass
+
+    logging.getLogger('main').info('Loading the model...')
+    model = ModelSuite.load()
+    
+    logging.getLogger('main').info('Finding the optimal branching...')
+    branching = full_graph.optimal_branching(model)
+
+    # TODO save branching
 
 
 # TODO deprecated

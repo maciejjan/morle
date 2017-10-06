@@ -226,10 +226,15 @@ class FullGraph(Graph):
         return branching
 
     # TODO edge weighting: use matrix operations!!!
-    def optimal_branching(self, model :'PointModel') -> Branching:
+    def optimal_branching(self, model :'ModelSuite') -> Branching:
+        root_costs = model.roots_cost(self.lexicon)
+        edge_costs = model.edges_cost(self.edge_set)
         graph = nx.DiGraph()
         for edge in self.edge_set:
-            weight = model.root_cost(edge.target) - model.edge_cost(edge)
+            # weight is the negative cost, i.e. how much is "saved"
+            # by including this edge (because we look for maximum branching)
+            weight = root_costs[self.lexicon.get_id(edge.target)] -\
+                     edge_costs[self.edge_set.get_id(edge)]
             if graph.has_edge(edge.source, edge.target):
                 if weight > graph[edge.source][edge.target]['weight']:
                     graph[edge.source][edge.target]['weight'] = weight
@@ -240,9 +245,10 @@ class FullGraph(Graph):
 
         result = Branching()
         for source, target in branching.edges_iter():
-            result.add_edge(min(self.find_edges(source, target), \
-                                key=lambda e: model.root_cost(e.target) -\
-                                              model.edge_cost(e)))
+            result.add_edge(\
+                max(self.find_edges(source, target), \
+                    key=lambda e: root_costs[self.lexicon.get_id(e.target)] -\
+                                  edge_costs[self.edge_set.get_id(e)]))
         return result
 
     def restriction_to_ruleset(self, ruleset :Set[Rule]) -> 'FullGraph':
