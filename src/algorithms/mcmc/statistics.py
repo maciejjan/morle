@@ -291,7 +291,7 @@ class RuleExpectedContributionStatistic(RuleStatistic):
         idx = self.sampler.rule_set.get_id(rule)
         if self.last_modified[idx] < self.sampler.iter_num:
             edges = self.sampler.branching.get_edges_for_rule(rule)
-            new_value = self.sampler.model.cost_of_change([], edges) -\
+            new_value = self.sampler.cost_of_change([], edges) -\
                 self.sampler.model.rule_cost(rule)
             self.val[idx] = \
                 (self.val[idx] * self.last_modified[idx] +\

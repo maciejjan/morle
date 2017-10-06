@@ -78,6 +78,8 @@ class MCMCGraphSampler:
         self.reset()
         for i in tqdm.tqdm(range(self.warmup_iter)):
             self.next()
+        logging.getLogger('main').debug(\
+            'log-likelihood after warmup: {}'.format(self._logl))
         self.reset()
         logging.getLogger('main').info('Sampling...')
         for i in tqdm.tqdm(range(self.sampling_iter)):
@@ -99,13 +101,15 @@ class MCMCGraphSampler:
                 edges_to_add, edges_to_remove, prop_prob_ratio)
             if acc_prob >= 1 or acc_prob >= random.random():
                 self.accept_move(edges_to_add, edges_to_remove)
-            for stat in self.stats.values():
-                stat.next_iter()
         # if move impossible -- propose staying in the current graph
         # (the acceptance probability for that is 1, so this move
         # is automatically accepted and nothing needs to be done
         except ImpossibleMoveException:
             pass
+
+        # inform all the statistics that the iteration is completed
+        for stat in self.stats.values():
+            stat.next_iter()
 
     # TODO fit to the new Branching class
     # TODO a more reasonable return value?
@@ -207,43 +211,38 @@ class MCMCGraphSampler:
     def compute_acc_prob(self, edges_to_add :List[GraphEdge], 
                          edges_to_remove :List[GraphEdge], 
                          prop_prob_ratio :float) -> float:
-        try:
-            return math.exp(\
-                    -self.cost_of_change(edges_to_add, edges_to_remove)) *\
-                   prop_prob_ratio
-        except OverflowError as e:
-            logging.getLogger('main').debug('OverflowError')
-            cost = -self.cost_of_change(edges_to_add, edges_to_remove)
-            if edges_to_add:
-                logging.getLogger('main').debug('adding:')
-                for edge in edges_to_add:
-                    logging.getLogger('main').debug(
-                        '{} {} {} {}'.format(edge.source, edge.target,
-                                             edge.rule, self.model.edge_cost(edge)))
-            if edges_to_remove:
-                logging.getLogger('main').debug('deleting:')
-                for edge in edges_to_remove:
-                    logging.getLogger('main').debug(
-                        '{} {} {} {}'.format(edge.source, edge.target,
-                                             edge.rule, -self.model.edge_cost(edge)))
-            logging.getLogger('main').debug('total cost: {}'.format(cost))
+        cost = self.cost_of_change(edges_to_add, edges_to_remove)
+        if cost < math.log(prop_prob_ratio):
             return 1.0
+        else: 
+            return math.exp(-cost) * prop_prob_ratio
+#         try:
+#             return math.exp(\
+#                     -self.cost_of_change(edges_to_add, edges_to_remove)) *\
+#                    prop_prob_ratio
+#         except OverflowError as e:
+#             logging.getLogger('main').debug('OverflowError')
+#             cost = -self.cost_of_change(edges_to_add, edges_to_remove)
+#             if edges_to_add:
+#                 logging.getLogger('main').debug('adding:')
+#                 for edge in edges_to_add:
+#                     logging.getLogger('main').debug(
+#                         '{} {} {} {}'.format(edge.source, edge.target,
+#                                              edge.rule, self.model.edge_cost(edge)))
+#             if edges_to_remove:
+#                 logging.getLogger('main').debug('deleting:')
+#                 for edge in edges_to_remove:
+#                     logging.getLogger('main').debug(
+#                         '{} {} {} {}'.format(edge.source, edge.target,
+#                                              edge.rule, -self.model.edge_cost(edge)))
+#             logging.getLogger('main').debug('total cost: {}'.format(cost))
+#             return 1.0
 
     def cache_costs(self) -> None:
         logging.getLogger('main').info('Computing root costs...')
         self.root_cost_cache = self.model.root_costs(self.lexicon)
-#         progressbar = tqdm.tqdm(total=len(self.lexicon))
-#         for i, entry in enumerate(self.lexicon):
-#             self.root_cost_cache[i] = self.model.root_cost(entry)
-#             progressbar.update()
-#         progressbar.close()
         logging.getLogger('main').info('Computing edge costs...')
         self.edge_cost_cache = self.model.edges_cost(self.edge_set)
-#         progressbar = tqdm.tqdm(total=len(self.edge_set))
-#         for i, edge in enumerate(self.edge_set):
-#             self.edge_cost_cache[i] = self.model.edge_cost(edge)
-#             progressbar.update()
-#         progressbar.close()
         if (np.any(np.isnan(self.root_cost_cache))):
             logging.getLogger('main').warn('NaN in root costs!')
         if (np.any(np.isnan(self.edge_cost_cache))):
@@ -355,7 +354,8 @@ class MCMCGraphSampler:
                 stats.append(stat)
         with open_to_write(filename) as fp:
             write_line(fp, ('iter_num',) + tuple(stat_names))
-            for iter_num in range(0, self.sampling_iter, 
+            for iter_num in range(self.iter_stat_interval, 
+                                  self.sampling_iter+1, 
                                   self.iter_stat_interval):
                 write_line(fp, (str(iter_num),) + \
                                tuple([stat.value(iter_num) for stat in stats]))

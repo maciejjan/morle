@@ -224,17 +224,8 @@ class FullGraph(Graph):
             if branching.is_edge_possible(edge) and random.random() < 0.5:
                 branching.add_edge(edge)
         return branching
-#         edge_ids = list(range(len(self.edge_set.items)))
-#         random.shuffle(edge_indices)
-#         edge_indices = edge_indices[:random.randrange(len(edge_indices))]
-# 
-#         branching = self.empty_branching()
-#         for idx in edge_indices:
-#             edge = self.edge_set.[idx]
-#             if branching.is_edge_possible(edge):
-#                 branching.add_edge(edge)
-#         return branching
 
+    # TODO edge weighting: use matrix operations!!!
     def optimal_branching(self, model :'PointModel') -> Branching:
         graph = nx.DiGraph()
         for edge in self.edge_set:
@@ -261,10 +252,4 @@ class FullGraph(Graph):
             if edge.rule in ruleset:
                 result.add_edge(edge)
         return result
-
-    # TODO deprecated -- replaced with EdgeSet.save() and Lexicon.save()
-#     def save_to_file(self, filename :str) -> None:
-#         with open_to_write(filename) as fp:
-#             for source, target, rule in self.edges_iter(keys=True):
-#                 write_line(fp, (source, target, rule))
 

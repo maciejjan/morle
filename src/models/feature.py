@@ -290,7 +290,7 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
     @staticmethod
     def load(filename, rule_set :RuleSet) -> 'GaussianEdgeFeatureModel':
         file_full_path = os.path.join(shared.options['working_dir'], filename)
-        result = GaussianEdgeFeatureModel()
+        result = GaussianEdgeFeatureModel(rule_set)
         with np.load(file_full_path) as data:
             result.means = data['means']
             result.vars = data['vars']

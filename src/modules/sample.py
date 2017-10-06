@@ -3,7 +3,6 @@ import algorithms.mcmc.statistics as stats
 from datastruct.graph import EdgeSet, FullGraph
 from datastruct.lexicon import Lexicon
 from datastruct.rules import Rule, RuleSet
-# from models.marginal import MarginalModel
 from models.suite import ModelSuite
 from utils.files import file_exists, read_tsv_file
 import algorithms.mcmc
@@ -54,16 +53,10 @@ def run() -> None:
     if shared.config['sample'].getboolean('stat_rule_contrib'):
         sampler.add_stat('contrib', 
                          stats.RuleExpectedContributionStatistic(sampler))
-#     logging.getLogger('main').debug('rules_cost = %f' % model.rules_cost)
-#     logging.getLogger('main').debug('roots_cost = %f' % model.roots_cost)
-#     logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
 
     # run sampling and print results
     logging.getLogger('main').info('Running sampling...')
     sampler.run_sampling()
     sampler.summary()
 
-#     logging.getLogger('main').debug('rules_cost = %f' % model.rules_cost)
-#     logging.getLogger('main').debug('roots_cost = %f' % model.roots_cost)
-#     logging.getLogger('main').debug('edges_cost = %f' % model.edges_cost)
 

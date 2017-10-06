@@ -165,7 +165,7 @@ class ModelSuite:
         if edge_feature_model_type == 'gaussian':
             result.edge_feature_model =\
                 GaussianEdgeFeatureModel.load(
-                    shared.filenames['edge-feature-model'], self.rule_set)
+                    shared.filenames['edge-feature-model'], rule_set)
         elif edge_feature_model_type == 'neural':
             result.edge_feature_model =\
                 NeuralEdgeFeatureModel.load(
