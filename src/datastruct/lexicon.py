@@ -150,19 +150,34 @@ class LexiconEntry:
     
 
 class Lexicon:
-    def __init__(self, filename :str = None) -> None:
-        self.items = {}           # type: Dict[str, LexiconEntry]
+    def __init__(self) -> None:
+        self.items = []           # type: List[LexiconEntry]
+        self.index = {}           # type: Dict[LexiconEntry, int]
+        self.items_by_key = {}    # type: Dict[str, LexiconEntry]
         self.items_by_symstr = {} # type: Dict[str, List[LexiconEntry]]
-        if filename is not None:
-            self.load_from_file(filename)
+        self.next_id = 0
+        if shared.config['Models'].get('root_feature_model') != 'none':
+            dim = shared.config['Features'].getint('word_vec_dim')
+            self.feature_matrix = np.ndarray((0, dim))
 
     def __contains__(self, key :Union[str, LexiconEntry]) -> bool:
         if isinstance(key, LexiconEntry):
-            key = str(key)
-        return key in self.items
+            return key in self.index
+        return key in self.items_by_key
 
-    def __getitem__(self, key :str) -> LexiconEntry:
-        return self.items[key]
+    def __getitem__(self, key :Union[int, str]) -> LexiconEntry:
+        if isinstance(key, str):
+            return self.items_by_key[key]
+        elif isinstance(key, int):
+            return self.items[key]
+        else:
+            raise KeyError(key)
+
+    def get_by_id(self, idx :int) -> LexiconEntry:
+        return self.items[idx]
+
+    def get_id(self, entry :LexiconEntry) -> int:
+        return self.index[entry]
 
     def get_by_symstr(self, key :str) -> List[LexiconEntry]:
         return self.items_by_symstr[key]
@@ -170,27 +185,46 @@ class Lexicon:
     def __len__(self) -> int:
         return len(self.items)
 
+    def __iter__(self) -> Iterable[LexiconEntry]:
+        return iter(self.items)
+
     def keys(self) -> Iterable[str]:
-        return self.items.keys()
+        return self.items_by_key.keys()
+
+#     def get_alphabet(self) -> Tuple[str]:
+#         alphabet = set()
+#         for item in self:
+#             alphabet |= set(item.word)
+#             alphabet |= set(item.tag)
+#         return tuple(sorted(list(alphabet)))
 
     def symstrs(self) -> Iterable[str]:
         return self.items_by_symstr.keys()
 
-    def entries(self) -> Iterable[LexiconEntry]:
-        return self.items.values()
-
-    def add(self, item :LexiconEntry) -> None:
-        if str(item) in self.items:
-            raise ValueError('{} already in vocabulary'.format(str(item)))
-        if not item.symstr in self.items_by_symstr:
-            self.items_by_symstr[item.symstr] = []
-        self.items[str(item)] = item
-        self.items_by_symstr[item.symstr].append(item)
+    def add(self, items :Union[LexiconEntry, Iterable[LexiconEntry]]) -> None:
+        if isinstance(items, LexiconEntry):
+            items = [items]
+        if not isinstance(items, list):
+            items = list(items)
+        for item in items:
+            if str(item) in self.items_by_key:
+                raise ValueError('{} already in vocabulary'.format(str(item)))
+            if not item.symstr in self.items_by_symstr:
+                self.items_by_symstr[item.symstr] = []
+            self.items.append(item)
+            self.index[item] = self.next_id
+            self.items_by_key[str(item)] = item
+            self.items_by_symstr[item.symstr].append(item)
+            self.next_id += 1
+        if shared.config['Models'].get('root_feature_model') != 'none':
+            self.feature_matrix = \
+                np.vstack((self.feature_matrix,
+                           np.array([item.vec for item in items])))
 
     def to_fst(self) -> hfst.HfstTransducer:
         lexc_file = shared.filenames['lexicon-tr'] + '.lex'
         tags = set()
-        for entry in self.entries():
+        for entry in self.items:
             for t in entry.tag:
                 tags.add(t)
         with open_to_write(lexc_file) as lexfp:
@@ -198,7 +232,7 @@ class Lexicon:
                         ' '.join(self._lexc_escape(s) \
                         for s in shared.multichar_symbols+list(tags)) + '\n\n')
             lexfp.write('LEXICON Root\n')
-            for entry in self.entries():
+            for entry in self.items:
                 lexfp.write('\t' + self._lexc_escape(entry.symstr) + ' # ;\n')
         transducer = hfst.compile_lexc_file(full_path(lexc_file))
         remove_file(lexc_file)
@@ -213,15 +247,23 @@ class Lexicon:
             if not self.items_by_symstr[item.symstr]:
                 del self.items_by_symstr[item.symstr]
 
-    def load_from_file(self, filename :str) -> None:
-#         for row in read_tsv_file(filename, get_wordlist_format()):
+    @staticmethod
+    def load(filename :str) -> 'Lexicon':
+        lexicon = Lexicon()
+        items_to_add = []
         for row in read_tsv_file(filename):
             try:
-                self.add(LexiconEntry(*row))
+                items_to_add.append(LexiconEntry(*row))
             except Exception as e:
 #                 raise e
                 logging.getLogger('main').warning('ignoring %s: %s' %\
                                                   (row[0], str(e)))
+        lexicon.add(items_to_add)
+        return lexicon
+
+    def _lexc_escape(self, string :str) -> str:
+        '''Escape a string for correct rendering in a LEXC file.'''
+        return re.sub('([0<>])', '%\\1', string)
 
     def _lexc_escape(self, string :str) -> str:
         '''Escape a string for correct rendering in a LEXC file.'''

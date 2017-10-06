@@ -1,13 +1,11 @@
 import shared
 
 import argparse
-# import configparser
 import importlib
 import logging
 import os
 import os.path
 import re
-#import warnings
 
 
 def process_config():
@@ -15,7 +13,6 @@ def process_config():
        the default configuration and save it in the working directory.'''
 
     def load_config(path):
-#         shared.config = configparser.ConfigParser()
         shared.config.read(path)
 
     def save_config(path):
@@ -45,7 +42,8 @@ def setup_logger(quiet, verbose):
 
     console_formatter = logging.Formatter('%(message)s')
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.WARNING if quiet else logging.INFO)
+    console_handler.setLevel(logging.WARNING if quiet else \
+                             logging.DEBUG if verbose else logging.INFO)
     console_handler.setFormatter(console_formatter)
     console_handler.addFilter(lambda x: not x.msg.endswith('% done'))
     logger.addHandler(console_handler)

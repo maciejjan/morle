@@ -1,17 +1,18 @@
-from algorithms.mcmc.indexing import Index
 from algorithms.mcmc.statistics import \
     MCMCStatistic, ScalarStatistic, IterationStatistic, EdgeStatistic, \
     RuleStatistic, UnorderedWordPairStatistic
 from datastruct.lexicon import LexiconEntry
 from datastruct.graph import GraphEdge, Branching, FullGraph
-from models.generic import Model
+from models.suite import ModelSuite
 from utils.files import open_to_write, write_line
 import shared
 
 import logging
 import math
+import numpy as np
 from operator import itemgetter
 import random
+import sys
 import tqdm
 from typing import List, Tuple
 
@@ -23,32 +24,31 @@ class ImpossibleMoveException(Exception):
 # TODO monitor the number of moves from each variant and their acceptance rates!
 class MCMCGraphSampler:
     def __init__(self, full_graph :FullGraph, 
-                       model :Model, 
+                       model :ModelSuite,
                        warmup_iter :int = 1000,
                        sampling_iter :int = 100000,
                        iter_stat_interval :int = 1) -> None:
         self.full_graph = full_graph
+        self.lexicon = full_graph.lexicon
+        self.edge_set = full_graph.edge_set
+        self.rule_set = model.rule_set
         self.model = model
+        self.root_cost_cache = np.empty(len(self.lexicon))
+        self.edge_cost_cache = np.empty(len(self.edge_set))
         self.warmup_iter = warmup_iter
         self.sampling_iter = sampling_iter
         self.iter_stat_interval = iter_stat_interval
         self.stats = {}               # type: Dict[str, MCMCStatistic]
         self.iter_num = 0
+#         self.reset()
 
-        self.branching = self.full_graph.random_branching()
-        self.model.fit_to_branching(self.branching)
-
-        # indices on edges, rules, wordpairs
-        self.edge_index = Index()
-        for source, target, rule in self.full_graph.edges_iter(keys=True):
-            self.edge_index.add(GraphEdge(source, target, rule))
-        self.unordered_word_pair_index = Index()
-        for source, target in self.full_graph.edges_iter():
-            key = (min(source, target), max(source, target))
-            self.unordered_word_pair_index.add(key)
-        self.rule_index = Index()
-        for rule in self.model.rule_features:
-            self.rule_index.add(rule)
+        self.unordered_word_pair_index = {}
+        next_id = 0
+        for e in self.edge_set:
+            key = (min(e.source, e.target), max(e.source, e.target))
+            if key not in self.unordered_word_pair_index:
+                self.unordered_word_pair_index[key] = next_id
+                next_id += 1
     
     def add_stat(self, name: str, stat :MCMCStatistic) -> None:
         if name in self.stats:
@@ -56,27 +56,34 @@ class MCMCGraphSampler:
         self.stats[name] = stat
 
     def logl(self) -> float:
-        return self.model.cost()
+        return self._logl
+
+    def set_initial_branching(self, branching :Branching) -> None:
+        self._logl = np.sum(self.root_cost_cache) + self.model.null_cost() +\
+                     self.cost_of_change(list(branching.edges_iter()), [])
+        logging.getLogger('main').debug('roots cost = {}'\
+            .format(np.sum(self.root_cost_cache)))
+        logging.getLogger('main').debug('null cost = {}'\
+            .format(self.model.null_cost()))
+        logging.getLogger('main').debug('initial branching cost = {}'\
+            .format(self.cost_of_change(list(branching.edges_iter()), [])))
 
     def run_sampling(self) -> None:
+        self.cache_costs()
+        self.branching = self.full_graph.random_branching()
+        self.set_initial_branching(self.branching)
+        logging.getLogger('main').debug(\
+            'initial log-likelihood: {}'.format(self._logl))
         logging.getLogger('main').info('Warming up the sampler...')
-#         pp = progress_printer(self.warmup_iter)
-#         progressbar = tqdm.tqdm(total=self.warmup_iter)
-#         while self.iter_num < self.warmup_iter:
-#             if self.next():
-#                 progressbar.update()
-#         progressbar.close()
+        self.reset()
         for i in tqdm.tqdm(range(self.warmup_iter)):
             self.next()
+        logging.getLogger('main').debug(\
+            'log-likelihood after warmup: {}'.format(self._logl))
         self.reset()
         logging.getLogger('main').info('Sampling...')
         for i in tqdm.tqdm(range(self.sampling_iter)):
             self.next()
-#         progressbar = tqdm.tqdm(total=self.sampling_iter)
-#         while self.iter_num < self.sampling_iter:
-#             if self.next():
-#                 progressbar.update()
-#         progressbar.close()
         self.update_stats()
 
     def next(self) -> None:
@@ -84,7 +91,6 @@ class MCMCGraphSampler:
         self.iter_num += 1
 
         # select an edge randomly
-#         edge_idx = random.randrange(self.len_edges)
         edge = self.full_graph.random_edge()
 
         # try the move determined by the selected edge
@@ -95,16 +101,15 @@ class MCMCGraphSampler:
                 edges_to_add, edges_to_remove, prop_prob_ratio)
             if acc_prob >= 1 or acc_prob >= random.random():
                 self.accept_move(edges_to_add, edges_to_remove)
-            for stat in self.stats.values():
-                stat.next_iter()
-#             return True
         # if move impossible -- propose staying in the current graph
         # (the acceptance probability for that is 1, so this move
         # is automatically accepted and nothing needs to be done
         except ImpossibleMoveException:
             pass
-#             self.iter_num -= 1
-#             return False
+
+        # inform all the statistics that the iteration is completed
+        for stat in self.stats.values():
+            stat.next_iter()
 
     # TODO fit to the new Branching class
     # TODO a more reasonable return value?
@@ -203,23 +208,73 @@ class MCMCGraphSampler:
                               edge.target)
         return [edge], edges_to_remove, 1
 
-    def compute_acc_prob(self, edges_to_add, edges_to_remove, prop_prob_ratio):
-        return math.exp(\
-                -self.model.cost_of_change(edges_to_add, edges_to_remove)) *\
-               prop_prob_ratio
+    def compute_acc_prob(self, edges_to_add :List[GraphEdge], 
+                         edges_to_remove :List[GraphEdge], 
+                         prop_prob_ratio :float) -> float:
+        cost = self.cost_of_change(edges_to_add, edges_to_remove)
+        if cost < math.log(prop_prob_ratio):
+            return 1.0
+        else: 
+            return math.exp(-cost) * prop_prob_ratio
+#         try:
+#             return math.exp(\
+#                     -self.cost_of_change(edges_to_add, edges_to_remove)) *\
+#                    prop_prob_ratio
+#         except OverflowError as e:
+#             logging.getLogger('main').debug('OverflowError')
+#             cost = -self.cost_of_change(edges_to_add, edges_to_remove)
+#             if edges_to_add:
+#                 logging.getLogger('main').debug('adding:')
+#                 for edge in edges_to_add:
+#                     logging.getLogger('main').debug(
+#                         '{} {} {} {}'.format(edge.source, edge.target,
+#                                              edge.rule, self.model.edge_cost(edge)))
+#             if edges_to_remove:
+#                 logging.getLogger('main').debug('deleting:')
+#                 for edge in edges_to_remove:
+#                     logging.getLogger('main').debug(
+#                         '{} {} {} {}'.format(edge.source, edge.target,
+#                                              edge.rule, -self.model.edge_cost(edge)))
+#             logging.getLogger('main').debug('total cost: {}'.format(cost))
+#             return 1.0
+
+    def cache_costs(self) -> None:
+        logging.getLogger('main').info('Computing root costs...')
+        self.root_cost_cache = self.model.roots_cost(self.lexicon)
+        logging.getLogger('main').info('Computing edge costs...')
+        self.edge_cost_cache = self.model.edges_cost(self.edge_set)
+        if (np.any(np.isnan(self.root_cost_cache))):
+            logging.getLogger('main').warn('NaN in root costs!')
+        if (np.any(np.isnan(self.edge_cost_cache))):
+            logging.getLogger('main').warn('NaN in edge costs!')
+       
+
+    def cost_of_change(self, edges_to_add :List[GraphEdge], 
+                       edges_to_remove :List[GraphEdge]) -> float:
+        result = 0.0
+        for e in edges_to_add:
+            result += self.edge_cost_cache[self.edge_set.get_id(e)]
+            result -= self.root_cost_cache[self.lexicon.get_id(e.target)]
+        for e in edges_to_remove:
+            result -= self.edge_cost_cache[self.edge_set.get_id(e)]
+            result += self.root_cost_cache[self.lexicon.get_id(e.target)]
+        return result
 
     def accept_move(self, edges_to_add, edges_to_remove):
-#            print('Accepted')
+        self._logl += self.cost_of_change(edges_to_add, edges_to_remove)
+        if np.isnan(self._logl):
+            raise RuntimeError('NaN log-likelihood at iteration {}'\
+                               .format(self.iter_num))
         # remove edges and update stats
         for e in edges_to_remove:
             self.branching.remove_edge(e)
-            self.model.apply_change([], [e])
+#             self.model.apply_change([], [e])
             for stat in self.stats.values():
                 stat.edge_removed(e)
         # add edges and update stats
         for e in edges_to_add:
             self.branching.add_edge(e)
-            self.model.apply_change([e], [])
+#             self.model.apply_change([e], [])
             for stat in self.stats.values():
                 stat.edge_added(e)
     
@@ -261,10 +316,10 @@ class MCMCGraphSampler:
                 stats.append(stat)
         with open_to_write(filename) as fp:
             write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
-            for edge in self.edge_index:
+            for idx, edge in enumerate(self.edge_set):
                 write_line(fp, 
                            (str(edge.source), str(edge.target), 
-                            str(edge.rule)) + tuple([stat.value(edge)\
+                            str(edge.rule)) + tuple([stat.val[idx]\
                                                      for stat in stats]))
 
     def save_rule_stats(self, filename):
@@ -274,10 +329,10 @@ class MCMCGraphSampler:
                 stat_names.append(stat_name)
                 stats.append(stat)
         with open_to_write(filename) as fp:
-            write_line(fp, ('rule', 'domsize') + tuple(stat_names))
-            for rule in self.rule_index:
-                write_line(fp, (str(rule), self.model.rule_features[rule][0].trials) +\
-                               tuple([stat.value(rule) for stat in stats]))
+            write_line(fp, ('rule',) + tuple(stat_names))
+            for idx, rule in enumerate(self.rule_set):
+                write_line(fp, (str(rule),) +\
+                               tuple([stat.val[idx] for stat in stats]))
 
     def save_wordpair_stats(self, filename):
         stats, stat_names = [], []
@@ -299,7 +354,8 @@ class MCMCGraphSampler:
                 stats.append(stat)
         with open_to_write(filename) as fp:
             write_line(fp, ('iter_num',) + tuple(stat_names))
-            for iter_num in range(0, self.sampling_iter, 
+            for iter_num in range(self.iter_stat_interval, 
+                                  self.sampling_iter+1, 
                                   self.iter_stat_interval):
                 write_line(fp, (str(iter_num),) + \
                                tuple([stat.value(iter_num) for stat in stats]))

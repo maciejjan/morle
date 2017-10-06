@@ -54,7 +54,11 @@ filenames = {\
     'wordlist' : 'input.training',
     'analyze.wordlist' : 'input.analyze',
     'wordlist.left' : 'wordlist-left.training',
-    'wordlist.right' : 'wordlist-right.training'
+    'wordlist.right' : 'wordlist-right.training',
+    'root-model' : 'root.model',
+    'edge-model' : 'edge.model',
+    'root-feature-model' : 'root-feature.model.npz',
+    'edge-feature-model' : 'edge-feature.model.npz'
 }
 
 format = {\

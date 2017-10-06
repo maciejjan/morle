@@ -4,6 +4,7 @@ import hfst
 import re
 from operator import itemgetter
 
+
 class Rule:
     def __init__(self, subst, tag_subst=None, string=None):
         self.subst = subst
@@ -34,6 +35,7 @@ class Rule:
         return Rule(self.subst, self.tag_subst)
     
     # TODO more meaningful name
+    # TODO proposition: check_constraints()
     def check(self, max_affix_length, max_infix_length, infix_slots):
         if len(self.subst) > infix_slots+2:
             return False
@@ -100,6 +102,8 @@ class Rule:
                 x_seq += (x,) if x != hfst.EPSILON else ()
                 y_seq += (y,) if y != hfst.EPSILON else ()
         subst.append((x_seq, y_seq))
+        tx, ty = tag_subst
+        tag_subst = (tuple(tx), tuple(ty))
         return Rule(tuple(subst), tag_subst)
     
     def reverse(self):
@@ -143,10 +147,64 @@ class Rule:
         return Rule(tuple(r_subst), r_tag_subst, string=string)
 
 
-def load_ruleset(filename :str) -> Dict[str, Rule]:
-    result = {} # type: Dict[str, Rule]
-    for rule_str, freq, domsize in read_tsv_file(filename, (str, int, int)):
-        result[rule_str] = Rule.from_string(rule_str)
-        # TODO include domsize in the Rule object?
-    return result
+class RuleSet:
+    '''A class for saving/loading rules to/from a file and indexing
+       (i.e. attributing IDs to) rules. Stores also domsizes.'''
 
+    def __init__(self) -> None:
+        self.items = []         # type: List[Rule]
+        self.items_by_str = {}  # type: Dict[str, Rule]
+        self.index = {}         # type: Dict[Rule, int]
+        self.domsizes = {}      # type: Dict[Rule, domsize]
+        self.next_id = 0
+
+    def __contains__(self, rule :Rule) -> bool:
+        return rule in self.index
+
+    def __getitem__(self, key :Union[int, str]) -> Rule:
+        if isinstance(key, str):
+            return self.items_by_str[key]
+        elif isinstance(key, int):
+            return self.items[key]
+        else:
+            raise KeyError(key)
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def __iter__(self) -> Iterable[Rule]:
+        return iter(self.items)
+    
+    def add(self, rule :Rule, domsize :int) -> None:
+        self.items.append(rule)
+        self.index[rule] = self.next_id
+        self.items_by_str[str(rule)] = rule
+        self.domsizes[rule] = domsize
+        self.next_id += 1
+
+    def get_id(self, rule :Rule) -> int:
+        return self.index[rule]
+
+    def get_domsize(self, rule :Rule) -> int:
+        return self.domsizes[rule]
+
+    def save(self, filename :str) -> None:
+        with open_to_write(filename) as fp:
+            for rule in self.items:
+                write_line(fp, (str(rule), self.domsizes[rule]))
+
+    @staticmethod
+    def load(filename :str) -> 'RuleSet':
+        result = RuleSet()
+        for rule_str, domsize in read_tsv_file(filename, types=(str, int)):
+            rule = Rule.from_string(rule_str)
+            result.add(rule, domsize)
+        return result
+
+# def load_ruleset(filename :str) -> Dict[str, Rule]:
+#     result = {} # type: Dict[str, Rule]
+#     for rule_str, freq, domsize in read_tsv_file(filename, (str, int, int)):
+#         result[rule_str] = Rule.from_string(rule_str)
+#         # TODO include domsize in the Rule object?
+#     return result
+# 
