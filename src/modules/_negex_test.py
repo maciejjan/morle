@@ -5,6 +5,7 @@ from datastruct.rules import RuleSet
 import shared
 
 import logging
+import numpy as np
 
 
 def run() -> None:
@@ -15,6 +16,7 @@ def run() -> None:
     logging.getLogger('main').info('Loading rules...')
     rule_set = RuleSet.load(shared.filenames['rules'])
 
-    negex_sampler = NegativeExampleSampler(lexicon, lexicon_tr, rule_set)
+    negex_sampler = NegativeExampleSampler(lexicon, lexicon_tr, rule_set,
+                                           np.array([]), np.array([]))
     negex_sampler.sample()
 
