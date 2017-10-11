@@ -1,10 +1,12 @@
-from datastruct.graph import EdgeSet
-from datastruct.lexicon import Lexicon
+import algorithms.fst
+from datastruct.graph import GraphEdge, EdgeSet
+from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.rules import RuleSet
 
 import hfst
 import logging
 import numpy as np
+import random
 import tqdm
 from typing import Tuple
 
@@ -28,29 +30,62 @@ class NegativeExampleSampler:
                  rule_set :RuleSet, rule_example_counts :np.ndarray,
                  rule_domsizes :np.ndarray) -> None:
         self.lexicon = lexicon
-#         self.lexicon_tr = lexicon_tr
+        self.lexicon_tr = lexicon_tr
+        self.lexicon_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
         self.rule_set = rule_set
 #         self.non_lex_tr = identity_fst()
 #         self.non_lex_tr.subtract(self.lexicon_tr)
         self.rule_example_counts = rule_example_counts
         self.rule_domsizes = rule_domsizes
-        self.transducers = self._build_transducers(lexicon_tr)
+        self.transducers = { rule : rule.to_fst() for rule in rule_set }
+        for tr in self.transducers.values():
+            tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
+#         self.transducers = self._build_transducers(lexicon_tr)
 
-    def sample(self) -> Tuple[EdgeSet, np.ndarray]:
-        # TODO returns edges (with empty target) and weights
-        # TODO automaton: Lex .o. Rules .o. (Lex^c)
-        # TODO memorize automata or compute them on the fly?
-        for rule in tqdm.tqdm(self.rule_set):
+    # TODO works, but is heavily affected by the lookup memory leak
+    def sample(self, sample_size :int) -> EdgeSet:
+        result = EdgeSet()
+#         visited_ids = set()
+        progressbar = tqdm.tqdm(total=sample_size)
+        while len(result) < sample_size:
+            w_id = random.randrange(len(self.lexicon))
+            r_id = random.randrange(len(self.rule_set))
+            entry = self.lexicon[w_id]
+            rule = self.rule_set[r_id]
+            lookup_results = self.transducers[rule].lookup(entry.symstr)
+            if lookup_results:
+                t_id = random.randrange(len(lookup_results))
+#                 if (w_id, r_id, t_id) in visited_ids:
+#                     continue
+#                 visited_ids.add((w_id, r_id, t_id))
+                target = None
+                try:
+                    target = LexiconEntry(lookup_results[t_id][0])
+                except Exception:
+                    continue
+                if self.lexicon_tr.lookup(target.symstr):
+                    continue
+                edge = GraphEdge(entry, target, rule)
+                if edge not in result:
+                    result.add(edge)
+                    progressbar.update()
+#                 else:
+#                     print(*edge.to_tuple(), 'already in EdgeSet')
+        progressbar.close()
+        return result
+
+#         for rule in tqdm.tqdm(self.rule_set):
 #             tr = hfst.HfstTransducer(self.lexicon_tr)
 #             tr.compose(rule.to_fst())
 #             tr.minimize()
 #             tr.compose(self.non_lex_tr)
 #             tr.minimize()
 #             print(rule)
-            for path in self.transducers[rule].extract_paths(\
-                            max_number=20, random='True', output='raw'):
-                source = ''.join([x for x, y in path[1]]).replace(hfst.EPSILON, '')
-                target = ''.join([y for x, y in path[1]]).replace(hfst.EPSILON, '')
+#             print(algorithms.fst.number_of_paths_for_input_str(tr))
+#             for path in tr.extract_paths(\
+#                             max_number=20, random='True', output='raw'):
+#                 source = ''.join([x for x, y in path[1]]).replace(hfst.EPSILON, '')
+#                 target = ''.join([y for x, y in path[1]]).replace(hfst.EPSILON, '')
 #                 print(source + ':' + target)
 #             print()
 

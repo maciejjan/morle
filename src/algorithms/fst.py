@@ -1,5 +1,6 @@
 from utils.files import full_path
 
+from collections import defaultdict
 import hfst
 import os.path
 import shared
@@ -130,6 +131,38 @@ def number_of_paths(transducer):
         for state in t.states():
             if t.is_final_state(state):
                 result += new_paths_for_state[state]
+        paths_for_state = new_paths_for_state
+    return result
+
+def number_of_paths_for_input_str(transducer):
+    # in n-th iteration paths_for_state[s] contains the number of paths
+    # of length n terminating in state s
+    # terminates if maximum n is reached, i.e. paths_for_state > 0
+    # only for states without outgoing transitions
+    t = hfst.HfstBasicTransducer(transducer)
+    paths_for_state = [defaultdict(lambda: 0)] * len(t.states())
+    paths_for_state[0][''] = 1
+    result = defaultdict(lambda: 0)
+    changed = True
+    while changed:
+        changed = False
+        new_paths_for_state = [defaultdict(lambda: 0)] * len(t.states())
+        for state in t.states():
+#             if paths_for_state[state] > 0:
+            for key, count in paths_for_state[state].items():
+                if count > 0:
+                    for tr in t.transitions(state):
+                        c = tr.get_input_symbol()
+                        if c == hfst.EPSILON:
+                            c = ''
+                        new_paths_for_state[tr.get_target_state()][key+c] += \
+                            count
+                    changed = True
+        for state in t.states():
+            if t.is_final_state(state):
+                for key, count in new_paths_for_state[state].items():
+                    result[key] += count
+#                 result += new_paths_for_state[state]
         paths_for_state = new_paths_for_state
     return result
 

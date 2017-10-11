@@ -2,6 +2,7 @@ import algorithms.fst
 from algorithms.negex import NegativeExampleSampler
 from datastruct.lexicon import Lexicon
 from datastruct.rules import RuleSet
+from utils.files import open_to_write, write_line
 import shared
 
 import logging
@@ -18,5 +19,7 @@ def run() -> None:
 
     negex_sampler = NegativeExampleSampler(lexicon, lexicon_tr, rule_set,
                                            np.array([]), np.array([]))
-    negex_sampler.sample()
+    with open_to_write('negex.txt') as fp:
+        for edge in negex_sampler.sample(600000):
+            write_line(fp, (edge.source, edge.target, edge.rule))
 
