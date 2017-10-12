@@ -27,22 +27,22 @@ class NegativeExampleSampler:
     # TODO stores also weights of sample items (domsize/sample_size for each rule)
 
     def __init__(self, lexicon :Lexicon, lexicon_tr :hfst.HfstTransducer,
-                 rule_set :RuleSet, rule_example_counts :np.ndarray,
-                 rule_domsizes :np.ndarray) -> None:
+                 rule_set :RuleSet) -> None:
         self.lexicon = lexicon
         self.lexicon_tr = lexicon_tr
         self.lexicon_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
         self.rule_set = rule_set
 #         self.non_lex_tr = identity_fst()
 #         self.non_lex_tr.subtract(self.lexicon_tr)
-        self.rule_example_counts = rule_example_counts
-        self.rule_domsizes = rule_domsizes
+#         self.rule_example_counts = rule_example_counts
+#         self.rule_domsizes = rule_domsizes
         self.transducers = { rule : rule.to_fst() for rule in rule_set }
         for tr in self.transducers.values():
             tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
 #         self.transducers = self._build_transducers(lexicon_tr)
 
     # TODO works, but is heavily affected by the lookup memory leak
+    # TODO start this method in a separate process to circumvent the memory leak
     def sample(self, sample_size :int) -> EdgeSet:
         result = EdgeSet()
 #         visited_ids = set()

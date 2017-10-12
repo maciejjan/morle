@@ -1,9 +1,10 @@
 import algorithms.fst
+from algorithms.negex import NegativeExampleSampler
 from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import EdgeSet, GraphEdge
 from datastruct.rules import Rule, RuleSet
 from models.root import AlergiaRootModel
-from models.edge import SimpleEdgeModel
+from models.edge import SimpleEdgeModel, NeuralEdgeModel
 from models.feature import \
      GaussianRootFeatureModel, NeuralRootFeatureModel, RNNRootFeatureModel, \
      GaussianEdgeFeatureModel, NeuralEdgeFeatureModel
@@ -24,6 +25,17 @@ class ModelSuite:
             edge_model_type = shared.config['Models'].get('edge_model')
             if edge_model_type == 'simple':
                 self.edge_model = SimpleEdgeModel(rule_set)
+            elif edge_model_type == 'neural':
+                lexicon = Lexicon.load(shared.filenames['wordlist'])
+                lexicon_tr = algorithms.fst.load_transducer(\
+                                 shared.filenames['lexicon-tr'])
+                negex_sampler = \
+                    NegativeExampleSampler(lexicon, lexicon_tr, rule_set)
+# TODO parameters (lexicon :Lexicon, lexicon_tr :hfst.HfstTransducer,
+#                  rule_set :RuleSet, rule_example_counts :np.ndarray,
+#                  rule_domsizes :np.ndarray)
+                self.edge_model = \
+                    NeuralEdgeModel(rule_set, edge_set, negex_sampler)
             else:
                 raise Exception('Unknown edge model: %s' % edge_model_type)
             self.root_feature_model = None
