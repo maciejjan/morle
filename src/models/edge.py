@@ -1,3 +1,4 @@
+from algorithms.negex import NegativeExampleSampler
 from datastruct.graph import GraphEdge, EdgeSet
 from datastruct.rules import Rule, RuleSet
 from utils.files import read_tsv_file, write_tsv_file
@@ -5,7 +6,7 @@ from utils.files import read_tsv_file, write_tsv_file
 from keras.models import Model
 from keras.layers import concatenate, Dense, Embedding, Flatten, Input
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 
 class EdgeModel:
