@@ -3,10 +3,12 @@ from datastruct.graph import GraphEdge, EdgeSet
 from datastruct.rules import Rule, RuleSet
 from utils.files import read_tsv_file, write_tsv_file
 
+from collections import defaultdict
 from keras.models import Model
 from keras.layers import concatenate, Dense, Embedding, Flatten, Input
 import numpy as np
-from typing import Dict, List, Tuple
+from operator import itemgetter
+from typing import Dict, Iterable, List, Tuple
 
 
 class EdgeModel:
@@ -100,15 +102,39 @@ class SimpleEdgeModel(EdgeModel):
 
 class NGramFeatureExtractor:
     def __init__(self) -> None:
-        raise NotImplementedError()
+        self.ngrams = []
+        self.feature_idx = {}
 
-    def select_features(self, edge_set :EdgeSet) -> None:
+    def select_features(self, edge_set :EdgeSet, max_num=1000) -> None:
         '''Count n-grams and select the most frequent ones.'''
-        raise NotImplementedError()
+        ngrams_freq = defaultdict(lambda: 0)
+        for edge in edge_set:
+            for ngram in self._extract_from_seq(edge.source.word):
+                ngrams_freq[ngram] += 1
+        self.ngrams = list(map(itemgetter(0),
+                               sorted(ngrams_freq.items(), reverse=True,
+                                      key=itemgetter(1))))[:max_num]
+        self.feature_idx = { ngram: i for i, ngram in enumerate(self.ngrams) }
+
+    def num_features(self) -> int:
+        return len(self.ngrams)
 
     def extract(self, edge_set :EdgeSet) -> np.ndarray:
         '''Extract n-gram features from edges and return a binary matrix.'''
-        raise NotImplementedError()
+        result = np.zeros((len(edge_set), self.num_features()))
+        for i, edge in enumerate(edge_set):
+            for ngram in self._extract_from_seq(edge.source.word):
+                if ngram in self.feature_idx:
+                    result[i,self.feature_idx[ngram]] = 1
+        return result
+
+    def _extract_from_seq(self, seq :Iterable[str]) -> Iterable[str]:
+        result = []
+        my_seq = ['^'] + list(seq) + ['$']
+        for n in range(1, len(my_seq)):
+            for i in range(len(my_seq)-1):
+                result.append(''.join(my_seq[i:i+n]))
+        return result
 
 
 class NeuralEdgeModel(EdgeModel):
@@ -137,7 +163,16 @@ class NeuralEdgeModel(EdgeModel):
         raise NotImplementedError()
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
-        raise NotImplementedError()
+        negex, weights_neg = self.negex_sampler.sample(len(edge_set))
+        X_attr_neg, X_rule_neg = self._prepare_data(negex)
+        X_attr_pos, X_rule_pos = self._prepare_data(edge_set)
+        X_attr = np.vstack([X_attr_pos, X_attr_neg])
+        X_rule = np.hstack([X_rule_pos, X_rule_neg])
+        y = np.hstack([weights, np.zeros(len(negex))])
+        weights = np.hstack([np.ones(len(edge_set)), weights_neg])
+        self.nn.fit([X_attr, X_rule], y, sample_weight=weights, epochs=5,
+                    batch_size=64, verbose=1)
+        # TODO set null_cost and rule_cost
 
     def save(self, filename :str) -> None:
         raise NotImplementedError()
@@ -148,6 +183,7 @@ class NeuralEdgeModel(EdgeModel):
 
     def _compile_network(self):
         num_ngr = self.ngram_extractor.num_features()
+        num_rules = len(self.rule_set)
         input_attr = Input(shape=(num_ngr,), name='input_attr')
         input_rule = Input(shape=(1,), name='input_rule')
         rule_emb = Embedding(input_dim=num_rules, output_dim=30,\
@@ -157,22 +193,14 @@ class NeuralEdgeModel(EdgeModel):
         internal = Dense(30, activation='relu', name='internal')(concat)
         output = Dense(1, activation='sigmoid', name='dense')(internal)
         self.nn = Model(inputs=[input_attr, input_rule], outputs=[output])
-        self.nn.compile(optimizer='adam', loss='mse')
+        self.nn.compile(optimizer='adam', loss='binary_crossentropy')
 
     def _prepare_data(self, edge_set :EdgeSet) -> \
                      Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        raise NotImplementedError()
-#         # build the arrays as lists
-#         X_attr_lst, X_rule_lst, y_lst = [], [], []
-#         for edge in edge_set:
-#             X_attr_lst.append(edge.source.vec)
-#             X_rule_lst.append(self.rule_set.get_id(edge.rule))
-#             y_lst.append(edge.target.vec)
-#         # convert the lists into matrices
-#         X_attr = np.vstack(X_attr_lst)
-#         X_rule = np.array(X_rule_lst)
-#         y = np.vstack(y_lst)
-#         return X_attr, X_rule, y
+        X_attr = self.ngram_extractor.extract(edge_set)
+        X_rule = np.array([self.rule_set.get_id(edge.rule) \
+                           for edge in edge_set])
+        return X_attr, X_rule
 
 
 # TODO also using sampling of negative examples
