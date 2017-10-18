@@ -67,7 +67,7 @@ class NegativeExampleSampler:
                 target = None
                 try:
                     target = LexiconEntry(lookup_results[t_id][0])
-                except Exception:
+                except Exception as e:
                     continue
                 if self.lexicon_tr.lookup(target.symstr):
                     continue

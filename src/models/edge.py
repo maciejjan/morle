@@ -2,12 +2,15 @@ from algorithms.negex import NegativeExampleSampler
 from datastruct.graph import GraphEdge, EdgeSet
 from datastruct.rules import Rule, RuleSet
 from utils.files import read_tsv_file, write_tsv_file
+import shared
 
 from collections import defaultdict
+from itertools import chain
 from keras.models import Model
 from keras.layers import concatenate, Dense, Embedding, Flatten, Input
 import numpy as np
 from operator import itemgetter
+import os.path
 from typing import Dict, Iterable, List, Tuple
 
 
@@ -66,7 +69,7 @@ class SimpleEdgeModel(EdgeModel):
 
     def rule_cost(self, rule :Rule) -> float:
         'Cost of having a rule in the model.'
-        return -self._rule_cost[self.rule_set.get_id(rule)]
+        return self._rule_cost[self.rule_set.get_id(rule)]
 
     def set_probs(self, probs :np.ndarray) -> None:
         self.rule_prob = probs
@@ -150,20 +153,22 @@ class NeuralEdgeModel(EdgeModel):
         raise NotImplementedError()
 
     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
-        raise NotImplementedError()
+        X_attr, X_rule = self._prepare_data(edge_set)
+        probs = self.nn.predict([X_attr, X_rule])
+        return np.log(probs / (1-probs))
 
-    def null_cost(self, edge_set :EdgeSet) -> float:
+    def null_cost(self) -> float:
         'Cost of a graph without any edges.'
-        # TODO log(1-prob) for all edges in edge_set
-        # TODO additionally: weight*log(1-prob) for sampled negative examples
-        raise NotImplementedError()
+        return self._null_cost
 
     def rule_cost(self, rule :Rule) -> float:
         'Cost of having a rule in the model.'
-        raise NotImplementedError()
+        return self._rule_cost[self.rule_set.get_id(rule)]
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
         negex, weights_neg = self.negex_sampler.sample(len(edge_set))
+#         for i, edge in enumerate(negex):
+#             print(edge.source, edge.target, edge.rule, weights_neg[i])
         X_attr_neg, X_rule_neg = self._prepare_data(negex)
         X_attr_pos, X_rule_pos = self._prepare_data(edge_set)
         X_attr = np.vstack([X_attr_pos, X_attr_neg])
@@ -172,13 +177,31 @@ class NeuralEdgeModel(EdgeModel):
         weights = np.hstack([np.ones(len(edge_set)), weights_neg])
         self.nn.fit([X_attr, X_rule], y, sample_weight=weights, epochs=5,
                     batch_size=64, verbose=1)
-        # TODO set null_cost and rule_cost
+        # set null_cost and rule_cost
+        self._rule_cost = np.zeros(len(self.rule_set))
+        # TODO the strange constants are to eliminate zeros and ones
+        # TODO a better approach is needed!!!
+#         probs = self.nn.predict([X_attr, X_rule]) * 0.9998 + 0.0001
+        probs = self.nn.predict([X_attr, X_rule])
+        if np.any(probs == 0):
+            logging.getLogger('main').warning('zeros in predicted costs!!!')
+        if np.any(probs == 1):
+            logging.getLogger('main').warning('ones in predicted costs!!!')
+        costs = -np.log(1-probs)
+        for i, edge in chain(enumerate(edge_set),
+                             enumerate(negex, len(edge_set))):
+            rule_id = self.rule_set.get_id(edge.rule)
+            self._rule_cost[rule_id] += costs[i] * weights[i]
+        self._null_cost = np.sum(self._rule_cost)
 
     def save(self, filename :str) -> None:
-        raise NotImplementedError()
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        self.nn.save_weights(file_full_path)
+        # TODO save NGramFeatureExtractor
 
     @staticmethod
-    def load(filename :str, rule_set :RuleSet) -> 'SimpleEdgeModel':
+    def load(filename :str, rule_set :RuleSet, edge_set :EdgeSet,
+             negex_sampler :NegativeExampleSampler) -> 'NeuralEdgeModel':
         raise NotImplementedError()
 
     def _compile_network(self):
@@ -189,7 +212,8 @@ class NeuralEdgeModel(EdgeModel):
         rule_emb = Embedding(input_dim=num_rules, output_dim=30,\
                              input_length=1)(input_rule)
         rule_emb_fl = Flatten(name='rule_emb_fl')(rule_emb)
-        concat = concatenate([input_attr, rule_emb_fl])
+        attr_dr = Dense(30, name='attr_dr')(input_attr)
+        concat = concatenate([attr_dr, rule_emb_fl])
         internal = Dense(30, activation='relu', name='internal')(concat)
         output = Dense(1, activation='sigmoid', name='dense')(internal)
         self.nn = Model(inputs=[input_attr, input_rule], outputs=[output])
