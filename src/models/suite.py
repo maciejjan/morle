@@ -4,7 +4,7 @@ from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import EdgeSet, GraphEdge
 from datastruct.rules import Rule, RuleSet
 from models.root import AlergiaRootModel
-from models.edge import SimpleEdgeModel, NeuralEdgeModel
+from models.edge import SimpleEdgeModel, NeuralEdgeModel, NGramFeatureExtractor
 from models.feature import \
      GaussianRootFeatureModel, NeuralRootFeatureModel, RNNRootFeatureModel, \
      GaussianEdgeFeatureModel, NeuralEdgeFeatureModel
@@ -36,8 +36,10 @@ class ModelSuite:
 # TODO parameters (lexicon :Lexicon, lexicon_tr :hfst.HfstTransducer,
 #                  rule_set :RuleSet, rule_example_counts :np.ndarray,
 #                  rule_domsizes :np.ndarray)
+                ngram_extractor = NGramFeatureExtractor()
+                ngram_extractor.select_features(edge_set)
                 self.edge_model = \
-                    NeuralEdgeModel(rule_set, edge_set, negex_sampler)
+                    NeuralEdgeModel(rule_set, negex_sampler, ngram_extractor)
             else:
                 raise Exception('Unknown edge model: %s' % edge_model_type)
             self.root_feature_model = None
@@ -150,6 +152,20 @@ class ModelSuite:
         if edge_model_type == 'simple':
             result.edge_model = SimpleEdgeModel.load(\
                                   shared.filenames['edge-model'], rule_set)
+        elif edge_model_type == 'neural':
+            lexicon = Lexicon.load(shared.filenames['wordlist'])
+            lexicon_tr = algorithms.fst.load_transducer(\
+                             shared.filenames['lexicon-tr'])
+            edge_set = \
+                EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
+            negex_sampler = \
+                NegativeExampleSampler(lexicon, lexicon_tr, rule_set, edge_set)
+# TODO parameters (lexicon :Lexicon, lexicon_tr :hfst.HfstTransducer,
+#                  rule_set :RuleSet, rule_example_counts :np.ndarray,
+#                  rule_domsizes :np.ndarray)
+            result.edge_model = \
+                NeuralEdgeModel.load(shared.filenames['edge-model'], rule_set,
+                                     edge_set, negex_sampler)
         else:
             raise RuntimeError('Unknown edge model: %s' % edge_model_type)
         result.root_feature_model = None

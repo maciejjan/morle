@@ -108,7 +108,7 @@ class NGramFeatureExtractor:
         self.ngrams = []
         self.feature_idx = {}
 
-    def select_features(self, edge_set :EdgeSet, max_num=1000) -> None:
+    def select_features(self, edge_set :EdgeSet, max_num=100) -> None:
         '''Count n-grams and select the most frequent ones.'''
         ngrams_freq = defaultdict(lambda: 0)
         for edge in edge_set:
@@ -139,14 +139,28 @@ class NGramFeatureExtractor:
                 result.append(''.join(my_seq[i:i+n]))
         return result
 
+    def save(self, filename :str) -> None:
+        write_tsv_file(filename, ((ngram,) for ngram in self.ngrams))
+
+    @staticmethod
+    def load(filename :str) -> 'NGramFeatureExtractor':
+        result = NGramFeatureExtractor()
+        result.ngrams = [ngram for (ngram,) in read_tsv_file(filename)]
+        result.feature_idx = \
+            { ngram: i for i, ngram in enumerate(result.ngrams) }
+        return result
+
 
 class NeuralEdgeModel(EdgeModel):
-    def __init__(self, rule_set :RuleSet, edge_set :EdgeSet,
-                       negex_sampler :NegativeExampleSampler) -> None:
+    def __init__(self, rule_set :RuleSet,
+                       negex_sampler :NegativeExampleSampler,
+                       ngram_extractor :NGramFeatureExtractor) -> None:
         self.rule_set = rule_set
         self.negex_sampler = negex_sampler
-        self.ngram_extractor = NGramFeatureExtractor()
-        self.ngram_extractor.select_features(edge_set)
+        self.ngram_extractor = ngram_extractor
+#         if self.ngram_extractor is None:
+#             self.ngram_extractor = NGramFeatureExtractor()
+#             self.ngram_extractor.select_features(edge_set)
         self._compile_network()
 
     def edge_cost(self, edge :GraphEdge) -> float:
@@ -174,9 +188,9 @@ class NeuralEdgeModel(EdgeModel):
         X_attr = np.vstack([X_attr_pos, X_attr_neg])
         X_rule = np.hstack([X_rule_pos, X_rule_neg])
         y = np.hstack([weights, np.zeros(len(negex))])
-        weights = np.hstack([np.ones(len(edge_set)), weights_neg])
-        self.nn.fit([X_attr, X_rule], y, sample_weight=weights, epochs=5,
-                    batch_size=64, verbose=1)
+        sample_weights = np.hstack([np.ones(len(edge_set)), weights_neg])
+        self.nn.fit([X_attr, X_rule], y, sample_weight=sample_weights,
+                    epochs=5, batch_size=64, verbose=1)
         # set null_cost and rule_cost
         self._rule_cost = np.zeros(len(self.rule_set))
         # TODO the strange constants are to eliminate zeros and ones
@@ -191,18 +205,38 @@ class NeuralEdgeModel(EdgeModel):
         for i, edge in chain(enumerate(edge_set),
                              enumerate(negex, len(edge_set))):
             rule_id = self.rule_set.get_id(edge.rule)
-            self._rule_cost[rule_id] += costs[i] * weights[i]
+            self._rule_cost[rule_id] += costs[i] * sample_weights[i]
         self._null_cost = np.sum(self._rule_cost)
 
     def save(self, filename :str) -> None:
+        self.ngram_extractor.save(filename + '.ngr')
         file_full_path = os.path.join(shared.options['working_dir'], filename)
         self.nn.save_weights(file_full_path)
-        # TODO save NGramFeatureExtractor
 
     @staticmethod
     def load(filename :str, rule_set :RuleSet, edge_set :EdgeSet,
              negex_sampler :NegativeExampleSampler) -> 'NeuralEdgeModel':
-        raise NotImplementedError()
+        ngram_extractor = NGramFeatureExtractor.load(filename + '.ngr')
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        result = NeuralEdgeModel(rule_set, negex_sampler, ngram_extractor)
+        result.nn.load_weights(file_full_path)
+        # TODO compute rule costs and the null cost
+        # TODO remove code duplication!!!
+        negex, weights_neg = result.negex_sampler.sample(len(edge_set))
+        X_attr_neg, X_rule_neg = result._prepare_data(negex)
+        X_attr_pos, X_rule_pos = result._prepare_data(edge_set)
+        X_attr = np.vstack([X_attr_pos, X_attr_neg])
+        X_rule = np.hstack([X_rule_pos, X_rule_neg])
+        sample_weights = np.hstack([np.ones(len(edge_set)), weights_neg])
+        result._rule_cost = np.zeros(len(result.rule_set))
+        probs = result.nn.predict([X_attr, X_rule])
+        costs = -np.log(1-probs)
+        for i, edge in chain(enumerate(edge_set),
+                             enumerate(negex, len(edge_set))):
+            rule_id = result.rule_set.get_id(edge.rule)
+            result._rule_cost[rule_id] += costs[i] * sample_weights[i]
+        result._null_cost = np.sum(result._rule_cost)
+        return result
 
     def _compile_network(self):
         num_ngr = self.ngram_extractor.num_features()
