@@ -59,8 +59,9 @@ class MCMCGraphSampler:
         return self._logl
 
     def set_initial_branching(self, branching :Branching) -> None:
-        self._logl = np.sum(self.root_cost_cache) + self.model.null_cost() +\
-                     self.cost_of_change(list(branching.edges_iter()), [])
+        self._logl = \
+            float(np.sum(self.root_cost_cache) + self.model.null_cost() +\
+                  self.cost_of_change(list(branching.edges_iter()), []))
         logging.getLogger('main').debug('roots cost = {}'\
             .format(np.sum(self.root_cost_cache)))
         logging.getLogger('main').debug('null cost = {}'\
@@ -258,7 +259,7 @@ class MCMCGraphSampler:
         for e in edges_to_remove:
             result -= self.edge_cost_cache[self.edge_set.get_id(e)]
             result += self.root_cost_cache[self.lexicon.get_id(e.target)]
-        return result
+        return float(result)
 
     def accept_move(self, edges_to_add, edges_to_remove):
         self._logl += self.cost_of_change(edges_to_add, edges_to_remove)

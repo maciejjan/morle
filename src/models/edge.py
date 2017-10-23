@@ -108,7 +108,7 @@ class NGramFeatureExtractor:
         self.ngrams = []
         self.feature_idx = {}
 
-    def select_features(self, edge_set :EdgeSet, max_num=100) -> None:
+    def select_features(self, edge_set :EdgeSet, max_num=1000) -> None:
         '''Count n-grams and select the most frequent ones.'''
         ngrams_freq = defaultdict(lambda: 0)
         for edge in edge_set:
