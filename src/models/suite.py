@@ -37,7 +37,9 @@ class ModelSuite:
 #                  rule_set :RuleSet, rule_example_counts :np.ndarray,
 #                  rule_domsizes :np.ndarray)
                 ngram_extractor = NGramFeatureExtractor()
-                ngram_extractor.select_features(edge_set)
+                max_num_ngr = shared.config['NeuralEdgeModel']\
+                                    .getint('num_ngrams')
+                ngram_extractor.select_features(edge_set, max_num=max_num_ngr)
                 self.edge_model = \
                     NeuralEdgeModel(rule_set, negex_sampler, ngram_extractor)
             else:

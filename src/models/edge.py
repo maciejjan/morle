@@ -180,7 +180,10 @@ class NeuralEdgeModel(EdgeModel):
         return self._rule_cost[self.rule_set.get_id(rule)]
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
-        negex, weights_neg = self.negex_sampler.sample(len(edge_set))
+        num_negex = int(len(edge_set) *\
+                        shared.config['NeuralEdgeModel']\
+                              .getfloat('negex_factor'))
+        negex, weights_neg = self.negex_sampler.sample(num_negex)
 #         for i, edge in enumerate(negex):
 #             print(edge.source, edge.target, edge.rule, weights_neg[i])
         X_attr_neg, X_rule_neg = self._prepare_data(negex)
@@ -222,7 +225,10 @@ class NeuralEdgeModel(EdgeModel):
         result.nn.load_weights(file_full_path)
         # TODO compute rule costs and the null cost
         # TODO remove code duplication!!!
-        negex, weights_neg = result.negex_sampler.sample(len(edge_set))
+        num_negex = int(len(edge_set) *\
+                        shared.config['NeuralEdgeModel']\
+                              .getfloat('negex_factor'))
+        negex, weights_neg = result.negex_sampler.sample(num_negex)
         X_attr_neg, X_rule_neg = result._prepare_data(negex)
         X_attr_pos, X_rule_pos = result._prepare_data(edge_set)
         X_attr = np.vstack([X_attr_pos, X_attr_neg])
