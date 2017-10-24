@@ -123,8 +123,9 @@ class Rule:
              ''.join(self.tag_subst[1]) if self.tag_subst else '')
     
     def to_fst(self, weight=0, alphabet=None):
-        return algorithms.fst.seq_to_transducer(self.seq(), weight=weight, 
-                                                alphabet=alphabet)
+        return algorithms.fst.seq_to_transducer(\
+                   self.seq(), weight=weight, 
+                   alphabet=shared.multichar_symbols)
     
     @staticmethod
     def from_string(string):
