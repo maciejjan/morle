@@ -182,8 +182,6 @@ class NeuralEdgeModel(EdgeModel):
                         shared.config['NeuralEdgeModel']\
                               .getfloat('negex_factor'))
         negex, weights_neg = self.negex_sampler.sample(num_negex)
-#         for i, edge in enumerate(negex):
-#             print(edge.source, edge.target, edge.rule, weights_neg[i])
         X_attr_neg, X_rule_neg = self._prepare_data(negex)
         X_attr_pos, X_rule_pos = self._prepare_data(edge_set)
         X_attr = np.vstack([X_attr_pos, X_attr_neg])
