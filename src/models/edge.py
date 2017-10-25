@@ -8,6 +8,7 @@ from collections import defaultdict
 from itertools import chain
 from keras.models import Model
 from keras.layers import concatenate, Dense, Embedding, Flatten, Input
+import logging
 import numpy as np
 from operator import itemgetter
 import os.path
