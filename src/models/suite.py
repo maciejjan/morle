@@ -33,9 +33,6 @@ class ModelSuite:
                     EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
                 negex_sampler = \
                     NegativeExampleSampler(lexicon, lexicon_tr, rule_set, edge_set)
-# TODO parameters (lexicon :Lexicon, lexicon_tr :hfst.HfstTransducer,
-#                  rule_set :RuleSet, rule_example_counts :np.ndarray,
-#                  rule_domsizes :np.ndarray)
                 ngram_extractor = NGramFeatureExtractor()
                 max_num_ngr = shared.config['NeuralEdgeModel']\
                                     .getint('num_ngrams')
@@ -162,9 +159,6 @@ class ModelSuite:
                 EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
             negex_sampler = \
                 NegativeExampleSampler(lexicon, lexicon_tr, rule_set, edge_set)
-# TODO parameters (lexicon :Lexicon, lexicon_tr :hfst.HfstTransducer,
-#                  rule_set :RuleSet, rule_example_counts :np.ndarray,
-#                  rule_domsizes :np.ndarray)
             result.edge_model = \
                 NeuralEdgeModel.load(shared.filenames['edge-model'], rule_set,
                                      edge_set, negex_sampler)

@@ -73,12 +73,6 @@ class RNNRootFeatureModel(RootFeatureModel):
 
     def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
         # prepare data
-#         X, y = [], []
-#         for entry in lexicon:
-#             X.append([self.alphabet_hash[sym] for sym in entry.word+entry.tag])
-#             y.append(entry.vec)
-#         X = keras.preprocessing.sequence.pad_sequences(X, maxlen=self.maxlen)
-#         y = np.vstack(y)
         X, y = self._prepare_data(lexicon)
         # fit the neural network
         self.nn.fit(X, y, epochs=20, sample_weight=weights, batch_size=64,
@@ -94,14 +88,6 @@ class RNNRootFeatureModel(RootFeatureModel):
         return -multivariate_normal.logpdf(y-y_pred,
                                            np.zeros(self.dim),
                                            np.diag(self.err_var))
-
-#     def root_cost(self, entry :LexiconEntry) -> float:
-#         X = [[self.alphabet_hash[sym] for sym in entry.word+entry.tag]]
-#         X = keras.preprocessing.sequence.pad_sequences(X, maxlen=self.maxlen)
-#         y_pred = self.nn.predict(X)
-#         return -multivariate_normal.logpdf(entry.vec-y_pred,
-#                                            np.zeros(self.dim),
-#                                            np.diag(self.err_var))
 
     def save(self, filename) -> None:
         file_full_path = os.path.join(shared.options['working_dir'], filename)
@@ -146,15 +132,6 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         self._compile_network()
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
-        # convert input and output data to matrices
-#         X_attr, X_rule, y = [], [], []
-#         for edge in edge_set:
-#             X_attr.append(edge.source.vec)
-#             X_rule.append(self.rule_set.get_id(edge.rule))
-#             y.append(edge.target.vec)
-#         X_attr = np.vstack(X_attr)
-#         X_rule = np.array(X_rule)
-#         y = np.vstack(y)
         X_attr, X_rule, y = self._prepare_data(edge_set)
         # fit the predictor
         self.nn.fit([X_attr, X_rule], y, epochs=20, sample_weight=weights,
@@ -170,7 +147,6 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         X_attr = np.array([edge.source.vec])
         X_rule = np.array([self.rule_set.get_id(edge.rule)])
         y = np.array([edge.target.vec])
-#         X_attr, X_rule, y = self._prepare_data([edge])
         y_pred = self.nn.predict([X_attr, X_rule])
         return -multivariate_normal.logpdf(y-y_pred, np.zeros(y.shape[1]),
                                            np.diag(self.err_var))
@@ -248,7 +224,6 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
             self.vars = np.empty((len(self.rule_set), self.dim))
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
             edge_ids = tuple(edge_ids)
-#             feature_matrix = edge_set.feature_matrix[edge_ids,:]
             feature_matrix = np.array([edge_set[i].target.vec - \
                                        edge_set[i].source.vec \
                                        for i in edge_ids])

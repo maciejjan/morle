@@ -159,9 +159,6 @@ class NeuralEdgeModel(EdgeModel):
         self.rule_set = rule_set
         self.negex_sampler = negex_sampler
         self.ngram_extractor = ngram_extractor
-#         if self.ngram_extractor is None:
-#             self.ngram_extractor = NGramFeatureExtractor()
-#             self.ngram_extractor.select_features(edge_set)
         self._compile_network()
 
     def edge_cost(self, edge :GraphEdge) -> float:
