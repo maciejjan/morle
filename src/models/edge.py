@@ -169,7 +169,7 @@ class NeuralEdgeModel(EdgeModel):
 
     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
         X_attr, X_rule = self._prepare_data(edge_set)
-        probs = self.nn.predict([X_attr, X_rule])
+        probs = self.nn.predict([X_attr, X_rule]).reshape((len(edge_set),))
         return np.log(probs / (1-probs))
 
     def null_cost(self) -> float:

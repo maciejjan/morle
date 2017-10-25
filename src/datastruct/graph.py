@@ -47,9 +47,9 @@ class EdgeSet:
         self.index = {}               # type: Dict[GraphEdge, int]
         self.edge_ids_by_rule = {}    # type: Dict[Rule, List[int]]
         self.next_id = 0
-        if shared.config['Models'].get('edge_feature_model') != 'none':
-            dim = shared.config['Features'].getint('word_vec_dim')
-            self.feature_matrix = np.ndarray((0, dim))
+#         if shared.config['Models'].get('edge_feature_model') != 'none':
+#             dim = shared.config['Features'].getint('word_vec_dim')
+#             self.feature_matrix = np.ndarray((0, dim))
 
     def __iter__(self) -> Iterable[GraphEdge]:
         return iter(self.items)
@@ -75,12 +75,12 @@ class EdgeSet:
                 self.edge_ids_by_rule[edge.rule] = []
             self.edge_ids_by_rule[edge.rule].append(self.next_id)
             self.next_id += 1
-        if shared.config['Models'].get('edge_feature_model') != 'none':
-            for edge in edges:
-                edge.attr['vec'] = edge.target.vec-edge.source.vec
-            self.feature_matrix = \
-                np.vstack((self.feature_matrix,
-                           np.array([edge.attr['vec'] for edge in edges])))
+#         if shared.config['Models'].get('edge_feature_model') != 'none':
+#             for edge in edges:
+#                 edge.attr['vec'] = edge.target.vec-edge.source.vec
+#             self.feature_matrix = \
+#                 np.vstack((self.feature_matrix,
+#                            np.array([edge.attr['vec'] for edge in edges])))
 
     def get_id(self, edge :GraphEdge) -> int:
         return self.index[edge]

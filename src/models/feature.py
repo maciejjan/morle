@@ -176,14 +176,6 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
                                            np.diag(self.err_var))
 
     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
-#         X_attr, X_rule, y = [], [], []
-#         for edge in edge_set:
-#             X_attr.append(edge.source.vec)
-#             X_rule.append(self.rule_set.get_id(edge.rule))
-#             y.append(edge.target.vec)
-#         X_attr = np.vstack(X_attr)
-#         X_rule = np.array(X_rule)
-#         y = np.vstack(y)
         X_attr, X_rule, y = self._prepare_data(edge_set)
         y_pred = self.nn.predict([X_attr, X_rule])
         return -multivariate_normal.logpdf(y-y_pred, np.zeros(y.shape[1]),
@@ -272,7 +264,6 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
         result = np.zeros(len(edge_set))
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
-            edge_ids = tuple(edge_ids)
             rule_id = self.rule_set.get_id(rule)
             feature_matrix = np.vstack([edge_set[i].target.vec - \
                                         edge_set[i].source.vec \
@@ -280,7 +271,7 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
             costs = -multivariate_normal.logpdf(feature_matrix,
                                                 self.means[rule_id,],
                                                 np.diag(self.vars[rule_id,]))
-            result[edge_ids,] = costs
+            result[tuple(edge_ids),] = costs
         return result
 
     def save(self, filename) -> None:
