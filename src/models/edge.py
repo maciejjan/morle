@@ -125,7 +125,7 @@ class NGramFeatureExtractor:
 
     def extract(self, edge_set :EdgeSet) -> np.ndarray:
         '''Extract n-gram features from edges and return a binary matrix.'''
-        result = np.zeros((len(edge_set), self.num_features()))
+        result = np.zeros((len(edge_set), self.num_features()), dtype=np.uint8)
         for i, edge in enumerate(edge_set):
             for ngram in self._extract_from_seq(edge.source.word):
                 if ngram in self.feature_idx:
@@ -182,6 +182,8 @@ class NeuralEdgeModel(EdgeModel):
                         shared.config['NeuralEdgeModel']\
                               .getfloat('negex_factor'))
         negex, weights_neg = self.negex_sampler.sample(num_negex)
+        write_tsv_file('negex.txt', ((e.source, e.target, e.rule, weights_neg[i]) \
+                                     for i, e in enumerate(negex)))
         X_attr_neg, X_rule_neg = self._prepare_data(negex)
         X_attr_pos, X_rule_pos = self._prepare_data(edge_set)
         X_attr = np.vstack([X_attr_pos, X_attr_neg])
