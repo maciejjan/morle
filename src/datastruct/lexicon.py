@@ -91,44 +91,23 @@ def unnormalize_word(literal :str) -> str:
 
 class LexiconEntry:
 
-    # TODO do not retrieve config for every lexicon entry!
-    #      (strings have to be converted each time)
     def __init__(self, word, **kwargs) -> None:
         # read arguments one by one
-#         args = list(args)
         self.literal = word
         self.word, self.tag, self.disamb = tokenize_word(self.literal)
         self.word = normalize_seq(self.word)
-        # string of printable symbols -- does not include disambiguation IDs
         self.symstr = ''.join(self.word + self.tag)
         self.normalized = ''.join(self.word + self.tag) +\
                           ((shared.format['word_disamb_sep'] + self.disamb) \
                            if self.disamb is not None else '')
-        if 'is_possible_edge_source' in kwargs:
-            self._is_possible_edge_source = kwargs['is_possible_edge_source']
-        if 'is_possible_edge_target' in kwargs:
-            self._is_possible_edge_target = kwargs['is_possible_edge_target']
+        self._is_possible_edge_source = \
+            kwargs['is_possible_edge_source'] \
+            if 'is_possible_edge_source' in kwargs else True
+        self._is_possible_edge_target = \
+            kwargs['is_possible_edge_target'] \
+            if 'is_possible_edge_target' in kwargs else True
         if 'vec' in kwargs:
             self.vec = kwargs['vec']
-#         if shared.config['General'].getboolean('use_edge_restrictions'):
-#             edge_restrictions = args.pop(0)
-#             self._is_possible_edge_source = ('L' in edge_restrictions)
-#             self._is_possible_edge_target = ('R' in edge_restrictions)
-#         else:
-#             self._is_possible_edge_source = True
-#             self._is_possible_edge_target = True
-#         if shared.config['Features'].getfloat('word_freq_weight') > 0:
-#             self.freq = int(args.pop(0))
-#             self.logfreq = math.log(self.freq)
-#         if shared.config['Features'].getfloat('word_vec_weight') > 0:
-#             vec_sep = shared.format['vector_sep']
-#             self.vec = np.array(list(map(float, args.pop(0).split(vec_sep))))
-#             if self.vec is None:
-#                 raise Exception("%s vec=None" % (self.literal))
-#             if self.vec.shape[0] != shared.config['Features']\
-#                                           .getfloat('word_vec_dim'):
-#                 raise Exception("%s dim=%d" %\
-#                                 (self.literal, self.vec.shape[0]))
 
     def __lt__(self, other) -> bool:
         if not isinstance(other, LexiconEntry):
@@ -285,10 +264,6 @@ class Lexicon:
             shared.config['Models'].get('edge_feature_model') != 'none'
         vec_sep = shared.format['vector_sep']
         vec_dim = shared.config['Features'].getint('word_vec_dim')
-        logging.getLogger('main').debug('use_restr={}'.format(use_restr))
-        logging.getLogger('main').debug('use_vec={}'.format(use_vec))
-        logging.getLogger('main').debug('vec_sep={}'.format(vec_sep))
-        logging.getLogger('main').debug('vec_dim={}'.format(vec_dim))
         items_to_add = []
         for row in read_tsv_file(filename):
             try:
