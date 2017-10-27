@@ -64,3 +64,7 @@ class NegativeExampleSampler:
             weights[i] = (domsize-num_pos_ex) / num_neg_ex
         return edge_set, weights
 
+    # TODO performs the sampling in a separate process to circumvent the memory leak
+    def sample_spawned(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
+        raise NotImplementedError()
+
