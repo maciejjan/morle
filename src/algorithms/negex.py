@@ -23,12 +23,15 @@ class NegativeExampleSampler:
         for edge in edge_set:
             self.num_pos_ex[edge.rule] += 1
         self.transducers = { rule : rule.to_fst() for rule in rule_set }
-        for tr in self.transducers.values():
-            tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
+#         for tr in self.transducers.values():
+#             tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
+
+    def sample(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
+        return self.sample_unspawned(sample_size)
 
     # TODO works, but is heavily affected by the lookup memory leak
     # TODO start this method in a separate process to circumvent the memory leak
-    def sample(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
+    def sample_unspawned(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
         edge_set = EdgeSet()
         num_edges_for_rule = defaultdict(lambda: 0)
         progressbar = tqdm.tqdm(total=sample_size)
@@ -64,7 +67,11 @@ class NegativeExampleSampler:
             weights[i] = (domsize-num_pos_ex) / num_neg_ex
         return edge_set, weights
 
-    # TODO performs the sampling in a separate process to circumvent the memory leak
-    def sample_spawned(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
+    def sample_with_block_composition(self, sample_size :int) -> None:
+        # TODO divide the sample size into block of size, say, 100000
+        # TODO sample word and rule ids
+        # TODO sort the sample items by rule id
+        # TODO for each rule: disjunct all input words, then compose
+        #      with the rule automaton
         raise NotImplementedError()
 
