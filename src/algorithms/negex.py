@@ -27,11 +27,12 @@ class NegativeExampleSampler:
 #             tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
 
     def sample(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
-        return self.sample_unspawned(sample_size)
+        return self.sample_with_lookup(sample_size)
 
     # TODO works, but is heavily affected by the lookup memory leak
     # TODO start this method in a separate process to circumvent the memory leak
-    def sample_unspawned(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
+    def sample_with_lookup(self, sample_size :int) \
+                          -> Tuple[EdgeSet, np.ndarray]:
         edge_set = EdgeSet()
         num_edges_for_rule = defaultdict(lambda: 0)
         progressbar = tqdm.tqdm(total=sample_size)
@@ -40,7 +41,9 @@ class NegativeExampleSampler:
             r_id = random.randrange(len(self.rule_set))
             entry = self.lexicon[w_id]
             rule = self.rule_set[r_id]
-            lookup_results = self.transducers[rule].lookup(entry.symstr)
+            lookup_results = \
+                list(map(lambda x: (x[0].replace(hfst.EPSILON, ''), x[1]),
+                         self.transducers[rule].lookup(entry.symstr)))
             if lookup_results:
                 t_id = random.randrange(len(lookup_results))
                 target = None
