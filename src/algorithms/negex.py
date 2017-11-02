@@ -11,6 +11,7 @@ from operator import itemgetter
 import random
 import tqdm
 from typing import Tuple
+import sys
 
 
 def identity_fst():
@@ -29,6 +30,8 @@ class NegativeExampleSampler:
 #         self.lexicon_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
         self.lexicon_cmp_tr = identity_fst()
         self.lexicon_cmp_tr.subtract(lexicon_tr)
+        self.lexicon_cmp_tr.minimize()
+        self.lexicon_tr.convert(hfst.ImplementationType.SFST_TYPE)
         self.lexicon_cmp_tr.convert(hfst.ImplementationType.SFST_TYPE)
         self.rule_set = rule_set
         self.num_pos_ex = defaultdict(lambda: 0)
@@ -36,12 +39,14 @@ class NegativeExampleSampler:
             self.num_pos_ex[edge.rule] += 1
         self.rule_transducers = [rule.to_fst() for rule in rule_set]
         self.lex_transducers = [entry.to_fst() for entry in lexicon]
-#         for tr in self.transducers.values():
-#             tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
         for tr in self.rule_transducers:
             tr.convert(hfst.ImplementationType.SFST_TYPE)
         for tr in self.lex_transducers:
             tr.convert(hfst.ImplementationType.SFST_TYPE)
+#         logging.getLogger('main').info('Precomputing some compositions...')
+#         for tr in tqdm.tqdm(self.rule_transducers):
+#             tr.compose(self.lexicon_cmp_tr)
+#             tr.minimize()
 
     def sample(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
         return self.sample_with_block_composition(sample_size)
@@ -87,30 +92,15 @@ class NegativeExampleSampler:
             weights[i] = (domsize-num_pos_ex) / num_neg_ex
         return edge_set, weights
 
-    def sample_with_block_composition(self, sample_size :int) -> None:
-        # TODO divide the sample size into block of size, say, 100000
-        # TODO sample word and rule ids
-        # TODO sort the sample items by rule id
-        # TODO for each rule: disjunct all input words, then compose
-        #      with the rule automaton
-
-        BLOCK_SIZE = 1000
-        edge_set = EdgeSet()
-        word_ids = np.array(list(range(len(self.lexicon))))
-
-        def _sample_block(r_id :int, block_size :int) -> EdgeSet:
-            w_ids = np.random.choice(word_ids, size=block_size, replace=False)
-            # sort alphabetically to speedup disjunction
-            w_ids_by_symstr = \
-                list(map(itemgetter(0),
-                         sorted([(int(w_id), self.lexicon[int(w_id)].symstr)\
-                                 for w_id in w_ids],
-                                key=itemgetter(1))))
-            transducers = []
-            tr = algorithms.fst.binary_disjunct(\
-                     [hfst.HfstTransducer(self.lex_transducers[w_id]) \
-                      for w_id in w_ids_by_symstr])
+    def sample_with_block_composition(self, sample_size :int):
+        # TODO divide the lexicon randomly into blocks of BLOCK_SIZE words
+        # TODO randomly combine a block with a rule
+        # (block size = 1 => independent sample)
+        # (for larger block sizes - independency sacrificed for speed)
+        def _sample_block(b_id :int, r_id :int):
+            tr = hfst.HfstTransducer(block_trs[b_id])
             tr.compose(self.rule_transducers[r_id])
+            tr.minimize()
             tr.compose(self.lexicon_cmp_tr)
             tr.minimize()
             result = EdgeSet()
@@ -125,16 +115,31 @@ class NegativeExampleSampler:
                             result.add(edge)
             return result
 
+        BLOCK_SIZE = 100
+
+        # prepare blocks
+        w_ids = list(range(len(self.lexicon)))
+        random.shuffle(w_ids)
+        i, j = 0, BLOCK_SIZE
+        block_trs = []
+        while i < len(w_ids):
+            trs = [self.lex_transducers[idx] for idx in w_ids[i:j]]
+            block_tr = algorithms.fst.binary_disjunct(trs)
+            block_trs.append(block_tr)
+            i, j = j, min(j+BLOCK_SIZE, len(w_ids))
+
+        edge_set = EdgeSet()
         num_edges_for_rule = defaultdict(lambda: 0)
         progressbar = tqdm.tqdm(total=sample_size)
-        r_id_queue = []
+        visited = set()
         while len(edge_set) < sample_size:
-            if not r_id_queue:
-                r_id_queue = list(range(len(self.rule_set)))
-                random.shuffle(r_id_queue)
-            r_id = r_id_queue.pop()
+            b_id = random.randrange(len(block_trs))
+            r_id = random.randrange(len(self.rule_set))
+            if (b_id, r_id) in visited:
+                continue
+            visited.add((b_id, r_id))
             rule = self.rule_set[r_id]
-            for edge in _sample_block(r_id, BLOCK_SIZE):
+            for edge in _sample_block(b_id, r_id):
                 if edge not in edge_set:
                     edge_set.add(edge)
                     num_edges_for_rule[rule] += 1
@@ -142,6 +147,7 @@ class NegativeExampleSampler:
                     if len(edge_set) >= sample_size:
                         break
         progressbar.close()
+        sys.exit(0)
         # compute edge weights
         weights = np.empty(len(edge_set))
         for i, edge in enumerate(edge_set):
