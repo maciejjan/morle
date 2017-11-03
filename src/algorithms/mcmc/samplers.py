@@ -264,6 +264,14 @@ class MCMCGraphSampler:
     def accept_move(self, edges_to_add, edges_to_remove):
         self._logl += self.cost_of_change(edges_to_add, edges_to_remove)
         if np.isnan(self._logl):
+            logging.getLogger('main').info('adding:')
+            for e in edges_to_add:
+                print(e.source, e.target, e.rule, \
+                      self.edge_cost_cache[self.edge_set.get_id(edge)])
+            logging.getLogger('main').info('deleting:')
+            for e in edges_to_delete:
+                print(e.source, e.target, e.rule, \
+                      self.edge_cost_cache[self.edge_set.get_id(edge)])
             raise RuntimeError('NaN log-likelihood at iteration {}'\
                                .format(self.iter_num))
         # remove edges and update stats

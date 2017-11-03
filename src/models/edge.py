@@ -196,8 +196,8 @@ class NeuralEdgeModel(EdgeModel):
         self._rule_cost = np.zeros(len(self.rule_set))
         # TODO the strange constants are to eliminate zeros and ones
         # TODO a better approach is needed!!!
-#         probs = self.nn.predict([X_attr, X_rule]) * 0.9998 + 0.0001
-        probs = self.nn.predict([X_attr, X_rule])
+        probs = self.nn.predict([X_attr, X_rule]) * 0.9998 + 0.0001
+#         probs = self.nn.predict([X_attr, X_rule])
         if np.any(probs == 0):
             logging.getLogger('main').warning('zeros in predicted costs!!!')
         if np.any(probs == 1):

@@ -26,12 +26,12 @@ class NegativeExampleSampler:
                  rule_set :RuleSet, edge_set :EdgeSet) -> None:
         self.lexicon = lexicon
         self.lexicon_tr = lexicon_tr
-#         self.lexicon_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
-        self.lexicon_cmp_tr = identity_fst()
-        self.lexicon_cmp_tr.subtract(lexicon_tr)
-        self.lexicon_cmp_tr.minimize()
-        self.lexicon_tr.convert(hfst.ImplementationType.SFST_TYPE)
-        self.lexicon_cmp_tr.convert(hfst.ImplementationType.SFST_TYPE)
+        self.lexicon_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
+#         self.lexicon_cmp_tr = identity_fst()
+#         self.lexicon_cmp_tr.subtract(lexicon_tr)
+#         self.lexicon_cmp_tr.minimize()
+#         self.lexicon_tr.convert(hfst.ImplementationType.SFST_TYPE)
+#         self.lexicon_cmp_tr.convert(hfst.ImplementationType.SFST_TYPE)
         self.rule_set = rule_set
         self.num_pos_ex = defaultdict(lambda: 0)
         for edge in edge_set:
@@ -40,15 +40,12 @@ class NegativeExampleSampler:
         self.lex_transducers = [entry.to_fst() for entry in lexicon]
         for tr in self.rule_transducers:
             tr.convert(hfst.ImplementationType.SFST_TYPE)
-        for tr in self.lex_transducers:
-            tr.convert(hfst.ImplementationType.SFST_TYPE)
-#         logging.getLogger('main').info('Precomputing some compositions...')
-#         for tr in tqdm.tqdm(self.rule_transducers):
-#             tr.compose(self.lexicon_cmp_tr)
-#             tr.minimize()
+#             tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
+#         for tr in self.lex_transducers:
+#             tr.convert(hfst.ImplementationType.SFST_TYPE)
 
     def sample(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
-        return self.sample_with_block_composition(sample_size)
+        return self.sample_with_lookup(sample_size)
 
     # TODO works, but is heavily affected by the lookup memory leak
     # TODO start this method in a separate process to circumvent the memory leak
@@ -64,7 +61,7 @@ class NegativeExampleSampler:
             rule = self.rule_set[r_id]
             lookup_results = \
                 list(map(lambda x: (x[0].replace(hfst.EPSILON, ''), x[1]),
-                         self.transducers[rule].lookup(entry.symstr)))
+                         self.rule_transducers[r_id].lookup(entry.symstr)))
             if lookup_results:
                 t_id = random.randrange(len(lookup_results))
                 target = None
@@ -74,7 +71,8 @@ class NegativeExampleSampler:
                     logging.getLogger('main').debug(\
                        'Exception during negative sampling: {}'.format(e))
                     continue
-                if self.lexicon_tr.lookup(target.symstr):
+#                 if self.lexicon_tr.lookup(target.symstr):
+                if target.symstr in self.lexicon.items_by_symstr:
                     continue
                 edge = GraphEdge(entry, target, rule)
                 if edge not in edge_set:
@@ -114,7 +112,7 @@ class NegativeExampleSampler:
                             result.add(edge)
             return result
 
-        BLOCK_SIZE = 3000
+        BLOCK_SIZE = 100
 
         # prepare blocks
         w_ids = list(range(len(self.lexicon)))
