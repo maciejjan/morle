@@ -11,7 +11,6 @@ from operator import itemgetter
 import random
 import tqdm
 from typing import Tuple
-import sys
 
 
 def identity_fst():
@@ -115,7 +114,7 @@ class NegativeExampleSampler:
                             result.add(edge)
             return result
 
-        BLOCK_SIZE = 100
+        BLOCK_SIZE = 3000
 
         # prepare blocks
         w_ids = list(range(len(self.lexicon)))
@@ -147,7 +146,6 @@ class NegativeExampleSampler:
                     if len(edge_set) >= sample_size:
                         break
         progressbar.close()
-        sys.exit(0)
         # compute edge weights
         weights = np.empty(len(edge_set))
         for i, edge in enumerate(edge_set):
