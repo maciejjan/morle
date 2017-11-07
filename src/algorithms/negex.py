@@ -6,6 +6,7 @@ from datastruct.rules import Rule, RuleSet
 from collections import defaultdict
 import hfst
 import logging
+import multiprocessing
 import numpy as np
 from operator import itemgetter
 import random
@@ -13,12 +14,82 @@ import tqdm
 from typing import Tuple
 
 
+# TODO move to algorithms.fst
 def identity_fst():
     tr = hfst.HfstBasicTransducer()
     tr.set_final_weight(0, 0.0)
     tr.add_transition(0, hfst.HfstBasicTransition(0, hfst.IDENTITY, 
                                                   hfst.IDENTITY, 0))
     return hfst.HfstTransducer(tr)
+
+
+# TODO remove code duplication with modules.preprocess!!!
+def parallel_execute(function :Callable[..., None] = None,
+                     data :List[Any] = None,
+                     num_processes :int = 1,
+                     additional_args :Tuple = (),
+                     show_progressbar :bool = False) -> Iterable:
+
+    mandatory_args = (function, data, num_processes, additional_args)
+    assert not any(arg is None for arg in mandatory_args)
+
+    # partition the data into chunks for each process
+    step = len(data) // num_processes
+    data_chunks = []
+    i = 0
+    while i < num_processes-1:
+        data_chunks.append(data[i*step:(i+1)*step])
+        i += 1
+    # account for rounding error while processing the last chunk
+    data_chunks.append(data[i*step:])
+
+    queue = multiprocessing.Queue(10000)
+    queue_lock = multiprocessing.Lock()
+
+    def _output_fun(x):
+        successful = False
+        queue_lock.acquire()
+        try:
+            queue.put_nowait(x)
+            successful = True
+        except Exception:
+            successful = False
+        finally:
+            queue_lock.release()
+        if not successful:
+            # wait for the queue to be emptied and try again
+            time.sleep(1)
+            _output_fun(x)
+
+    processes, joined = [], []
+    for i in range(num_processes):
+        p = multiprocessing.Process(target=function,
+                                    args=(data_chunks[i], _output_fun) +\
+                                         additional_args)
+        p.start()
+        processes.append(p)
+        joined.append(False)
+
+    progressbar, state = None, None
+    if show_progressbar:
+        progressbar = tqdm.tqdm(total=len(data))
+    while not all(joined):
+        count = 0
+        queue_lock.acquire()
+        try:
+            while not queue.empty():
+                yield queue.get()
+                count += 1
+        finally:
+            queue_lock.release()
+        if show_progressbar:
+            progressbar.update(count)
+        for i, p in enumerate(processes):
+            if not p.is_alive():
+                p.join()
+                joined[i] = True
+    if show_progressbar:
+        progressbar.close()
 
 
 class NegativeExampleSampler:
@@ -45,7 +116,7 @@ class NegativeExampleSampler:
 #             tr.convert(hfst.ImplementationType.SFST_TYPE)
 
     def sample(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
-        return self.sample_with_lookup(sample_size)
+        return self.parallel_sample_with_lookup(sample_size)
 
     # TODO works, but is heavily affected by the lookup memory leak
     # TODO start this method in a separate process to circumvent the memory leak
@@ -80,6 +151,27 @@ class NegativeExampleSampler:
                     num_edges_for_rule[rule] += 1
                     progressbar.update()
         progressbar.close()
+        # compute edge weights
+        weights = np.empty(len(edge_set))
+        for i, edge in enumerate(edge_set):
+            domsize = self.rule_set.get_domsize(edge.rule)
+            num_pos_ex = self.num_pos_ex[edge.rule]
+            num_neg_ex = num_edges_for_rule[edge.rule]
+            weights[i] = (domsize-num_pos_ex) / num_neg_ex
+        return edge_set, weights
+
+    def parallel_sample_with_lookup(self, sample_size :int) \
+                                   -> Tuple[EdgeSet, np.ndarray]:
+        NUM_PROCESSES = 4
+        # TODO distribute rules to the processes
+        p_rules = [list() for i in range(NUM_PROCESSES)]
+        cur_proc = 0
+        for rule in self.rule_set:
+            p_rules[cur_proc].append(rule)
+            cur_proc = (cur_proc + 1) % NUM_PROCESSES
+        # TODO call parallel_execute for sampling function
+#         edges_iter = parallel_execute(function=_
+        # TODO create an edge_set out of the results
         # compute edge weights
         weights = np.empty(len(edge_set))
         for i, edge in enumerate(edge_set):
