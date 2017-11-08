@@ -129,15 +129,8 @@ class NegativeExampleSampler:
                     _output_fun(GraphEdge(entry, target, rule))
                     num += 1
 
-        NUM_PROCESSES = 4
-        # distribute rules to the processes
-#         p_rules = [list() for i in range(NUM_PROCESSES)]
-#         cur_proc = 0
-#         for rule in self.rule_set:
-#             p_rules[cur_proc].append(rule)
-#             cur_proc = (cur_proc + 1) % NUM_PROCESSES
+        NUM_PROCESSES = 4       # TODO config parameter
         sample_size_per_proc = int(sample_size / NUM_PROCESSES)
-        # sampling
         rules_lst = [r for r in self.rule_set]
         edges_iter = \
             parallel_execute(function=_sample_process, data=list(self.rule_set),
