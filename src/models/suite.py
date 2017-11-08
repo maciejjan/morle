@@ -27,12 +27,10 @@ class ModelSuite:
                 self.edge_model = SimpleEdgeModel(rule_set)
             elif edge_model_type == 'neural':
                 lexicon = Lexicon.load(shared.filenames['wordlist'])
-                lexicon_tr = algorithms.fst.load_transducer(\
-                                 shared.filenames['lexicon-tr'])
                 edge_set = \
                     EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
                 negex_sampler = \
-                    NegativeExampleSampler(lexicon, lexicon_tr, rule_set, edge_set)
+                    NegativeExampleSampler(lexicon, rule_set, edge_set)
                 ngram_extractor = NGramFeatureExtractor()
                 max_num_ngr = shared.config['NeuralEdgeModel']\
                                     .getint('num_ngrams')
