@@ -96,8 +96,16 @@ class RNNRootFeatureModel(RootFeatureModel):
                  err_var=self.err_var)
         
     @staticmethod
-    def load(filename) -> 'RNNRootFeatureModel':
-        raise NotImplementedError()
+    def load(filename, alphabet :Iterable[str], maxlen :int) \
+            -> 'RNNRootFeatureModel':
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        data = np.load(file_full_path)
+        result = RNNRootFeatureModel(alphabet, maxlen)
+        result.nn.layers[0].set_weights(data['emb'])
+        result.nn.layers[1].set_weights(data['internal'])
+        result.nn.layers[2].set_weights(data['output'])
+        result.err_var = data['err_var']
+        return result
 
     def _compile_network(self) -> None:
         self.nn = Sequential()
@@ -165,7 +173,14 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
     
     @staticmethod
     def load(filename, rule_set :RuleSet) -> 'NeuralEdgeFeatureModel':
-        raise NotImplementedError()
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        data = np.load(file_full_path)
+        result = NeuralEdgeFeatureModel(rule_set)
+        result.nn.layers[0].set_weights(data['rule_emb'])
+        result.nn.layers[1].set_weights(data['internal'])
+        result.nn.layers[2].set_weights(data['output'])
+        result.err_var = data['err_var']
+        return result
 
     def _compile_network(self):
         dim = shared.config['Features'].getint('word_vec_dim')

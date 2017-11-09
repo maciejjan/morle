@@ -151,12 +151,10 @@ class ModelSuite:
                                   shared.filenames['edge-model'], rule_set)
         elif edge_model_type == 'neural':
             lexicon = Lexicon.load(shared.filenames['wordlist'])
-            lexicon_tr = algorithms.fst.load_transducer(\
-                             shared.filenames['lexicon-tr'])
             edge_set = \
                 EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
             negex_sampler = \
-                NegativeExampleSampler(lexicon, lexicon_tr, rule_set, edge_set)
+                NegativeExampleSampler(lexicon, rule_set, edge_set)
             result.edge_model = \
                 NeuralEdgeModel.load(shared.filenames['edge-model'], rule_set,
                                      edge_set, negex_sampler)
@@ -175,9 +173,18 @@ class ModelSuite:
                 NeuralRootFeatureModel.load(
                     shared.filenames['root-feature-model'])
         elif root_feature_model_type == 'rnn':
+            # TODO refactor
+            lexicon_tr = algorithms.fst.load_transducer(\
+                             shared.filenames['lexicon-tr'])
+            alphabet = tuple(sorted(list(lexicon_tr.get_alphabet())))
+            longest_paths = lexicon_tr.extract_longest_paths(
+                                max_number=1, output='raw')
+            maxlen = len(longest_paths[0][1])
+            logging.getLogger('main').debug(\
+                'Detected maximum word length: {}'.format(maxlen))
             result.root_feature_model =\
                 RNNRootFeatureModel.load(
-                    shared.filenames['root-feature-model'])
+                    shared.filenames['root-feature-model'], alphabet, maxlen)
         elif root_feature_model_type == 'none':
             pass
         else:
@@ -193,7 +200,7 @@ class ModelSuite:
         elif edge_feature_model_type == 'neural':
             result.edge_feature_model =\
                 NeuralEdgeFeatureModel.load(
-                    shared.filenames['edge-feature-model'])
+                    shared.filenames['edge-feature-model'], rule_set)
         elif edge_feature_model_type == 'none':
             pass
         else:
