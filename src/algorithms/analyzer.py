@@ -15,6 +15,9 @@ from typing import List
 # - no feature model -> quicker analysis with compose + minimize + lookup
 # - tag prediction
 
+# TODO
+# - predict feature fector if not present
+
 class Analyzer:
     def __init__(self, lexicon :Lexicon, model :ModelSuite, **kwargs):
         # kwargs:

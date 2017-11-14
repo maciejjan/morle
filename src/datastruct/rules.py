@@ -13,11 +13,6 @@ class Rule:
             self.string = self.to_string()
         else:
             self.string = string
-        
-    def __le__(self, other):
-        pattern = 'X'.join(''.join(s[0]) for s in self.subst) +\
-            (''.join(self.tag_subst[0]) if self.tag_subst else '')
-        return other.lmatch_string(pattern)
 
     def __lt__(self, other):
         return self.string < other.string
@@ -79,6 +74,7 @@ class Rule:
             y_seq.extend((hfst.EPSILON,)*(len(xt)-len(yt)) + yt)
         return tuple(zip(x_seq, y_seq))
     
+    # TODO deprecated?
     def input_seq(self):
         seq = []
         for x, y in self.subst[:-1]:
@@ -112,6 +108,7 @@ class Rule:
             else (self.tag_subst[1], self.tag_subst[0])
         return Rule(subst, tag_subst)
 
+    # TODO deprecated?
     def to_string(self):
         return shared.format['rule_part_sep'].join(
             ''.join(x)+shared.format['rule_subst_sep']+''.join(y)
@@ -122,13 +119,14 @@ class Rule:
              shared.format['rule_subst_sep']+\
              ''.join(self.tag_subst[1]) if self.tag_subst else '')
     
-    def to_fst(self, weight=0, alphabet=None):
+    def to_fst(self, weight :int=0, alphabet=None) -> hfst.HfstTransducer:
         return algorithms.fst.seq_to_transducer(\
                    self.seq(), weight=weight, 
                    alphabet=shared.multichar_symbols)
     
+    # TODO reformat
     @staticmethod
-    def from_string(string):
+    def from_string(string :str) -> 'Rule':
         r_subst, r_tag_subst = [], None
         m = re.match(shared.compiled_patterns['rule'], string)
         if m is None:

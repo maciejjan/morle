@@ -32,6 +32,19 @@ class RuleTest(unittest.TestCase):
         self.assertEqual(self.rules[2].subst, \
                          (((), ('{CAP}',)), (('e', 'n'), ('u', 'n', 'g'))))
 
+    def test_str(self) -> None:
+        self.assertEqual(str(self.rules[0]), ':/a:ä/en:t___<VVINF>:<VVFIN>')
+        self.assertEqual(str(self.rules[1]), ':/:zu/:___<VVINF>:<VVINF>')
+        self.assertEqual(str(self.rules[2]), ':{CAP}/en:ung___<VVINF>:<NN>')
+
+    def test_eq(self) -> None:
+        self.assertEqual(self.rules[0],
+                         Rule.from_string(':/a:ä/en:t___<VVINF>:<VVFIN>'))
+        self.assertEqual(self.rules[1],
+                         Rule.from_string(':/:zu/:___<VVINF>:<VVINF>'))
+        self.assertEqual(self.rules[2],
+                         Rule.from_string(':{CAP}/en:ung___<VVINF>:<NN>'))
+
     def test_fst(self) -> None:
 
         def test_fst_for_rule(self, rule, inputs, outputs) -> None:
@@ -42,6 +55,12 @@ class RuleTest(unittest.TestCase):
 
         test_fst_for_rule(self, self.rules[0], ['fahren<VVINF>'],
                           [(('fährt<VVFIN>', 0.0),)])
+        test_fst_for_rule(self, self.rules[0],
+                          ['fallen<VVINF>', 'heraustragen<VVINF>'],
+                          [(('fällt<VVFIN>', 0.0),),
+                           (('herausträgt<VVFIN>', 0.0),
+                            ('heräustragt<VVFIN>', 0.0)
+                           )])
         # test the treatment of multi-character symbols
         test_fst_for_rule(self, self.rules[1], ['{CAP}aufmachen<VVINF>'],
                           [(('{CAP}zuaufmachen<VVINF>', 0.0),
@@ -54,4 +73,11 @@ class RuleTest(unittest.TestCase):
                             ('{CAP}aufmachzuen<VVINF>', 0.0),
                             ('{CAP}aufmachezun<VVINF>', 0.0) \
                            )])
+
+    def test_compute_domsize(self) -> None:
+        raise NotImplementedError()
+
+
+class RuleSetTest(unittest.TestCase):
+    pass
 
