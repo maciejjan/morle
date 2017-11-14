@@ -91,9 +91,10 @@ class RNNRootFeatureModel(RootFeatureModel):
 
     def save(self, filename) -> None:
         file_full_path = os.path.join(shared.options['working_dir'], filename)
-        iw = self.nn.get_weights()
-        np.savez(file_full_path, emb=iw[0], internal=iw[1], output=iw[2],
-                 err_var=self.err_var)
+        weights = self.nn.get_weights()
+        np.savez(file_full_path, emb=weights[0], rnn_1=weights[1],
+                 rnn_2=weights[2], rnn_3=weights[3], d1_1=weights[4],
+                 d1_2=weights[5], d2=weights[6], err_var=self.err_var)
         
     @staticmethod
     def load(filename, alphabet :Iterable[str], maxlen :int) \
@@ -101,9 +102,11 @@ class RNNRootFeatureModel(RootFeatureModel):
         file_full_path = os.path.join(shared.options['working_dir'], filename)
         data = np.load(file_full_path)
         result = RNNRootFeatureModel(alphabet, maxlen)
-        result.nn.layers[0].set_weights(data['emb'])
-        result.nn.layers[1].set_weights(data['internal'])
-        result.nn.layers[2].set_weights(data['output'])
+        result.nn.layers[0].set_weights([data['emb']])
+        result.nn.layers[1].set_weights([data['rnn_1'], data['rnn_2'],
+                                         data['rnn_3']])
+        result.nn.layers[2].set_weights([data['d1_1'], data['d1_2']])
+        result.nn.layers[3].set_weights([data['d2']])
         result.err_var = data['err_var']
         return result
 
@@ -167,18 +170,17 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
 
     def save(self, filename) -> None:
         file_full_path = os.path.join(shared.options['working_dir'], filename)
-        iw = self.nn.get_weights()
-        np.savez(file_full_path, rule_emb=iw[0], internal=iw[1], output=iw[2],
-                 err_var=self.err_var)
+        weights = self.nn.get_weights()
+        np.savez(file_full_path, rule_emb=weights[0], d_1=weights[1],
+                 d_2=weights[2], err_var=self.err_var)
     
     @staticmethod
     def load(filename, rule_set :RuleSet) -> 'NeuralEdgeFeatureModel':
         file_full_path = os.path.join(shared.options['working_dir'], filename)
         data = np.load(file_full_path)
         result = NeuralEdgeFeatureModel(rule_set)
-        result.nn.layers[0].set_weights(data['rule_emb'])
-        result.nn.layers[1].set_weights(data['internal'])
-        result.nn.layers[2].set_weights(data['output'])
+        result.nn.layers[1].set_weights([data['rule_emb']])
+        result.nn.layers[5].set_weights([data['d_1'], data['d_2']])
         result.err_var = data['err_var']
         return result
 
