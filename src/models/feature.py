@@ -73,12 +73,6 @@ class RNNRootFeatureModel(RootFeatureModel):
 
     def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
         # prepare data
-#         X, y = [], []
-#         for entry in lexicon:
-#             X.append([self.alphabet_hash[sym] for sym in entry.word+entry.tag])
-#             y.append(entry.vec)
-#         X = keras.preprocessing.sequence.pad_sequences(X, maxlen=self.maxlen)
-#         y = np.vstack(y)
         X, y = self._prepare_data(lexicon)
         # fit the neural network
         self.nn.fit(X, y, epochs=20, sample_weight=weights, batch_size=64,
@@ -95,14 +89,6 @@ class RNNRootFeatureModel(RootFeatureModel):
                                            np.zeros(self.dim),
                                            np.diag(self.err_var))
 
-#     def root_cost(self, entry :LexiconEntry) -> float:
-#         X = [[self.alphabet_hash[sym] for sym in entry.word+entry.tag]]
-#         X = keras.preprocessing.sequence.pad_sequences(X, maxlen=self.maxlen)
-#         y_pred = self.nn.predict(X)
-#         return -multivariate_normal.logpdf(entry.vec-y_pred,
-#                                            np.zeros(self.dim),
-#                                            np.diag(self.err_var))
-
     def save(self, filename) -> None:
         file_full_path = os.path.join(shared.options['working_dir'], filename)
         iw = self.nn.get_weights()
@@ -110,8 +96,16 @@ class RNNRootFeatureModel(RootFeatureModel):
                  err_var=self.err_var)
         
     @staticmethod
-    def load(filename) -> 'RNNRootFeatureModel':
-        raise NotImplementedError()
+    def load(filename, alphabet :Iterable[str], maxlen :int) \
+            -> 'RNNRootFeatureModel':
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        data = np.load(file_full_path)
+        result = RNNRootFeatureModel(alphabet, maxlen)
+        result.nn.layers[0].set_weights(data['emb'])
+        result.nn.layers[1].set_weights(data['internal'])
+        result.nn.layers[2].set_weights(data['output'])
+        result.err_var = data['err_var']
+        return result
 
     def _compile_network(self) -> None:
         self.nn = Sequential()
@@ -146,15 +140,6 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         self._compile_network()
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
-        # convert input and output data to matrices
-#         X_attr, X_rule, y = [], [], []
-#         for edge in edge_set:
-#             X_attr.append(edge.source.vec)
-#             X_rule.append(self.rule_set.get_id(edge.rule))
-#             y.append(edge.target.vec)
-#         X_attr = np.vstack(X_attr)
-#         X_rule = np.array(X_rule)
-#         y = np.vstack(y)
         X_attr, X_rule, y = self._prepare_data(edge_set)
         # fit the predictor
         self.nn.fit([X_attr, X_rule], y, epochs=20, sample_weight=weights,
@@ -170,20 +155,11 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         X_attr = np.array([edge.source.vec])
         X_rule = np.array([self.rule_set.get_id(edge.rule)])
         y = np.array([edge.target.vec])
-#         X_attr, X_rule, y = self._prepare_data([edge])
         y_pred = self.nn.predict([X_attr, X_rule])
         return -multivariate_normal.logpdf(y-y_pred, np.zeros(y.shape[1]),
                                            np.diag(self.err_var))
 
     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
-#         X_attr, X_rule, y = [], [], []
-#         for edge in edge_set:
-#             X_attr.append(edge.source.vec)
-#             X_rule.append(self.rule_set.get_id(edge.rule))
-#             y.append(edge.target.vec)
-#         X_attr = np.vstack(X_attr)
-#         X_rule = np.array(X_rule)
-#         y = np.vstack(y)
         X_attr, X_rule, y = self._prepare_data(edge_set)
         y_pred = self.nn.predict([X_attr, X_rule])
         return -multivariate_normal.logpdf(y-y_pred, np.zeros(y.shape[1]),
@@ -197,7 +173,14 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
     
     @staticmethod
     def load(filename, rule_set :RuleSet) -> 'NeuralEdgeFeatureModel':
-        raise NotImplementedError()
+        file_full_path = os.path.join(shared.options['working_dir'], filename)
+        data = np.load(file_full_path)
+        result = NeuralEdgeFeatureModel(rule_set)
+        result.nn.layers[0].set_weights(data['rule_emb'])
+        result.nn.layers[1].set_weights(data['internal'])
+        result.nn.layers[2].set_weights(data['output'])
+        result.err_var = data['err_var']
+        return result
 
     def _compile_network(self):
         dim = shared.config['Features'].getint('word_vec_dim')
@@ -256,7 +239,6 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
             self.vars = np.empty((len(self.rule_set), self.dim))
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
             edge_ids = tuple(edge_ids)
-#             feature_matrix = edge_set.feature_matrix[edge_ids,:]
             feature_matrix = np.array([edge_set[i].target.vec - \
                                        edge_set[i].source.vec \
                                        for i in edge_ids])
@@ -272,7 +254,6 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
         result = np.zeros(len(edge_set))
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
-            edge_ids = tuple(edge_ids)
             rule_id = self.rule_set.get_id(rule)
             feature_matrix = np.vstack([edge_set[i].target.vec - \
                                         edge_set[i].source.vec \
@@ -280,7 +261,7 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
             costs = -multivariate_normal.logpdf(feature_matrix,
                                                 self.means[rule_id,],
                                                 np.diag(self.vars[rule_id,]))
-            result[edge_ids,] = costs
+            result[tuple(edge_ids),] = costs
         return result
 
     def save(self, filename) -> None:

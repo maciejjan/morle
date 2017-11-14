@@ -76,5 +76,9 @@ class AlergiaRootModel(RootModel):
         return result
 
 
+class NGramRootModel(RootModel):
+    pass    # TODO
+
+
 class RNNRootModel(RootModel):
     pass    # TODO

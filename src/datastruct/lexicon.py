@@ -91,38 +91,23 @@ def unnormalize_word(literal :str) -> str:
 
 class LexiconEntry:
 
-    # TODO do not retrieve config for every lexicon entry!
-    #      (strings have to be converted each time)
-    def __init__(self, *args) -> None:
+    def __init__(self, word, **kwargs) -> None:
         # read arguments one by one
-        args = list(args)
-        self.literal = args.pop(0)
+        self.literal = word
         self.word, self.tag, self.disamb = tokenize_word(self.literal)
         self.word = normalize_seq(self.word)
-        # string of printable symbols -- does not include disambiguation IDs
         self.symstr = ''.join(self.word + self.tag)
         self.normalized = ''.join(self.word + self.tag) +\
                           ((shared.format['word_disamb_sep'] + self.disamb) \
                            if self.disamb is not None else '')
-        if shared.config['General'].getboolean('use_edge_restrictions'):
-            edge_restrictions = args.pop(0)
-            self._is_possible_edge_source = ('L' in edge_restrictions)
-            self._is_possible_edge_target = ('R' in edge_restrictions)
-        else:
-            self._is_possible_edge_source = True
-            self._is_possible_edge_target = True
-        if shared.config['Features'].getfloat('word_freq_weight') > 0:
-            self.freq = int(args.pop(0))
-            self.logfreq = math.log(self.freq)
-        if shared.config['Features'].getfloat('word_vec_weight') > 0:
-            vec_sep = shared.format['vector_sep']
-            self.vec = np.array(list(map(float, args.pop(0).split(vec_sep))))
-            if self.vec is None:
-                raise Exception("%s vec=None" % (self.literal))
-            if self.vec.shape[0] != shared.config['Features']\
-                                          .getfloat('word_vec_dim'):
-                raise Exception("%s dim=%d" %\
-                                (self.literal, self.vec.shape[0]))
+        self._is_possible_edge_source = \
+            kwargs['is_possible_edge_source'] \
+            if 'is_possible_edge_source' in kwargs else True
+        self._is_possible_edge_target = \
+            kwargs['is_possible_edge_target'] \
+            if 'is_possible_edge_target' in kwargs else True
+        if 'vec' in kwargs:
+            self.vec = kwargs['vec']
 
     def __lt__(self, other) -> bool:
         if not isinstance(other, LexiconEntry):
@@ -249,11 +234,42 @@ class Lexicon:
 
     @staticmethod
     def load(filename :str) -> 'Lexicon':
+
+        def _parse_entry_from_row(row :List[str], use_restr=False,
+                                  use_vec=False, vec_sep=' ', vec_dim=None)\
+                                 -> LexiconEntry:
+            word = row.pop(0)
+            kwargs = {}
+            if use_restr:
+                restr = row.pop(0)
+                kwargs['is_possible_edge_source'] = 'L' in restr
+                kwargs['is_possible_edge_target'] = 'R' in restr
+            if use_vec:
+                vec_str = row.pop(0)
+                kwargs['vec'] = \
+                    np.array(list(map(float, vec_str.split(vec_sep))))
+                if kwargs['vec'] is None:
+                    raise Exception("%s vec=None" % word)
+                if kwargs['vec'].shape[0] != vec_dim:
+                    raise Exception("%s dim=%d" % \
+                                    (word, kwargs['vec'].shape[0]))
+            return LexiconEntry(word, **kwargs)
+
         lexicon = Lexicon()
+        # determine the file format
+        use_restr = \
+            shared.config['General'].getboolean('use_edge_restrictions')
+        use_vec = \
+            shared.config['Models'].get('root_feature_model') != 'none' or \
+            shared.config['Models'].get('edge_feature_model') != 'none'
+        vec_sep = shared.format['vector_sep']
+        vec_dim = shared.config['Features'].getint('word_vec_dim')
         items_to_add = []
         for row in read_tsv_file(filename):
             try:
-                items_to_add.append(LexiconEntry(*row))
+                entry = _parse_entry_from_row(row, use_restr=use_restr,
+                                              use_vec=use_vec, vec_dim=vec_dim)
+                items_to_add.append(entry)
             except Exception as e:
 #                 raise e
                 logging.getLogger('main').warning('ignoring %s: %s' %\
@@ -264,9 +280,4 @@ class Lexicon:
     def _lexc_escape(self, string :str) -> str:
         '''Escape a string for correct rendering in a LEXC file.'''
         return re.sub('([0<>])', '%\\1', string)
-
-    def _lexc_escape(self, string :str) -> str:
-        '''Escape a string for correct rendering in a LEXC file.'''
-        return re.sub('([0<>])', '%\\1', string)
-
 

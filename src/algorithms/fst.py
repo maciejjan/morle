@@ -1,5 +1,6 @@
 from utils.files import full_path
 
+from collections import defaultdict
 import hfst
 import os.path
 import shared

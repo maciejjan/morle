@@ -1,9 +1,10 @@
 import algorithms.fst
+from algorithms.negex import NegativeExampleSampler
 from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import EdgeSet, GraphEdge
 from datastruct.rules import Rule, RuleSet
 from models.root import AlergiaRootModel
-from models.edge import SimpleEdgeModel
+from models.edge import SimpleEdgeModel, NeuralEdgeModel, NGramFeatureExtractor
 from models.feature import \
      GaussianRootFeatureModel, NeuralRootFeatureModel, RNNRootFeatureModel, \
      GaussianEdgeFeatureModel, NeuralEdgeFeatureModel
@@ -24,6 +25,18 @@ class ModelSuite:
             edge_model_type = shared.config['Models'].get('edge_model')
             if edge_model_type == 'simple':
                 self.edge_model = SimpleEdgeModel(rule_set)
+            elif edge_model_type == 'neural':
+                lexicon = Lexicon.load(shared.filenames['wordlist'])
+                edge_set = \
+                    EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
+                negex_sampler = \
+                    NegativeExampleSampler(lexicon, rule_set, edge_set)
+                ngram_extractor = NGramFeatureExtractor()
+                max_num_ngr = shared.config['NeuralEdgeModel']\
+                                    .getint('num_ngrams')
+                ngram_extractor.select_features(edge_set, max_num=max_num_ngr)
+                self.edge_model = \
+                    NeuralEdgeModel(rule_set, negex_sampler, ngram_extractor)
             else:
                 raise Exception('Unknown edge model: %s' % edge_model_type)
             self.root_feature_model = None
@@ -136,6 +149,15 @@ class ModelSuite:
         if edge_model_type == 'simple':
             result.edge_model = SimpleEdgeModel.load(\
                                   shared.filenames['edge-model'], rule_set)
+        elif edge_model_type == 'neural':
+            lexicon = Lexicon.load(shared.filenames['wordlist'])
+            edge_set = \
+                EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
+            negex_sampler = \
+                NegativeExampleSampler(lexicon, rule_set, edge_set)
+            result.edge_model = \
+                NeuralEdgeModel.load(shared.filenames['edge-model'], rule_set,
+                                     edge_set, negex_sampler)
         else:
             raise RuntimeError('Unknown edge model: %s' % edge_model_type)
         result.root_feature_model = None
@@ -151,9 +173,18 @@ class ModelSuite:
                 NeuralRootFeatureModel.load(
                     shared.filenames['root-feature-model'])
         elif root_feature_model_type == 'rnn':
+            # TODO refactor
+            lexicon_tr = algorithms.fst.load_transducer(\
+                             shared.filenames['lexicon-tr'])
+            alphabet = tuple(sorted(list(lexicon_tr.get_alphabet())))
+            longest_paths = lexicon_tr.extract_longest_paths(
+                                max_number=1, output='raw')
+            maxlen = len(longest_paths[0][1])
+            logging.getLogger('main').debug(\
+                'Detected maximum word length: {}'.format(maxlen))
             result.root_feature_model =\
                 RNNRootFeatureModel.load(
-                    shared.filenames['root-feature-model'])
+                    shared.filenames['root-feature-model'], alphabet, maxlen)
         elif root_feature_model_type == 'none':
             pass
         else:
@@ -169,7 +200,7 @@ class ModelSuite:
         elif edge_feature_model_type == 'neural':
             result.edge_feature_model =\
                 NeuralEdgeFeatureModel.load(
-                    shared.filenames['edge-feature-model'])
+                    shared.filenames['edge-feature-model'], rule_set)
         elif edge_feature_model_type == 'none':
             pass
         else:
