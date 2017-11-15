@@ -238,14 +238,15 @@ class Lexicon:
         def _parse_entry_from_row(row :List[str], use_restr=False,
                                   use_vec=False, vec_sep=' ', vec_dim=None)\
                                  -> LexiconEntry:
-            word = row.pop(0)
+            my_row = list(row)      # copy because it will be destroyed
+            word = my_row.pop(0)
             kwargs = {}
             if use_restr:
-                restr = row.pop(0)
+                restr = my_row.pop(0)
                 kwargs['is_possible_edge_source'] = 'L' in restr
                 kwargs['is_possible_edge_target'] = 'R' in restr
             if use_vec:
-                vec_str = row.pop(0)
+                vec_str = my_row.pop(0)
                 kwargs['vec'] = \
                     np.array(list(map(float, vec_str.split(vec_sep))))
                 if kwargs['vec'] is None:

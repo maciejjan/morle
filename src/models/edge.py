@@ -123,14 +123,15 @@ class NGramFeatureExtractor:
     def num_features(self) -> int:
         return len(self.ngrams)
 
-    def extract(self, edge_set :EdgeSet) -> np.ndarray:
+    def extract(self, edges :Union[Edge, EdgeSet]) -> np.ndarray:
         '''Extract n-gram features from edges and return a binary matrix.'''
-        result = np.zeros((len(edge_set), self.num_features()), dtype=np.uint8)
-        for i, edge in enumerate(edge_set):
-            for ngram in self._extract_from_seq(edge.source.word):
-                if ngram in self.feature_idx:
-                    result[i,self.feature_idx[ngram]] = 1
-        return result
+        if isinstance(edges, Edge):
+            return self._extract_from_edge(edges)
+        else:
+            result = np.zeros((len(edge_set), self.num_features()),
+                              dtype=np.uint8)
+            for i, edge in enumerate(edge_set):
+            return result
 
     def _extract_from_seq(self, seq :Iterable[str]) -> Iterable[str]:
         result = []
@@ -138,6 +139,13 @@ class NGramFeatureExtractor:
         for n in range(1, len(my_seq)):
             for i in range(len(my_seq)-1):
                 result.append(''.join(my_seq[i:i+n]))
+        return result
+
+    def _extract_from_edge(self, edge :Edge) -> np.ndarray:
+        result = np.zeros(self.num_features(), dtype=np.uint8)
+        for ngram in self._extract_from_seq(edge.source.word):
+            if ngram in self.feature_idx:
+                result[self.feature_idx[ngram]] = 1
         return result
 
     def save(self, filename :str) -> None:
@@ -161,11 +169,8 @@ class NeuralEdgeModel(EdgeModel):
         self.ngram_extractor = ngram_extractor
         self._compile_network()
 
-    def edge_cost(self, edge :GraphEdge) -> float:
-        raise NotImplementedError()
-
-    def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
-        X_attr, X_rule = self._prepare_data(edge_set)
+    def edges_cost(self, edges :Union[Edge, EdgeSet]) -> np.ndarray:
+        X_attr, X_rule = self._prepare_data(edges)
         probs = self.nn.predict([X_attr, X_rule]).reshape((len(edge_set),))
         return np.log(probs / (1-probs))
 
