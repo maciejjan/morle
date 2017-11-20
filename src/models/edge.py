@@ -12,7 +12,7 @@ import logging
 import numpy as np
 from operator import itemgetter
 import os.path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Tuple, Union
 
 
 class EdgeModel:
@@ -123,15 +123,12 @@ class NGramFeatureExtractor:
     def num_features(self) -> int:
         return len(self.ngrams)
 
-    def extract(self, edges :Union[Edge, EdgeSet]) -> np.ndarray:
+    def extract(self, edges :Union[GraphEdge, EdgeSet]) -> np.ndarray:
         '''Extract n-gram features from edges and return a binary matrix.'''
-        if isinstance(edges, Edge):
+        if isinstance(edges, GraphEdge):
             return self._extract_from_edge(edges)
         else:
-            result = np.zeros((len(edge_set), self.num_features()),
-                              dtype=np.uint8)
-            for i, edge in enumerate(edge_set):
-            return result
+            return np.vstack([self._extract_from_edge(edge) for edge in edges])
 
     def _extract_from_seq(self, seq :Iterable[str]) -> Iterable[str]:
         result = []
@@ -141,7 +138,7 @@ class NGramFeatureExtractor:
                 result.append(''.join(my_seq[i:i+n]))
         return result
 
-    def _extract_from_edge(self, edge :Edge) -> np.ndarray:
+    def _extract_from_edge(self, edge :GraphEdge) -> np.ndarray:
         result = np.zeros(self.num_features(), dtype=np.uint8)
         for ngram in self._extract_from_seq(edge.source.word):
             if ngram in self.feature_idx:
@@ -169,7 +166,7 @@ class NeuralEdgeModel(EdgeModel):
         self.ngram_extractor = ngram_extractor
         self._compile_network()
 
-    def edges_cost(self, edges :Union[Edge, EdgeSet]) -> np.ndarray:
+    def edges_cost(self, edges :Union[GraphEdge, EdgeSet]) -> np.ndarray:
         X_attr, X_rule = self._prepare_data(edges)
         probs = self.nn.predict([X_attr, X_rule]).reshape((len(edge_set),))
         return np.log(probs / (1-probs))
