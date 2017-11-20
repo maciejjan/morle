@@ -74,8 +74,8 @@ class RuleTest(unittest.TestCase):
                             ('{CAP}aufmachezun<VVINF>', 0.0) \
                            )])
 
-    def test_compute_domsize(self) -> None:
-        raise NotImplementedError()
+#     def test_compute_domsize(self) -> None:
+#         raise NotImplementedError()
 
 
 class RuleSetTest(unittest.TestCase):
