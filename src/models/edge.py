@@ -168,7 +168,7 @@ class NeuralEdgeModel(EdgeModel):
 
     def edges_cost(self, edges :Union[GraphEdge, EdgeSet]) -> np.ndarray:
         X_attr, X_rule = self._prepare_data(edges)
-        probs = self.nn.predict([X_attr, X_rule]).reshape((len(edge_set),))
+        probs = self.nn.predict([X_attr, X_rule]).reshape((len(edges),))
         return np.log(probs / (1-probs))
 
     def null_cost(self) -> float:
@@ -267,12 +267,34 @@ class NeuralEdgeModel(EdgeModel):
         return X_attr, X_rule
 
 
-# TODO also using sampling of negative examples
-class LogisticEdgeModel(EdgeModel):
-    pass
-
-
 # TODO pass alignments on character level to an RNN instead of rule embedding
 class AlignmentRNNEdgeModel(EdgeModel):
-    pass
+    def __init__(self) -> None:
+        raise NotImplementedError()
+
+    def edges_cost(self) -> None:
+        raise NotImplementedError()
+
+    def null_cost(self) -> None:
+        raise NotImplementedError()
+
+    def rule_cost(self) -> None:
+        raise NotImplementedError()
+
+    def fit(self) -> None:
+        raise NotImplementedError()
+
+    def save(self, filename :str) -> None:
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(filename :str) -> 'AlignmentRNNEdgeModel':
+        raise NotImplementedError()
+
+    def _compile_network(self) -> None:
+        raise NotImplementedError()
+
+    def _prepare_data(self, edge_set :EdgeSet) \
+                     -> Tuple[np.ndarray, np.ndarray]:
+        raise NotImplementedError()
 
