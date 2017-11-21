@@ -249,12 +249,12 @@ class NeuralEdgeModel(EdgeModel):
         num_rules = len(self.rule_set)
         input_attr = Input(shape=(num_ngr,), name='input_attr')
         input_rule = Input(shape=(1,), name='input_rule')
-        rule_emb = Embedding(input_dim=num_rules, output_dim=30,\
+        rule_emb = Embedding(input_dim=num_rules, output_dim=5,\
                              input_length=1)(input_rule)
         rule_emb_fl = Flatten(name='rule_emb_fl')(rule_emb)
-        attr_dr = Dense(30, name='attr_dr')(input_attr)
+        attr_dr = Dense(5, name='attr_dr')(input_attr)
         concat = concatenate([attr_dr, rule_emb_fl])
-        internal = Dense(30, activation='relu', name='internal')(concat)
+        internal = Dense(5, activation='relu', name='internal')(concat)
         output = Dense(1, activation='sigmoid', name='dense')(internal)
         self.nn = Model(inputs=[input_attr, input_rule], outputs=[output])
         self.nn.compile(optimizer='adam', loss='binary_crossentropy')
