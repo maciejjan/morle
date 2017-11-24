@@ -1,6 +1,8 @@
 from algorithms.negex import NegativeExampleSampler
+from datastruct.lexicon import Lexicon
 from datastruct.graph import GraphEdge, EdgeSet
 from datastruct.rules import Rule, RuleSet
+from models.generic import Model, ModelFactory, UnknownModelTypeException
 from utils.files import read_tsv_file, write_tsv_file
 import shared
 
@@ -15,7 +17,7 @@ import os.path
 from typing import Dict, Iterable, List, Tuple, Union
 
 
-class EdgeModel:
+class EdgeModel(Model):
     def __init__(self, edges :List[GraphEdge], rule_domsizes :Dict[Rule, int])\
                 -> None:
         raise NotImplementedError()
@@ -297,4 +299,43 @@ class AlignmentRNNEdgeModel(EdgeModel):
     def _prepare_data(self, edge_set :EdgeSet) \
                      -> Tuple[np.ndarray, np.ndarray]:
         raise NotImplementedError()
+
+
+class EdgeModelFactory(ModelFactory):
+    @staticmethod
+    def create(model_type :str) -> EdgeModel:
+        if model_type == 'simple':
+            rule_set = RuleSet.load(shared.filenames['rules'])
+            return SimpleEdgeModel(rule_set)
+        elif model_type == 'neural':
+            lexicon = Lexicon.load(shared.filenames['wordlist'])
+            rule_set = RuleSet.load(shared.filenames['rules'])
+            edge_set = \
+                EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
+            negex_sampler = \
+                NegativeExampleSampler(lexicon, rule_set, edge_set)
+            ngram_extractor = NGramFeatureExtractor()
+            max_num_ngr = shared.config['NeuralEdgeModel']\
+                                .getint('num_ngrams')
+            ngram_extractor.select_features(edge_set, max_num=max_num_ngr)
+            return NeuralEdgeModel(rule_set, negex_sampler, ngram_extractor)
+        else:
+            raise UnknownModelTypeException('edge', model_type)
+
+    @staticmethod
+    def load(model_type :str, filename :str) -> EdgeModel:
+        if model_type == 'simple':
+            rule_set = RuleSet.load(shared.filenames['rules'])
+            return SimpleEdgeModel.load(filename, rule_set)
+        elif model_type == 'neural':
+            lexicon = Lexicon.load(shared.filenames['wordlist'])
+            rule_set = RuleSet.load(shared.filenames['rules'])
+            edge_set = \
+                EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
+            negex_sampler = \
+                NegativeExampleSampler(lexicon, rule_set, edge_set)
+            return NeuralEdgeModel.load(filename, rule_set, edge_set,
+                                        negex_sampler)
+        else:
+            raise UnknownModelTypeException('edge', model_type)
 

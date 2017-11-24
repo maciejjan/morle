@@ -1,6 +1,7 @@
 import algorithms.alergia
 import algorithms.fst
 from datastruct.lexicon import LexiconEntry, Lexicon
+from models.generic import Model, ModelFactory, UnknownModelTypeException
 import shared
 
 import hfst
@@ -8,7 +9,7 @@ import numpy as np
 from typing import Iterable
 
 
-class RootModel:
+class RootModel(Model):
     def __init__(self, entries :Iterable[LexiconEntry]) -> None:
         raise NotImplementedError()
 
@@ -26,12 +27,7 @@ class RootModel:
 class AlergiaRootModel(RootModel):
 
     def __init__(self) -> None:
-#         self.lexicon = lexicon
         self.automaton = hfst.empty_fst()
-#         if self.lexicon is None:
-#             self.automaton = hfst.empty_fst()
-#         else:
-#             self.fit()
 
     # TODO weights are presently ignored, should it be so?!
     def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
@@ -53,12 +49,6 @@ class AlergiaRootModel(RootModel):
         self.automaton.concatenate(tag_automaton)
         self.automaton.remove_epsilons()
         self.automaton.convert(hfst.ImplementationType.HFST_OLW_TYPE)
-#         self.recompute_costs()
-            
-#     def recompute_costs(self) -> None:
-#         self.costs = np.empty(len(self.lexicon))
-#         for i, entry in enumerate(self.lexicon):
-#             self.costs[i] = self.automaton.lookup(entry.symstr)[0][1]
 
     def root_cost(self, entry :LexiconEntry) -> float:
         return self.automaton.lookup(entry.symstr)[0][1]
@@ -82,3 +72,20 @@ class NGramRootModel(RootModel):
 
 class RNNRootModel(RootModel):
     pass    # TODO
+
+
+class RootModelFactory(ModelFactory):
+    @staticmethod
+    def create(model_type :str) -> RootModel:
+        if model_type == 'alergia':
+            return AlergiaRootModel()
+        else:
+            raise UnknownModelTypeException('root', model_type)
+
+    @staticmethod
+    def load(model_type :str, filename :str) -> RootModel:
+        if model_type == 'alergia':
+            return AlergiaRootModel.load(filename)
+        else:
+            raise UnknownModelTypeException('root', model_type)
+

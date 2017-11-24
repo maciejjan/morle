@@ -1,6 +1,8 @@
+import algorithms.fst
 from datastruct.graph import EdgeSet, FullGraph, GraphEdge
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import RuleSet, Rule
+from models.generic import Model, ModelFactory, UnknownModelTypeException
 import shared
 
 from keras.models import Model, Sequential
@@ -14,7 +16,7 @@ from scipy.stats import multivariate_normal
 from typing import Iterable, List, Tuple
 
 
-class RootFeatureModel:
+class RootFeatureModel(Model):
     pass
 
 
@@ -132,7 +134,51 @@ class RNNRootFeatureModel(RootFeatureModel):
         return X, y
 
 
-class EdgeFeatureModel:
+class RootFeatureModelFactory(ModelFactory):
+    @staticmethod
+    def create(model_type :str) -> RootFeatureModel:
+        if model_type == 'none':
+            return None
+        elif model_type == 'gaussian':
+            return GaussianRootFeatureModel()
+        elif model_type == 'neural':
+            return NeuralRootFeatureModel()
+        elif model_type == 'rnn':
+            lexicon_tr = algorithms.fst.load_transducer(\
+                             shared.filenames['lexicon-tr'])
+            alphabet = tuple(sorted(list(lexicon_tr.get_alphabet())))
+            longest_paths = lexicon_tr.extract_longest_paths(
+                                max_number=1, output='raw')
+            maxlen = len(longest_paths[0][1])
+            logging.getLogger('main').debug(\
+                'Detected maximum word length: {}'.format(maxlen))
+            return RNNRootFeatureModel(alphabet, maxlen)
+        else:
+            raise UnknownModelTypeException('root feature', model_type)
+
+    @staticmethod
+    def load(model_type :str, filename :str) -> RootFeatureModel:
+        if model_type == 'none':
+            return None
+        elif model_type == 'gaussian':
+            return GaussianRootFeatureModel.load(filename)
+        elif model_type == 'neural':
+            return NeuralRootFeatureModel.load(filename)
+        elif model_type == 'rnn':
+            lexicon_tr = algorithms.fst.load_transducer(\
+                             shared.filenames['lexicon-tr'])
+            alphabet = tuple(sorted(list(lexicon_tr.get_alphabet())))
+            longest_paths = lexicon_tr.extract_longest_paths(
+                                max_number=1, output='raw')
+            maxlen = len(longest_paths[0][1])
+            logging.getLogger('main').debug(\
+                'Detected maximum word length: {}'.format(maxlen))
+            return RNNRootFeatureModel.load(filename, alphabet, maxlen)
+        else:
+            raise UnknownModelTypeException('root feature', model_type)
+
+
+class EdgeFeatureModel(Model):
     pass
 
 
@@ -278,4 +324,32 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
             result.means = data['means']
             result.vars = data['vars']
         return result
+
+
+class EdgeFeatureModelFactory(ModelFactory):
+    @staticmethod
+    def create(model_type :str) -> EdgeFeatureModel:
+        if model_type == 'none':
+            return None
+        elif model_type == 'gaussian':
+            rule_set = RuleSet.load(shared.filenames['rules'])
+            return GaussianEdgeFeatureModel(rule_set)
+        elif model_type == 'neural':
+            rule_set = RuleSet.load(shared.filenames['rules'])
+            return NeuralEdgeFeatureModel(rule_set)
+        else:
+            raise UnknownModelTypeException('edge feature', model_type)
+
+    @staticmethod
+    def load(model_type :str, filename :str) -> EdgeFeatureModel:
+        if model_type == 'none':
+            return None
+        elif model_type == 'gaussian':
+            rule_set = RuleSet.load(shared.filenames['rules'])
+            return GaussianEdgeFeatureModel.load(filename, rule_set)
+        elif model_type == 'neural':
+            rule_set = RuleSet.load(shared.filenames['rules'])
+            return NeuralEdgeFeatureModel.load(filename, rule_set)
+        else:
+            raise UnknownModelTypeException('edge feature', model_type)
 
