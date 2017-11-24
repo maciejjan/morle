@@ -3,7 +3,13 @@ class Model:
 
 
 class ModelFactory:
-    pass
+    @staticmethod
+    def create(model_type :str) -> Model:
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(model_type :str, filename :str) -> Model:
+        raise NotImplementedError()
 
 
 class UnknownModelTypeException(Exception):
