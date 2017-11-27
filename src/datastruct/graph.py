@@ -42,11 +42,14 @@ class EdgeSet:
     '''Class responsible for reading/writing a list of edges from/to a file
        and indexing (i.e. assigning IDs to) the edges.'''
 
-    def __init__(self) -> None:
+    def __init__(self, edges :Union[GraphEdge, Iterable[GraphEdge]] = None) \
+                -> None:
         self.items = []               # type: List[GraphEdge]
         self.index = {}               # type: Dict[GraphEdge, int]
         self.edge_ids_by_rule = {}    # type: Dict[Rule, List[int]]
         self.next_id = 0
+        if edges is not None:
+            self.add(edges)
 
     def __iter__(self) -> Iterable[GraphEdge]:
         return iter(self.items)
@@ -63,8 +66,8 @@ class EdgeSet:
     def add(self, edges :Union[GraphEdge, Iterable[GraphEdge]]) -> None:
         if isinstance(edges, GraphEdge):
             edges = [edges]
-        if not isinstance(edges, list):
-            edges = list(edges)             # because we need two iterations
+#         if not isinstance(edges, list):
+#             edges = list(edges)             # because we need two iterations
         for edge in edges:
             self.items.append(edge)
             self.index[edge] = self.next_id
