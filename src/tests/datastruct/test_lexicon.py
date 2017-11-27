@@ -10,6 +10,10 @@ encoding = utf-8
 date_format = %%d.%%m.%%Y %%H:%%M
 supervised = no
 
+[Models]
+root_feature_model = none
+edge_feature_model = none
+
 [Features]
 rootdist_n = 1
 word_freq_weight = 0.0
