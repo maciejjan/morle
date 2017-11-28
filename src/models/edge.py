@@ -307,13 +307,11 @@ class AlignmentRNNEdgeModel(EdgeModel):
 
 class EdgeModelFactory(ModelFactory):
     @staticmethod
-    def create(model_type :str) -> EdgeModel:
+    def create(model_type :str, rule_set :RuleSet) -> EdgeModel:
         if model_type == 'simple':
-            rule_set = RuleSet.load(shared.filenames['rules'])
             return SimpleEdgeModel(rule_set)
         elif model_type == 'neural':
             lexicon = Lexicon.load(shared.filenames['wordlist'])
-            rule_set = RuleSet.load(shared.filenames['rules'])
             edge_set = \
                 EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
             negex_sampler = NegativeExampleSampler(rule_set)
@@ -326,13 +324,11 @@ class EdgeModelFactory(ModelFactory):
             raise UnknownModelTypeException('edge', model_type)
 
     @staticmethod
-    def load(model_type :str, filename :str) -> EdgeModel:
+    def load(model_type :str, filename :str, rule_set :RuleSet) -> EdgeModel:
         if model_type == 'simple':
-            rule_set = RuleSet.load(shared.filenames['rules'])
             return SimpleEdgeModel.load(filename, rule_set)
         elif model_type == 'neural':
             lexicon = Lexicon.load(shared.filenames['wordlist'])
-            rule_set = RuleSet.load(shared.filenames['rules'])
             edge_set = \
                 EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
             negex_sampler = NegativeExampleSampler(rule_set)

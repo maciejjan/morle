@@ -328,27 +328,24 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
 
 class EdgeFeatureModelFactory(ModelFactory):
     @staticmethod
-    def create(model_type :str) -> EdgeFeatureModel:
+    def create(model_type :str, rule_set :RuleSet) -> EdgeFeatureModel:
         if model_type == 'none':
             return None
         elif model_type == 'gaussian':
-            rule_set = RuleSet.load(shared.filenames['rules'])
             return GaussianEdgeFeatureModel(rule_set)
         elif model_type == 'neural':
-            rule_set = RuleSet.load(shared.filenames['rules'])
             return NeuralEdgeFeatureModel(rule_set)
         else:
             raise UnknownModelTypeException('edge feature', model_type)
 
     @staticmethod
-    def load(model_type :str, filename :str) -> EdgeFeatureModel:
+    def load(model_type :str, filename :str, rule_set :RuleSet) \
+            -> EdgeFeatureModel:
         if model_type == 'none':
             return None
         elif model_type == 'gaussian':
-            rule_set = RuleSet.load(shared.filenames['rules'])
             return GaussianEdgeFeatureModel.load(filename, rule_set)
         elif model_type == 'neural':
-            rule_set = RuleSet.load(shared.filenames['rules'])
             return NeuralEdgeFeatureModel.load(filename, rule_set)
         else:
             raise UnknownModelTypeException('edge feature', model_type)

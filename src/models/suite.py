@@ -21,13 +21,15 @@ class ModelSuite:
             self.root_model = RootModelFactory.create(
                                   shared.config['Models'].get('root_model'))
             self.edge_model = EdgeModelFactory.create(
-                                  shared.config['Models'].get('edge_model'))
+                                  shared.config['Models'].get('edge_model'),
+                                  self.rule_set)
             self.root_feature_model = \
                 RootFeatureModelFactory.create(
                     shared.config['Models'].get('root_feature_model'))
             self.edge_feature_model = \
                 EdgeFeatureModelFactory.create(
-                    shared.config['Models'].get('edge_feature_model'))
+                    shared.config['Models'].get('edge_feature_model'),
+                    self.rule_set)
 
     def root_cost(self, entry :LexiconEntry) -> float:
         result = self.root_model.root_cost(entry)
@@ -99,7 +101,8 @@ class ModelSuite:
                                 shared.filenames['root-model'])
         result.edge_model = EdgeModelFactory.load(
                                 shared.config['Models'].get('edge_model'),
-                                shared.filenames['edge-model'])
+                                shared.filenames['edge-model'],
+                                rule_set)
         result.root_feature_model = \
             RootFeatureModelFactory.load(
                 shared.config['Models'].get('root_feature_model'),
@@ -107,6 +110,7 @@ class ModelSuite:
         result.edge_feature_model = \
             EdgeFeatureModelFactory.load(
                 shared.config['Models'].get('edge_feature_model'),
-                shared.filenames['edge-feature-model'])
+                shared.filenames['edge-feature-model'],
+                rule_set)
         return result
 
