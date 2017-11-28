@@ -1,3 +1,4 @@
+from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import Rule
 import shared
 
@@ -74,8 +75,17 @@ class RuleTest(unittest.TestCase):
                             ('{CAP}aufmachezun<VVINF>', 0.0) \
                            )])
 
-#     def test_compute_domsize(self) -> None:
-#         raise NotImplementedError()
+    def test_compute_domsize(self) -> None:
+        lexicon = Lexicon()
+        lexicon.add(LexiconEntry('anwinkeln<VVINF>'))
+        lexicon.add(LexiconEntry('machen<VVINF>'))
+        lexicon.add(LexiconEntry('Sachen<NN>'))
+        lexicon.add(LexiconEntry('lachen<VVINF>'))
+        lexicon.add(LexiconEntry('Dörfern<NN>'))
+        lex_fst = lexicon.to_fst()
+        self.assertEqual(self.rules[0].compute_domsize(lex_fst), 2)
+        self.assertEqual(self.rules[1].compute_domsize(lex_fst), 18)
+        self.assertEqual(self.rules[2].compute_domsize(lex_fst), 2)
 
 
 class RuleSetTest(unittest.TestCase):
