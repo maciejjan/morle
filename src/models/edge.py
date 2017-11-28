@@ -316,8 +316,7 @@ class EdgeModelFactory(ModelFactory):
             rule_set = RuleSet.load(shared.filenames['rules'])
             edge_set = \
                 EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
-            negex_sampler = \
-                NegativeExampleSampler(lexicon, rule_set, edge_set)
+            negex_sampler = NegativeExampleSampler(rule_set)
             ngram_extractor = NGramFeatureExtractor()
             max_num_ngr = shared.config['NeuralEdgeModel']\
                                 .getint('num_ngrams')
@@ -336,8 +335,7 @@ class EdgeModelFactory(ModelFactory):
             rule_set = RuleSet.load(shared.filenames['rules'])
             edge_set = \
                 EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
-            negex_sampler = \
-                NegativeExampleSampler(lexicon, rule_set, edge_set)
+            negex_sampler = NegativeExampleSampler(rule_set)
             return NeuralEdgeModel.load(filename, rule_set, edge_set,
                                         negex_sampler)
         else:
