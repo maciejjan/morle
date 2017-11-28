@@ -32,6 +32,9 @@ class GraphEdge:
     def __eq__(self, other) -> bool:
         return self.key() == other.key()
 
+    def __str__(self) -> str:
+        return '{} -> {} by {}'.format(self.source, self.target, self.rule)
+
     def to_tuple(self) -> Tuple[LexiconEntry, LexiconEntry, Rule, Dict]:
         attr = self.attr
         attr['object'] = self
@@ -66,8 +69,6 @@ class EdgeSet:
     def add(self, edges :Union[GraphEdge, Iterable[GraphEdge]]) -> None:
         if isinstance(edges, GraphEdge):
             edges = [edges]
-#         if not isinstance(edges, list):
-#             edges = list(edges)             # because we need two iterations
         for edge in edges:
             self.items.append(edge)
             self.index[edge] = self.next_id

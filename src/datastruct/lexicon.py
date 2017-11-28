@@ -135,7 +135,9 @@ class LexiconEntry:
     
 
 class Lexicon:
-    def __init__(self) -> None:
+    def __init__(self,
+                 items :Union[LexiconEntry, Iterable[LexiconEntry]] = None) \
+                -> None:
         self.items = []           # type: List[LexiconEntry]
         self.index = {}           # type: Dict[LexiconEntry, int]
         self.items_by_key = {}    # type: Dict[str, LexiconEntry]
@@ -144,6 +146,8 @@ class Lexicon:
         if shared.config['Models'].get('root_feature_model') != 'none':
             dim = shared.config['Features'].getint('word_vec_dim')
             self.feature_matrix = np.ndarray((0, dim))
+        if items:
+            self.add(items)
 
     def __contains__(self, key :Union[str, LexiconEntry]) -> bool:
         if isinstance(key, LexiconEntry):
