@@ -12,3 +12,6 @@ uninstall:
 
 test:
 	python3 -m unittest discover -t ./src -s ./src/tests
+
+typecheck:
+	find src/ -name *.py -exec mypy {} \;
