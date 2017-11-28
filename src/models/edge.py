@@ -185,7 +185,9 @@ class NeuralEdgeModel(EdgeModel):
         num_negex = int(len(edge_set) *\
                         shared.config['NeuralEdgeModel']\
                               .getfloat('negex_factor'))
-        negex, weights_neg = self.negex_sampler.sample(num_negex)
+        negex = self.negex_sampler.sample(edge_set.lexicon, num_negex)
+        weights_neg = self.negex_sampler\
+                          .compute_sample_weights(negex, edge_set)
         write_tsv_file('negex.txt', ((e.source, e.target, e.rule, weights_neg[i]) \
                                      for i, e in enumerate(negex)))
         X_attr_neg, X_rule_neg = self._prepare_data(negex)
@@ -230,7 +232,9 @@ class NeuralEdgeModel(EdgeModel):
         num_negex = int(len(edge_set) *\
                         shared.config['NeuralEdgeModel']\
                               .getfloat('negex_factor'))
-        negex, weights_neg = result.negex_sampler.sample(num_negex)
+        negex = result.negex_sampler.sample(edge_set.lexicon, num_negex)
+        weights_neg = result.negex_sampler\
+                            .compute_sample_weights(negex, edge_set)
         X_attr_neg, X_rule_neg = result._prepare_data(negex)
         X_attr_pos, X_rule_pos = result._prepare_data(edge_set)
         X_attr = np.vstack([X_attr_pos, X_attr_neg])

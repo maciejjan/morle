@@ -111,17 +111,21 @@ class NegativeExampleSamplerTest(unittest.TestCase):
         for rule_str in rules:
             rule = Rule.from_string(rule_str)
             rule_set.add(rule, rule.compute_domsize(lex_fst))
+        edge_iter = (GraphEdge(lexicon[source], lexicon[target],
+                               rule_set[rule]) \
+                     for (source, target, rule) in positive_edges)
+        edge_set = EdgeSet(lexicon, edge_iter)
+                           
+        negex_sampler = NegativeExampleSampler(rule_set)
+        sample_size = len(expected_negative_edges)
+        sample = negex_sampler.sample(lexicon, sample_size)
+        sample_weights = negex_sampler.compute_sample_weights(sample, edge_set)
+
         self.assertEqual(rule_set.get_domsize(rule_set[0]), 2)
         self.assertEqual(rule_set.get_domsize(rule_set[1]), 4)
         self.assertEqual(rule_set.get_domsize(rule_set[2]), 5)
         self.assertEqual(rule_set.get_domsize(rule_set[3]), 42)
-        edge_set = EdgeSet([GraphEdge(lexicon[source], lexicon[target],
-                                      rule_set[rule]) \
-                           for (source, target, rule) in positive_edges])
-        negex_sampler = NegativeExampleSampler(lexicon, rule_set, edge_set)
         self.longMessage=False
-        sample_size = len(expected_negative_edges)
-        sample, sample_weights = negex_sampler.sample(sample_size)
         for edge in edge_set:
             self.assertNotIn(edge, sample,
                              msg='positive edge: {} in sample'.format(edge))

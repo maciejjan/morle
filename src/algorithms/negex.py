@@ -13,15 +13,10 @@ from typing import Callable, Dict, List, Tuple
 
 
 class NegativeExampleSampler:
-    def __init__(self, lexicon :Lexicon, rule_set :RuleSet,
-                 edge_set :EdgeSet) -> None:
-        self.lexicon = lexicon
+    def __init__(self, rule_set :RuleSet) -> None:
         self.rule_set = rule_set
-        self.num_pos_ex = defaultdict(lambda: 0)
-        for edge in edge_set:
-            self.num_pos_ex[edge.rule] += 1
 
-    def sample(self, sample_size :int) -> Tuple[EdgeSet, np.ndarray]:
+    def sample(self, lexicon :Lexicon, sample_size :int) -> EdgeSet:
 
         def _sample_process(rules :List[Rule],
                             _output_fun :Callable[..., None],
@@ -55,19 +50,6 @@ class NegativeExampleSampler:
                         logging.getLogger('main').debug(\
                            'Exception during negative sampling: {}'.format(e))
 
-        def _compute_sample_weights(edge_set :EdgeSet) -> np.ndarray:
-            'Compute weights of the sample points.'
-            num_edges_for_rule = defaultdict(lambda: 0)
-            for edge in edge_set:
-                num_edges_for_rule[edge.rule] += 1
-            result = np.empty(len(edge_set))
-            for i, edge in enumerate(edge_set):
-                domsize = self.rule_set.get_domsize(edge.rule)
-                num_pos_ex = self.num_pos_ex[edge.rule]
-                num_neg_ex = num_edges_for_rule[edge.rule]
-                result[i] = (domsize-num_pos_ex) / num_neg_ex
-            return result
-
         num_processes = shared.config['NegativeExampleSampler']\
                         .getint('num_processes')
         sample_size_per_proc = int(sample_size / num_processes)
@@ -75,12 +57,28 @@ class NegativeExampleSampler:
             parallel_execute(function=_sample_process,
                              data=list(self.rule_set),
                              num_processes=num_processes,
-                             additional_args=(self.lexicon, \
-                                              sample_size_per_proc),
+                             additional_args=(lexicon, sample_size_per_proc),
                              show_progressbar=True,
                              progressbar_total = sample_size_per_proc * \
                                                  num_processes)
-        edge_set = EdgeSet(edges_iter)
-        weights = _compute_sample_weights(edge_set)
-        return edge_set, weights
+        edge_set = EdgeSet(lexicon, edges_iter)
+        return edge_set
+
+    def compute_sample_weights(self, sample_edges :EdgeSet,
+                               positive_edges :EdgeSet) -> np.ndarray:
+        'Compute weights of the sample points.'
+        num_positive_edges_for_rule = np.zeros(len(self.rule_set))
+        for edge in positive_edges:
+            num_positive_edges_for_rule[self.rule_set.get_id(edge.rule)] += 1
+        num_sample_edges_for_rule = np.zeros(len(self.rule_set))
+        for edge in sample_edges:
+            num_sample_edges_for_rule[self.rule_set.get_id(edge.rule)] += 1
+        result = np.empty(len(sample_edges))
+        for i, edge in enumerate(sample_edges):
+            domsize = self.rule_set.get_domsize(edge.rule)
+            r_id = self.rule_set.get_id(edge.rule)
+            num_pos_ex = num_positive_edges_for_rule[r_id]
+            num_neg_ex = num_sample_edges_for_rule[r_id]
+            result[i] = (domsize-num_pos_ex) / num_neg_ex
+        return result
 

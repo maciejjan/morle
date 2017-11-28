@@ -45,8 +45,9 @@ class EdgeSet:
     '''Class responsible for reading/writing a list of edges from/to a file
        and indexing (i.e. assigning IDs to) the edges.'''
 
-    def __init__(self, edges :Union[GraphEdge, Iterable[GraphEdge]] = None) \
-                -> None:
+    def __init__(self, lexicon :Lexicon,
+                 edges :Union[GraphEdge, Iterable[GraphEdge]] = None) -> None:
+        self.lexicon = lexicon
         self.items = []               # type: List[GraphEdge]
         self.index = {}               # type: Dict[GraphEdge, int]
         self.edge_ids_by_rule = {}    # type: Dict[Rule, List[int]]
@@ -90,10 +91,12 @@ class EdgeSet:
 
     @staticmethod
     def load(filename :str, lexicon :Lexicon, rule_set :RuleSet) -> 'EdgeSet':
-        result = EdgeSet()
-        result.add(GraphEdge(lexicon[source], lexicon[target], rule_set[rule])\
-                   for source, target, rule in read_tsv_file(filename))
-        return result
+        result = EdgeSet(lexicon)
+        edge_iter = (GraphEdge(lexicon[source],
+                               lexicon[target],
+                               rule_set[rule]) \
+                     for source, target, rule in read_tsv_file(filename))
+        return EdgeSet(lexicon, edge_iter)
 
 
 class Graph(nx.MultiDiGraph):

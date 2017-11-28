@@ -1,5 +1,4 @@
 import algorithms.fst
-from algorithms.negex import NegativeExampleSampler
 from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import EdgeSet, GraphEdge
 from datastruct.rules import Rule, RuleSet
