@@ -33,7 +33,7 @@ class NegativeExampleSamplerTest(unittest.TestCase):
         lexicon.add(LexiconEntry('machen'))
         lexicon.add(LexiconEntry('Sachen'))
         rule_set = RuleSet()
-        rule_set.add(Rule.from_string(':/en:t___:')
+        rule_set.add(Rule.from_string(':/en:t___:'), 2)
         # TODO compute domsizes!!!
         edge_set = EdgeSet()
         negex_sampler = NegativeExampleSampler(lexicon, rule_set, edge_set)
