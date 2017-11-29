@@ -36,7 +36,7 @@ def run() -> None:
 
     # initialize a PointModel
     logging.getLogger('main').info('Initializing the model...')
-    model = ModelSuite(rule_set)
+    model = ModelSuite(rule_set, lexicon = lexicon)
 #     model = PointModel()
 #     model.fit_rootdist(lexicon.entries())
 #     model.fit_ruledist(rule for (rule, domsize) in rules)

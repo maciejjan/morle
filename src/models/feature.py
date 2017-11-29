@@ -13,7 +13,7 @@ import logging
 import numpy as np
 import os.path
 from scipy.stats import multivariate_normal
-from typing import Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Tuple
 
 
 class RootFeatureModel(Model):
@@ -66,7 +66,9 @@ class GaussianRootFeatureModel(RootFeatureModel):
 
 
 class RNNRootFeatureModel(RootFeatureModel):
-    def __init__(self, alphabet :Iterable[str], maxlen :int) -> None:
+    # TODO alphabet_hash: include the unknown symbol?
+    def __init__(self, alphabet :Iterable[str] = None, maxlen :int = None) \
+                -> None:
         self.alphabet = alphabet
         self.alphabet_hash = dict((y, x) for (x, y) in enumerate(alphabet, 1))
         self.dim = shared.config['Features'].getint('word_vec_dim')
@@ -99,8 +101,9 @@ class RNNRootFeatureModel(RootFeatureModel):
                  d1_2=weights[5], d2=weights[6], err_var=self.err_var)
         
     @staticmethod
-    def load(filename, alphabet :Iterable[str], maxlen :int) \
-            -> 'RNNRootFeatureModel':
+    def load(filename :str,
+             alphabet :Iterable[str] = None,
+             maxlen :int = None) -> 'RNNRootFeatureModel':
         file_full_path = os.path.join(shared.options['working_dir'], filename)
         data = np.load(file_full_path)
         result = RNNRootFeatureModel(alphabet, maxlen)
@@ -136,44 +139,46 @@ class RNNRootFeatureModel(RootFeatureModel):
 
 class RootFeatureModelFactory(ModelFactory):
     @staticmethod
-    def create(model_type :str) -> RootFeatureModel:
+    def get_rnn_model_parameters(lexicon :Lexicon) -> Dict[str, Any]:
+        result = {}
+        if lexicon is not None:
+            result['alphabet'] = lexicon.get_alphabet()
+            logging.getLogger('main').debug(\
+                'Detected alphabet: {}'.format(', '.join(result['alphabet'])))
+            result['maxlen'] = lexicon.get_max_word_length()
+            logging.getLogger('main').debug(\
+                'Detected max. word length: {}'.format(result['maxlen']))
+        else:
+            # default settings (TODO move somewhere else?)
+            result['alphabet'] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
+                                  'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
+                                  's', 't', 'u', 'v', 'w', 'x', 'y', 'z'] + \
+                                 shared.multichar_symbols
+            result['maxlen'] = 20
+        return result
+
+    @staticmethod
+    def create(model_type :str, lexicon :Lexicon = None) -> RootFeatureModel:
         if model_type == 'none':
             return None
         elif model_type == 'gaussian':
             return GaussianRootFeatureModel()
-        elif model_type == 'neural':
-            return NeuralRootFeatureModel()
         elif model_type == 'rnn':
-            lexicon_tr = algorithms.fst.load_transducer(\
-                             shared.filenames['lexicon-tr'])
-            alphabet = tuple(sorted(list(lexicon_tr.get_alphabet())))
-            longest_paths = lexicon_tr.extract_longest_paths(
-                                max_number=1, output='raw')
-            maxlen = len(longest_paths[0][1])
-            logging.getLogger('main').debug(\
-                'Detected maximum word length: {}'.format(maxlen))
-            return RNNRootFeatureModel(alphabet, maxlen)
+            params = RootFeatureModelFactory.get_rnn_model_parameters(lexicon)
+            return RNNRootFeatureModel(**params)
         else:
             raise UnknownModelTypeException('root feature', model_type)
 
     @staticmethod
-    def load(model_type :str, filename :str) -> RootFeatureModel:
+    def load(model_type :str, filename :str, lexicon :Lexicon = None) \
+            -> RootFeatureModel:
         if model_type == 'none':
             return None
         elif model_type == 'gaussian':
             return GaussianRootFeatureModel.load(filename)
-        elif model_type == 'neural':
-            return NeuralRootFeatureModel.load(filename)
         elif model_type == 'rnn':
-            lexicon_tr = algorithms.fst.load_transducer(\
-                             shared.filenames['lexicon-tr'])
-            alphabet = tuple(sorted(list(lexicon_tr.get_alphabet())))
-            longest_paths = lexicon_tr.extract_longest_paths(
-                                max_number=1, output='raw')
-            maxlen = len(longest_paths[0][1])
-            logging.getLogger('main').debug(\
-                'Detected maximum word length: {}'.format(maxlen))
-            return RNNRootFeatureModel.load(filename, alphabet, maxlen)
+            params = RootFeatureModelFactory.get_rnn_model_parameters(lexicon)
+            return RNNRootFeatureModel.load(filename, **params)
         else:
             raise UnknownModelTypeException('root feature', model_type)
 

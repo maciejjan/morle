@@ -11,19 +11,6 @@ import logging
 from typing import Any, Dict, Callable, Iterable, List, Tuple, Union
 
 
-# def get_wordlist_format() -> List[Callable[[Any], Any]]:
-#     result = [str]  # type: List[Callable[[Any], Any]]
-#     if shared.config['General'].getboolean('supervised'):
-#         result.append(str)
-#     if shared.config['Features'].getfloat('word_freq_weight') > 0:
-#         result.append(int)
-#     if shared.config['Features'].getfloat('word_vec_weight') > 0:
-#         vector_sep = shared.format['vector_sep']
-#         result.append(\
-#             lambda x: np.array(list(map(float, x.split(vector_sep)))))
-#     return result
-
-
 def tokenize_word(string :str) -> Tuple[List[str], List[str], str]:
     '''Separate a string into a word and a POS-tag,
        both expressed as sequences of symbols.'''
@@ -143,6 +130,8 @@ class Lexicon:
         self.items_by_key = {}    # type: Dict[str, LexiconEntry]
         self.items_by_symstr = {} # type: Dict[str, List[LexiconEntry]]
         self.next_id = 0
+        self.alphabet = set()
+        self.max_word_length = 0
         if shared.config['Models'].get('root_feature_model') != 'none':
             dim = shared.config['Features'].getint('word_vec_dim')
             self.feature_matrix = np.ndarray((0, dim))
@@ -180,12 +169,11 @@ class Lexicon:
     def keys(self) -> Iterable[str]:
         return self.items_by_key.keys()
 
-#     def get_alphabet(self) -> Tuple[str]:
-#         alphabet = set()
-#         for item in self:
-#             alphabet |= set(item.word)
-#             alphabet |= set(item.tag)
-#         return tuple(sorted(list(alphabet)))
+    def get_alphabet(self) -> List[str]:
+        return sorted(list(self.alphabet))
+
+    def get_max_word_length(self) -> int:
+        return self.max_word_length
 
     def symstrs(self) -> Iterable[str]:
         return self.items_by_symstr.keys()
@@ -205,10 +193,14 @@ class Lexicon:
             self.items_by_key[str(item)] = item
             self.items_by_symstr[item.symstr].append(item)
             self.next_id += 1
+            self.alphabet |= set(item.word + item.tag)
+            self.max_word_length = max(self.max_word_length,
+                                       len(item.word) + len(item.tag))
         if shared.config['Models'].get('root_feature_model') != 'none':
             self.feature_matrix = \
                 np.vstack((self.feature_matrix,
                            np.array([item.vec for item in items])))
+
 
     def to_fst(self) -> hfst.HfstTransducer:
         lexc_file = shared.filenames['lexicon-tr'] + '.lex'

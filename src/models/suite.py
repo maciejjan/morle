@@ -15,7 +15,9 @@ from typing import Iterable
 
 class ModelSuite:
 
-    def __init__(self, rule_set :RuleSet, initialize_models=True) -> None:
+    def __init__(self, rule_set :RuleSet,
+                 lexicon :Lexicon = None,
+                 initialize_models :bool = True) -> None:
         self.rule_set = rule_set
         if initialize_models:
             self.root_model = RootModelFactory.create(
@@ -25,7 +27,8 @@ class ModelSuite:
                                   self.rule_set)
             self.root_feature_model = \
                 RootFeatureModelFactory.create(
-                    shared.config['Models'].get('root_feature_model'))
+                    shared.config['Models'].get('root_feature_model'),
+                    lexicon)
             self.edge_feature_model = \
                 EdgeFeatureModelFactory.create(
                     shared.config['Models'].get('edge_feature_model'),
@@ -95,6 +98,7 @@ class ModelSuite:
     @staticmethod
     def load() -> 'ModelSuite':
         rule_set = RuleSet.load(shared.filenames['rules'])
+        lexicon = Lexicon.load(shared.filenames['wordlist'])
         result = ModelSuite(rule_set)
         result.root_model = RootModelFactory.load(
                                 shared.config['Models'].get('root_model'),
@@ -106,7 +110,8 @@ class ModelSuite:
         result.root_feature_model = \
             RootFeatureModelFactory.load(
                 shared.config['Models'].get('root_feature_model'),
-                shared.filenames['root-feature-model'])
+                shared.filenames['root-feature-model'],
+                lexicon)
         result.edge_feature_model = \
             EdgeFeatureModelFactory.load(
                 shared.config['Models'].get('edge_feature_model'),
