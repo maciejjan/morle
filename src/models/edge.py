@@ -251,7 +251,7 @@ class NeuralEdgeModel(EdgeModel):
         return result
 
     def _compile_network(self):
-        num_ngr = self.ngram_extractor.num_features()
+        num_ngr = shared.config['NeuralEdgeModel'].getint('num_ngrams')
         num_rules = len(self.rule_set)
         input_attr = Input(shape=(num_ngr,), name='input_attr')
         input_rule = Input(shape=(1,), name='input_rule')
@@ -267,6 +267,10 @@ class NeuralEdgeModel(EdgeModel):
 
     def _prepare_data(self, edge_set :EdgeSet) -> \
                      Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        if not self.ngram_extractor.ngrams:
+            self.ngram_extractor.select_features(\
+                edge_set,
+                max_num=shared.config['NeuralEdgeModel'].getint('num_ngrams'))
         X_attr = self.ngram_extractor.extract(edge_set)
         X_rule = np.array([self.rule_set.get_id(edge.rule) \
                            for edge in edge_set])
@@ -311,15 +315,17 @@ class EdgeModelFactory(ModelFactory):
         if model_type == 'simple':
             return SimpleEdgeModel(rule_set)
         elif model_type == 'neural':
-            lexicon = Lexicon.load(shared.filenames['wordlist'])
-            edge_set = \
-                EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
-            negex_sampler = NegativeExampleSampler(rule_set)
-            ngram_extractor = NGramFeatureExtractor()
-            max_num_ngr = shared.config['NeuralEdgeModel']\
-                                .getint('num_ngrams')
-            ngram_extractor.select_features(edge_set, max_num=max_num_ngr)
-            return NeuralEdgeModel(rule_set, negex_sampler, ngram_extractor)
+#             lexicon = Lexicon.load(shared.filenames['wordlist'])
+#             edge_set = \
+#                 EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
+#             negex_sampler = NegativeExampleSampler(rule_set)
+#             ngram_extractor = NGramFeatureExtractor()
+#             max_num_ngr = shared.config['NeuralEdgeModel']\
+#                                 .getint('num_ngrams')
+#             ngram_extractor.select_features(edge_set, max_num=max_num_ngr)
+            return NeuralEdgeModel(rule_set,
+                                   NegativeExampleSampler(rule_set),
+                                   NGramFeatureExtractor())
         else:
             raise UnknownModelTypeException('edge', model_type)
 
