@@ -10,7 +10,7 @@ import shared
 
 import logging
 import numpy as np
-from typing import Iterable, Union
+from typing import Iterable
 
 
 class ModelSuite:
@@ -40,7 +40,7 @@ class ModelSuite:
             result += self.root_feature_model.root_cost(entry)
         return result
 
-    def roots_cost(self, entries :Union[LexiconEntry, Iterable[LexiconEntry]]) -> np.ndarray:
+    def roots_cost(self, entries :Iterable[LexiconEntry]) -> np.ndarray:
         result = self.root_model.root_costs(entries)
         if self.root_feature_model is not None:
             result += self.root_feature_model.root_costs(entries)
@@ -48,15 +48,14 @@ class ModelSuite:
 
     def rule_cost(self, rule :Rule) -> float:
         return self.edge_model.rule_cost(rule)
-# 
-#     def edge_cost(self, edge :GraphEdge) -> float:
-#         result = self.edge_model.edge_cost(edge)
-#         if self.edge_feature_model is not None:
-#             result += self.edge_feature_model.edge_cost(edge)
-#         return result
 
-    # TODO EdgeSet -> Iterable[Edge]?
-    def edges_cost(self, edges :Union[GraphEdge, EdgeSet]) -> np.ndarray:
+    def edge_cost(self, edge :GraphEdge) -> float:
+        result = self.edge_model.edge_cost(edge)
+        if self.edge_feature_model is not None:
+            result += self.edge_feature_model.edge_cost(edge)
+        return result
+
+    def edges_cost(self, edges :EdgeSet) -> np.ndarray:
         result = self.edge_model.edges_cost(edges)
         if self.edge_feature_model is not None:
             result += self.edge_feature_model.edges_cost(edges)

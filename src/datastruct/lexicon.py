@@ -134,7 +134,7 @@ class Lexicon:
         self.max_word_length = 0
         if shared.config['Models'].get('root_feature_model') != 'none':
             dim = shared.config['Features'].getint('word_vec_dim')
-#             self.feature_matrix = np.ndarray((0, dim))
+            self.feature_matrix = np.ndarray((0, dim))
         if items:
             self.add(items)
 
@@ -181,8 +181,8 @@ class Lexicon:
     def add(self, items :Union[LexiconEntry, Iterable[LexiconEntry]]) -> None:
         if isinstance(items, LexiconEntry):
             items = [items]
-#         if not isinstance(items, list):
-#             items = list(items)
+        if not isinstance(items, list):
+            items = list(items)
         for item in items:
             if str(item) in self.items_by_key:
                 raise ValueError('{} already in vocabulary'.format(str(item)))
@@ -196,10 +196,10 @@ class Lexicon:
             self.alphabet |= set(item.word + item.tag)
             self.max_word_length = max(self.max_word_length,
                                        len(item.word) + len(item.tag))
-#         if shared.config['Models'].get('root_feature_model') != 'none':
-#             self.feature_matrix = \
-#                 np.vstack((self.feature_matrix,
-#                            np.array([item.vec for item in items])))
+        if shared.config['Models'].get('root_feature_model') != 'none':
+            self.feature_matrix = \
+                np.vstack((self.feature_matrix,
+                           np.array([item.vec for item in items])))
 
 
     def to_fst(self) -> hfst.HfstTransducer:
