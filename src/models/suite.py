@@ -56,7 +56,7 @@ class ModelSuite:
 #         return result
 
     # TODO EdgeSet -> Iterable[Edge]?
-    def edges_cost(self, edges :Union[GraphEdge, EdgeSet]) -> np.ndarray:
+    def edges_cost(self, edges :EdgeSet) -> np.ndarray:
         result = self.edge_model.edges_cost(edges)
         if self.edge_feature_model is not None:
             result += self.edge_feature_model.edges_cost(edges)

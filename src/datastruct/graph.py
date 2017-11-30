@@ -67,6 +67,9 @@ class EdgeSet:
     def __len__(self) -> int:
         return len(self.items)
 
+    def __bool__(self) -> bool:
+        return True if self.items else False
+
     def add(self, edges :Union[GraphEdge, Iterable[GraphEdge]]) -> None:
         if isinstance(edges, GraphEdge):
             edges = [edges]

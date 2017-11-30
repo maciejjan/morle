@@ -168,7 +168,7 @@ class NeuralEdgeModel(EdgeModel):
         self.ngram_extractor = ngram_extractor
         self._compile_network()
 
-    def edges_cost(self, edges :Union[GraphEdge, EdgeSet]) -> np.ndarray:
+    def edges_cost(self, edges :EdgeSet) -> np.ndarray:
         X_attr, X_rule = self._prepare_data(edges)
         probs = self.nn.predict([X_attr, X_rule]).reshape((len(edges),))
         return np.log(probs / (1-probs))
