@@ -15,9 +15,6 @@ root_feature_model = none
 edge_feature_model = none
 
 [Features]
-rootdist_n = 1
-word_freq_weight = 0.0
-word_vec_weight = 0.0
 word_vec_dim = 100
 '''
 

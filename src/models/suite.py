@@ -93,8 +93,10 @@ class ModelSuite:
     def is_loadable() -> bool:
         return file_exists(shared.filenames['root-model']) and \
                file_exists(shared.filenames['edge-model']) and \
-               (shared.config['Features'].getfloat('word_vec_weight') == 0 or \
-                file_exists(shared.filenames['feature-model']))
+               (shared.config['Models'].get('root_feature_model') == 'none' or \
+                file_exists(shared.filenames['root-feature-model'])) and \
+               (shared.config['Models'].get('edge_feature_model') == 'none' or \
+                file_exists(shared.filenames['edge-feature-model']))
 
     @staticmethod
     def load() -> 'ModelSuite':
