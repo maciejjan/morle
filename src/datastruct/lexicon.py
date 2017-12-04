@@ -96,6 +96,16 @@ class LexiconEntry:
         if 'vec' in kwargs:
             self.vec = kwargs['vec']
 
+    def copy(self) -> 'LexiconEntry':
+        kwargs = {
+            'is_possible_edge_source' : self.is_possible_edge_source,
+            'is_possible_edge_target' : self.is_possible_edge_target
+        }
+        if hasattr(self, 'vec'):
+            kwargs['vec'] = self.vec
+        result = LexiconEntry(self.literal, **kwargs)
+        return result
+
     def __lt__(self, other) -> bool:
         if not isinstance(other, LexiconEntry):
             raise TypeError('Expected LexiconEntry, got %s', type(other))

@@ -27,6 +27,8 @@ class Analyzer:
         self.lexicon = lexicon
         self.model = model
         self._compile_fst()
+        self.predict_vec = 'predict_vec' in kwargs and \
+                           kwargs['predict_vec'] == True
 
     def analyze(self, target :LexiconEntry, **kwargs) -> List[GraphEdge]:
         # TODO 1a. if predict_tag: get possible tags from the tag predictor
@@ -41,18 +43,22 @@ class Analyzer:
             rules = extract_all_rules(source, target)
             for rule in rules:
                 if rule in self.model.rule_set:
-#                     edge.attr['cost'] = self.model.edges_cost(edge)
-#                     results.append(GraphEdge(source, target, rule))
-                    edge_set.add(GraphEdge(source, target, rule))
+                    if self.predict_vec:
+                        target_pr = target.copy()
+                        edge = GraphEdge(source, target_pr, rule)
+                        target_pr.vec = self.model.predict_target_feature_vec(edge) 
+                        edge_set.add(edge)
+                    else:
+                        edge_set.add(GraphEdge(source, target, rule))
         if not edge_set:
             return list()
         edge_costs = self.model.edges_cost(edge_set)
         results = [edge for edge in edge_set]
         for i, edge in enumerate(results):
             edge.attr['cost'] = edge_costs[i]
-        results.sort(key=lambda r: r.attr['cost'])
         # 4. sort the analyses according to the cost
         # (TODO max_results etc.)
+        results.sort(key=lambda r: r.attr['cost'])
         return results
 
     def _compile_fst(self) -> None:

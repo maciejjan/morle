@@ -39,3 +39,9 @@ class LexiconEntryTest(unittest.TestCase):
             self.assertEqual(lexentry.disamb, disamb)
             self.assertEqual(lexentry.symstr, symstr)
 
+    def test_copy(self) -> None:
+        for literal, word, tag, disamb, symstr in \
+                LexiconEntryTest.test_examples:
+            lexentry = LexiconEntry(literal)
+            self.assertEqual(lexentry, lexentry.copy())
+

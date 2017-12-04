@@ -184,7 +184,8 @@ class RootFeatureModelFactory(ModelFactory):
 
 
 class EdgeFeatureModel(Model):
-    pass
+    def predict_target_feature_vec(self, edge :GraphEdge) -> np.ndarray:
+        raise NotImplementedError()
 
 
 class NeuralEdgeFeatureModel(EdgeFeatureModel):
@@ -203,8 +204,7 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         err = y-y_pred
         self.err_var = np.average(err**2, axis=0, weights=weights)
 
-    # TODO compute costs for a whole EdgeSet/Lexicon!
-
+    # TODO unused?
     def edge_cost(self, edge :GraphEdge) -> float:
         X_attr = np.array([edge.source.vec])
         X_rule = np.array([self.rule_set.get_id(edge.rule)])
@@ -218,6 +218,13 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         y_pred = self.nn.predict([X_attr, X_rule])
         return -multivariate_normal.logpdf(y-y_pred, np.zeros(y.shape[1]),
                                            np.diag(self.err_var))
+
+    def predict_target_feature_vec(self, edge :GraphEdge) -> np.ndarray:
+        # TODO remove code duplication with edge_cost()
+        X_attr = np.array([edge.source.vec])
+        X_rule = np.array([self.rule_set.get_id(edge.rule)])
+        y_pred = self.nn.predict([X_attr, X_rule])
+        return y_pred
 
     def save(self, filename) -> None:
         file_full_path = os.path.join(shared.options['working_dir'], filename)
@@ -316,6 +323,10 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
                                                 np.diag(self.vars[rule_id,]))
             result[tuple(edge_ids),] = costs
         return result
+
+    def predict_target_feature_vec(self, edge :GraphEdge) -> np.ndarray:
+        rule_id = self.rule_set.get_id(edge.rule)
+        return edge.source.vec + self.means[rule_id,]
 
     def save(self, filename) -> None:
         file_full_path = os.path.join(shared.options['working_dir'], filename)

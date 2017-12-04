@@ -65,6 +65,12 @@ class ModelSuite:
     def null_cost(self) -> float:
         return self.edge_model.null_cost()
 
+    def predict_target_feature_vec(self, edge :GraphEdge) -> np.ndarray:
+        if self.edge_feature_model is not None:
+            return self.edge_feature_model.predict_target_feature_vec(edge)
+        else:
+            raise Exception('No edge feature model!')
+
 #     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
 #         # TODO cost of an edge set -- optimized computation
 #         raise NotImplementedError()
