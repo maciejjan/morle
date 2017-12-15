@@ -29,6 +29,8 @@ class Analyzer:
         self._compile_fst()
         self.predict_vec = 'predict_vec' in kwargs and \
                            kwargs['predict_vec'] == True
+        self.max_results = kwargs['max_results'] if 'max_results' in kwargs \
+                                                 else None
 
     def analyze(self, target :LexiconEntry, **kwargs) -> List[GraphEdge]:
         # TODO 1a. if predict_tag: get possible tags from the tag predictor
@@ -57,8 +59,9 @@ class Analyzer:
         for i, edge in enumerate(results):
             edge.attr['cost'] = edge_costs[i]
         # 4. sort the analyses according to the cost
-        # (TODO max_results etc.)
         results.sort(key=lambda r: r.attr['cost'])
+        if self.max_results is not None:
+            results = results[:self.max_results]
         return results
 
     def _compile_fst(self) -> None:

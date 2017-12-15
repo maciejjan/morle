@@ -9,11 +9,18 @@ def run():
     model = ModelSuite.load()
     kwargs = {}
     kwargs['predict_vec'] = shared.config['analyze'].getboolean('predict_vec')
+    kwargs['max_results'] = shared.config['analyze'].getint('max_results')
     analyzer = Analyzer(lexicon, model, **kwargs)
     lexicon_to_analyze = Lexicon.load(shared.filenames['analyze.wordlist'])
     for lexitem in lexicon_to_analyze:
         analyses = analyzer.analyze(lexitem)
         for a in analyses:
-            print(a.source, a.target, a.rule, a.attr['cost'],
-                  a.target.vec if kwargs['predict_vec'] else '')
+            vec_str = ' '.join(list(map(str, a.target.vec))) \
+                      if kwargs['predict_vec'] \
+                      else ''
+            print(a.source, a.target, a.rule, a.attr['cost'], vec_str,
+                  sep='\t')
+        # TODO
+        # - max_results parameter
+        # - including the analysis of a word as a root
 

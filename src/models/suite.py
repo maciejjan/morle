@@ -33,17 +33,21 @@ class ModelSuite:
                 EdgeFeatureModelFactory.create(
                     shared.config['Models'].get('edge_feature_model'),
                     self.rule_set)
+            self.feature_weight = \
+                shared.config['Features'].getfloat('word_vec_weight')
 
     def root_cost(self, entry :LexiconEntry) -> float:
         result = self.root_model.root_cost(entry)
         if self.root_feature_model is not None:
-            result += self.root_feature_model.root_cost(entry)
+            result += self.feature_weight * \
+                      self.root_feature_model.root_cost(entry)
         return result
 
     def roots_cost(self, entries :Union[LexiconEntry, Iterable[LexiconEntry]]) -> np.ndarray:
         result = self.root_model.root_costs(entries)
         if self.root_feature_model is not None:
-            result += self.root_feature_model.root_costs(entries)
+            result += self.feature_weight * \
+                      self.root_feature_model.root_costs(entries)
         return result
 
     def rule_cost(self, rule :Rule) -> float:
@@ -59,7 +63,8 @@ class ModelSuite:
     def edges_cost(self, edges :EdgeSet) -> np.ndarray:
         result = self.edge_model.edges_cost(edges)
         if self.edge_feature_model is not None:
-            result += self.edge_feature_model.edges_cost(edges)
+            result += self.feature_weight * \
+                      self.edge_feature_model.edges_cost(edges)
         return result
 
     def null_cost(self) -> float:
