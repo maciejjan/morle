@@ -288,3 +288,10 @@ class Lexicon:
         '''Escape a string for correct rendering in a LEXC file.'''
         return re.sub('([0<>])', '%\\1', string)
 
+
+def load_raw_vocabulary(filename :str) -> Lexicon:
+    lexicon = Lexicon()
+    for (word,) in read_tsv_file(filename):
+        lexicon.add(LexiconEntry(word))
+    return lexicon
+
