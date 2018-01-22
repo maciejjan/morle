@@ -15,7 +15,7 @@ from typing import List, Tuple
 def load_rules() -> List[Tuple[Rule, float]]:
     rules_filename = None
     if shared.config['compile'].getboolean('weighted'):
-        if shared.config['Models'].get('edge_model') == 'bernoulli':
+        if shared.config['Models'].get('edge_model') == 'simple':
             rules_filename = shared.filenames['edge-model']
             return [(Rule.from_string(rule), -math.log(prod))\
                     for rule, prod in\
@@ -45,7 +45,7 @@ def load_roots() -> List[LexiconEntry]:
     roots = []
     for root_str in root_reader():
         try:
-            roots.append(root_str)
+            roots.append(LexiconEntry(root_str))
         except Exception as ex:
             logging.getLogger('main').warning(str(ex))
     return roots
@@ -64,7 +64,8 @@ def build_rule_transducer(rules :List[Tuple[Rule, float]]) \
 def build_root_transducer(roots :List[LexiconEntry]) -> hfst.HfstTransducer:
     transducers = []
     for root in roots:
-        transducers.append(algorithms.fst.seq_to_transducer(root.seq()))
+        seq = root.word + root.tag
+        transducers.append(algorithms.fst.seq_to_transducer(zip(seq, seq)))
     result = algorithms.fst.binary_disjunct(transducers, print_progress=True)
     return result
 

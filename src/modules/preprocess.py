@@ -210,8 +210,8 @@ def run() -> None:
         write_tsv_file(shared.filenames['graph'],
                        build_graph_fstfastss(lexicon, 
                                              shared.filenames['lexicon-tr']))
-        sort_file(shared.filenames['graph'], key=3)
 
+    sort_file(shared.filenames['graph'], key=3)
     update_file_size(shared.filenames['graph'])
     run_filters(shared.filenames['graph'])
     update_file_size(shared.filenames['graph'])

@@ -269,11 +269,14 @@ class Lexicon:
         use_vec = \
             shared.config['Models'].get('root_feature_model') != 'none' or \
             shared.config['Models'].get('edge_feature_model') != 'none'
+        supervised = shared.config['General'].getboolean('supervised')
         vec_sep = shared.format['vector_sep']
         vec_dim = shared.config['Features'].getint('word_vec_dim')
         items_to_add = []
         for row in read_tsv_file(filename):
             try:
+                if supervised:
+                    row.pop(0)    # the first item is the base/lemma -> ignore
                 entry = _parse_entry_from_row(row, use_restr=use_restr,
                                               use_vec=use_vec, vec_dim=vec_dim)
                 items_to_add.append(entry)
