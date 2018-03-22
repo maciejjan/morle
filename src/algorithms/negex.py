@@ -16,7 +16,8 @@ class NegativeExampleSampler:
     def __init__(self, rule_set :RuleSet) -> None:
         self.rule_set = rule_set
 
-    def sample(self, lexicon :Lexicon, sample_size :int) -> EdgeSet:
+    def sample(self, lexicon :Lexicon, sample_size :int,
+               show_progressbar :bool = True) -> EdgeSet:
 
         def _sample_process(rules :List[Rule],
                             _output_fun :Callable[..., None],
@@ -58,7 +59,7 @@ class NegativeExampleSampler:
                              data=list(self.rule_set),
                              num_processes=num_processes,
                              additional_args=(lexicon, sample_size_per_proc),
-                             show_progressbar=True,
+                             show_progressbar=show_progressbar,
                              progressbar_total = sample_size_per_proc * \
                                                  num_processes)
         edge_set = EdgeSet(lexicon, edges_iter)

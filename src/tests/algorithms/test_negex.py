@@ -118,7 +118,8 @@ class NegativeExampleSamplerTest(unittest.TestCase):
                            
         negex_sampler = NegativeExampleSampler(rule_set)
         sample_size = len(expected_negative_edges)
-        sample = negex_sampler.sample(lexicon, sample_size)
+        sample = negex_sampler.sample(lexicon, sample_size,
+                                      show_progressbar=False)
         sample_weights = negex_sampler.compute_sample_weights(sample, edge_set)
 
         self.assertEqual(rule_set.get_domsize(rule_set[0]), 2)
