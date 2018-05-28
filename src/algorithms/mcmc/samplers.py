@@ -430,3 +430,97 @@ class MCMCGraphSamplerFactory:
         else:
             return MCMCGraphSampler(*args, **kwargs)
 
+
+def MCMCTagSampler(MCMCGraphSampler):
+    def __init__(self, full_graph :FullGraph,
+                       model :ModelSuite,
+                       warmup_iter :int = 1000,
+                       sampling_iter :int = 100000) -> None:
+        self.full_graph = full_graph
+        self.lexicon = full_graph.lexicon
+        self.edge_set = full_graph.edge_set
+        self.rule_set = model.rule_set
+        self.model = model
+#         self.root_cost_cache = np.empty(len(self.lexicon))
+
+    # TODO change the methods below to include retagging
+
+    def propose_adding_edge(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        return [edge], [], 1
+
+    def propose_deleting_edge(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        return [], [edge], 1
+
+    def propose_flip(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        if random.random() < 0.5:
+            return self.propose_flip_1(edge)
+        else:
+            return self.propose_flip_2(edge)
+
+    def propose_flip_1(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        edges_to_add, edges_to_remove = [], []
+        node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
+
+        if not self.full_graph.has_edge(node_3, node_1):
+            raise ImpossibleMoveException()
+
+        edge_3_1 = random.choice(self.full_graph.find_edges(node_3, node_1))
+        edge_3_2 = self.branching.find_edges(node_3, node_2)[0] \
+                   if self.branching.has_edge(node_3, node_2) else None
+        edge_4_1 = self.branching.find_edges(node_4, node_1)[0] \
+                   if self.branching.has_edge(node_4, node_1) else None
+
+        if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
+        if edge_4_1 is not None:
+            edges_to_remove.append(edge_4_1)
+        else: raise Exception('!')
+        edges_to_add.append(edge_3_1)
+        prop_prob_ratio = (1/len(self.full_graph.find_edges(node_3, node_1))) /\
+                          (1/len(self.full_graph.find_edges(node_3, node_2)))
+
+        return edges_to_add, edges_to_remove, prop_prob_ratio
+
+    def propose_flip_2(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        edges_to_add, edges_to_remove = [], []
+        node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
+
+        if not self.full_graph.has_edge(node_3, node_5):
+            raise ImpossibleMoveException()
+
+        edge_2_5 = self.branching.find_edges(node_2, node_5)[0] \
+                   if self.branching.has_edge(node_2, node_5) else None
+        edge_3_2 = self.branching.find_edges(node_3, node_2)[0] \
+                   if self.branching.has_edge(node_3, node_2) else None
+        edge_3_5 = random.choice(self.full_graph.find_edges(node_3, node_5))
+
+        if edge_2_5 is not None:
+            edges_to_remove.append(edge_2_5)
+        elif node_2 != node_5: raise Exception('!')     # TODO ???
+        if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
+        edges_to_add.append(edge_3_5)
+        prop_prob_ratio = (1/len(self.full_graph.find_edges(node_3, node_5))) /\
+                          (1/len(self.full_graph.find_edges(node_3, node_2)))
+
+        return edges_to_add, edges_to_remove, prop_prob_ratio
+        # propose the next move:
+        # - an edge randomly from the full graph
+        # - if the edge is already present in the graph -> try to remove it
+        # - otherwise -> try to add it:
+        #   - same cases as in the normal sampler (swap parent, flip etc.)
+        #   - then: additional edge changes needed because of retagging
+        #     (ingoing edge of w_1, all outgoing edges of w_1 and w_2)
+        pass
+
+        def retag_ingoing_edge(self, node, new_tag) ->
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+            pass
+
+        def retag_outgoing_edge(self, node, new_tag) ->
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+            pass
+
