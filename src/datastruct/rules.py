@@ -187,6 +187,10 @@ class RuleSet:
     def get_domsize(self, rule :Rule) -> int:
         return self.domsizes[rule]
 
+    def to_fst(self, **kwargs) -> hfst.HfstTransducer:
+        transducers = [rule.to_fst() for rule in self.items]
+        return algorithms.fst.binary_disjunct(transducers, **kwargs)
+
     def save(self, filename :str) -> None:
         with open_to_write(filename) as fp:
             for rule in self.items:
