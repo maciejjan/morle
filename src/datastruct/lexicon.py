@@ -248,11 +248,11 @@ class Lexicon:
             word = my_row.pop(0)
             kwargs = {}
             if use_restr:
-                restr = my_row.pop(0)
+                restr = my_row.pop(0).strip()
                 kwargs['is_possible_edge_source'] = 'L' in restr
                 kwargs['is_possible_edge_target'] = 'R' in restr
             if use_vec:
-                vec_str = my_row.pop(0)
+                vec_str = my_row.pop(0).strip()
                 kwargs['vec'] = \
                     np.array(list(map(float, vec_str.split(vec_sep))))
                 if kwargs['vec'] is None:
