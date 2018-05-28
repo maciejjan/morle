@@ -37,7 +37,7 @@ class GraphEdge:
 
     def to_tuple(self) -> Tuple[LexiconEntry, LexiconEntry, Rule, Dict]:
         attr = self.attr
-        attr['object'] = self
+#         attr['object'] = self
         return (self.source, self.target, self.rule, attr)
 
 
@@ -90,7 +90,7 @@ class EdgeSet:
     def save(self, filename :str) -> None:
         with open_to_write(filename) as fp:
             for edge in self.__iter__():
-                write_line(fp, edge.to_tuple())
+                write_line(fp, edge.to_tuple()[:3])
 
     @staticmethod
     def load(filename :str, lexicon :Lexicon, rule_set :RuleSet) -> 'EdgeSet':
