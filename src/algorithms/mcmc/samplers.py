@@ -432,6 +432,14 @@ class MCMCGraphSamplerFactory:
 
 
 def MCMCTagSampler(MCMCGraphSampler):
+
+    # TODO
+    # FIRST: a sampler without morphology (just the root distribution)
+    # THEN: a sampler with edges, but only adding/deleting an edge when possible
+    # THEN: additional moves to make adding an edge possible
+
+    # TODO proposals: use edge IDs instead of concrete edges!!!
+
     def __init__(self, full_graph :FullGraph,
                        model :ModelSuite,
                        warmup_iter :int = 1000,
