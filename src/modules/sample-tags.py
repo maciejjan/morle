@@ -3,6 +3,7 @@ import algorithms.fst
 from datastruct.graph import EdgeSet, GraphEdge
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import RuleSet
+from models.suite import ModelSuite
 from utils.files import file_exists
 import shared
 
@@ -77,9 +78,19 @@ def run() -> None:
         rules_file = shared.filenames['rules']
     rule_set = RuleSet.load(rules_file)
 
-#     print(extract_tag_symbols_from_rules(rule_set))
+    tagset = extract_tag_symbols_from_rules(rule_set)
+    print(tagset)
     # TODO compute the graph of possible edges
     # TODO save the graph
-    edges = compute_possible_edges(lexicon, rule_set)
-    edges.save('possible-edges.txt')
+#     edges = compute_possible_edges(lexicon, rule_set)
+#     edges.save('possible-edges.txt')
+
+    model = ModelSuite.load()
+    sampler = \
+        algorithms.mcmc.samplers.MCMCTagSamplerRootsOnly(\
+            lexicon, model, tagset,
+            warmup_iter=100000, sampling_iter=1000000)
+    sampler.run_sampling()
+
+    # TODO save results
 
