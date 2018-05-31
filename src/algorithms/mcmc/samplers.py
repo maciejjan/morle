@@ -1,7 +1,7 @@
 from algorithms.mcmc.statistics import \
     MCMCStatistic, ScalarStatistic, IterationStatistic, EdgeStatistic, \
     RuleStatistic, UnorderedWordPairStatistic
-from datastruct.lexicon import LexiconEntry
+from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import GraphEdge, Branching, FullGraph
 from models.suite import ModelSuite
 from utils.files import open_to_write, write_line
@@ -431,82 +431,86 @@ class MCMCGraphSamplerFactory:
             return MCMCGraphSampler(*args, **kwargs)
 
 
-# class MCMCTagSamplerRootsOnly:
-# 
-#     def __init__(self, lexicon :Lexicon, 
-#                        model :ModelSuite,
-#                        tagset :List[Tuple[str]],
-#                        warmup_iter :int = 1000,
-#                        sampling_iter :int = 100000,
-#                        iter_stat_interval :int = 1) -> None:
-#         self.lexicon = lexicon
-#         self.model = model
-#         self.root_cost_cache = np.empty(len(self.lexicon))
-#         self.edge_cost_cache = np.empty(len(self.edge_set))
-#         self.warmup_iter = warmup_iter
-#         self.sampling_iter = sampling_iter
-#         self.iter_stat_interval = iter_stat_interval
-#         self.stats = {}               # type: Dict[str, MCMCStatistic]
-#         # fields related to the tags
-#         self.tagset = tagset
-# #         self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
-#         self.current_tag = \
-#             np.random.randint(len(self.tagset), size=len(self.lexicon))
-#         self.reset()
-# 
-#     def run_sampling(self):
-#         logging.getLogger('main').info('Warming up the sampler...')
-#         self.reset()
-#         for i in tqdm.tqdm(range(self.warmup_iter)):
-#             self.next()
-#         self.reset()
-#         logging.getLogger('main').info('Sampling...')
-#         for i in tqdm.tqdm(range(self.sampling_iter)):
-#             self.next()
-#         self.finalize()
-# 
-#     def reset(self):
-#         self.iter_num = 0
-#         self.tag_freq = np.zeros((len(self.lexicon), len(self.tagset)))
-#         self.last_modified = np.zeros(len(self.lexicon))
-# 
-#     def next(self):
-#         # increase the number of iterations
-#         self.iter_num += 1
-# 
-#         # select a root and a new tag randomly
-#         w_id = np.random.randint(len(self.lexicon))
-#         tag_id = np.random.randint(len(self.tagset))
-# 
-#         # compute the new and the old root
-#         old_root = LexiconEntry(self.lexicon[w_id].word + \
-#                                 ''.join(self.tagset[self.current_tag[w_id]]))
-#         new_root = LexiconEntry(self.lexicon[w_id].word + \
-#                                 ''.join(self.tagset[tag_id]))
-# 
-#         # compute the cost of retagging
+class MCMCTagSamplerRootsOnly:
+
+    def __init__(self, lexicon :Lexicon, 
+                       model :ModelSuite,
+                       tagset :List[Tuple[str]],
+                       warmup_iter :int = 1000,
+                       sampling_iter :int = 100000,
+                       iter_stat_interval :int = 1) -> None:
+        self.lexicon = lexicon
+        self.model = model
+        self.warmup_iter = warmup_iter
+        self.sampling_iter = sampling_iter
+        self.iter_stat_interval = iter_stat_interval
+        self.stats = {}               # type: Dict[str, MCMCStatistic]
+        # fields related to the tags
+        self.tagset = tagset
+#         self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
+        self.current_tag = \
+            np.random.randint(len(self.tagset), size=len(self.lexicon))
+        self.root_cost_cache = np.empty((len(self.lexicon), len(self.tagset)))
+        print('Computing root costs...')
+        for w_id, entry in tqdm.tqdm(enumerate(lexicon), total=len(lexicon)):
+            for t_id, tag in enumerate(tagset):
+                self.root_cost_cache[w_id,t_id] = \
+                    self.model.root_cost(LexiconEntry(''.join(entry.word) + \
+                                                      ''.join(tag)))
+        self.reset()
+
+    def run_sampling(self):
+        logging.getLogger('main').info('Warming up the sampler...')
+        self.reset()
+        for i in tqdm.tqdm(range(self.warmup_iter)):
+            self.next()
+        self.reset()
+        logging.getLogger('main').info('Sampling...')
+        for i in tqdm.tqdm(range(self.sampling_iter)):
+            self.next()
+        self.finalize()
+
+    def reset(self):
+        self.iter_num = 0
+        self.tag_freq = np.zeros((len(self.lexicon), len(self.tagset)))
+        self.last_modified = np.zeros(len(self.lexicon))
+
+    def next(self):
+        # increase the number of iterations
+        self.iter_num += 1
+
+        # select a root and a new tag randomly
+        w_id = np.random.randint(len(self.lexicon))
+        tag_id = np.random.randint(len(self.tagset))
+
+        # compute the cost of retagging
 #         cost = self.model.root_cost(new_root) - self.model.root_cost(old_root)
-#         acc_prob = 1.0 if cost < 0 else math.exp(-cost)
-#         if random.random() < acc_prob:
-#             # accept move
-#             last_tag_one_hot = np.zeros(len(self.tagset))
-#             last_tag_one_hot[self.current_tag[w_id]] = 1
-#             self.tag_freq[w_id,:] = \
-#                 self.tag_freq[w_id,:] * \
-#                     (self.last_modified[w_id] / self.iter_num) + \
-#                 last_tag_one_hot * \
-#                     ((self.iter_num-self.last_modified[w_id]) / self.iter_num)
-#             self.current_tag[w_id] = tag_id
-#             self.last_modified[w_id] = self.iter_num
-# 
-#     def finalize(self):
-#         self.last_tag = np.zeros((len(self.lexicon), len(self.tagset)))
-#         for i in range(len(self.lexicon)):
-#             self.last_tag[i, self.current_tag[i]] = 1
-#         self.tag_freq = \
-#             self.tag_freq * ((self.last_modified / self.iter_num) + \
-#             self.last_tag * \
-#                 ((self.iter_num-self.last_modified) / self.iter_num)
+        cost = self.root_cost_cache[w_id,tag_id] - \
+               self.root_cost_cache[w_id,self.current_tag[w_id]]
+        acc_prob = 1.0 if cost < 0 else math.exp(-cost)
+        if random.random() < acc_prob:
+            # accept move
+            last_tag_one_hot = np.zeros(len(self.tagset))
+            last_tag_one_hot[self.current_tag[w_id]] = 1
+            self.tag_freq[w_id,:] = \
+                self.tag_freq[w_id,:] * \
+                    (self.last_modified[w_id] / self.iter_num) + \
+                last_tag_one_hot * \
+                    ((self.iter_num-self.last_modified[w_id]) / self.iter_num)
+            self.current_tag[w_id] = tag_id
+            self.last_modified[w_id] = self.iter_num
+
+    def finalize(self):
+        self.last_tag = np.zeros((len(self.lexicon), len(self.tagset)))
+        for i in range(len(self.lexicon)):
+            self.last_tag[i, self.current_tag[i]] = 1
+        T = len(self.tagset)
+        self.tag_freq = \
+            self.tag_freq * \
+            np.tile(self.last_modified / self.iter_num, (T, 1)).T + \
+            self.last_tag * \
+                np.tile((self.iter_num-self.last_modified) / self.iter_num,
+                        (T, 1)).T
 
 
 # class MCMCTagSampler(MCMCGraphSampler):

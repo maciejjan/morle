@@ -1,10 +1,11 @@
 import algorithms.align
 import algorithms.fst
+import algorithms.mcmc.samplers
 from datastruct.graph import EdgeSet, GraphEdge
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import RuleSet
 from models.suite import ModelSuite
-from utils.files import file_exists
+from utils.files import file_exists, open_to_write, write_line
 import shared
 
 import hfst
@@ -80,6 +81,7 @@ def run() -> None:
 
     tagset = extract_tag_symbols_from_rules(rule_set)
     print(tagset)
+    print(len(tagset))
     # TODO compute the graph of possible edges
     # TODO save the graph
 #     edges = compute_possible_edges(lexicon, rule_set)
@@ -89,8 +91,11 @@ def run() -> None:
     sampler = \
         algorithms.mcmc.samplers.MCMCTagSamplerRootsOnly(\
             lexicon, model, tagset,
-            warmup_iter=100000, sampling_iter=1000000)
+            warmup_iter=100000, sampling_iter=10000000)
     sampler.run_sampling()
 
-    # TODO save results
+    with open_to_write('tags.txt') as outfp:
+        for w_id in range(len(lexicon)):
+            for t_id in range(len(tagset)):    
+                write_line(outfp, (lexicon[w_id], ''.join(tagset[t_id]), sampler.tag_freq[w_id,t_id]))
 
