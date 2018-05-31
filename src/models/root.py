@@ -51,7 +51,10 @@ class AlergiaRootModel(RootModel):
         self.automaton.convert(hfst.ImplementationType.HFST_OLW_TYPE)
 
     def root_cost(self, entry :LexiconEntry) -> float:
-        return self.automaton.lookup(entry.symstr)[0][1]
+        lookup_results = self.automaton.lookup(entry.symstr)
+        if not lookup_results:
+            return np.inf
+        return lookup_results[0][1]
 
     def root_costs(self, lexicon :Lexicon) -> np.ndarray:
         return np.array([self.root_cost(entry) for entry in lexicon])
