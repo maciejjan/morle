@@ -37,7 +37,7 @@ class GraphEdge:
 
     def to_tuple(self) -> Tuple[LexiconEntry, LexiconEntry, Rule, Dict]:
         attr = self.attr
-#         attr['object'] = self
+        attr['object'] = self
         return (self.source, self.target, self.rule, attr)
 
 
