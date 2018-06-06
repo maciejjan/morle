@@ -94,7 +94,7 @@ def run() -> None:
     sampler = \
         algorithms.mcmc.samplers.MCMCTagSampler(\
             full_graph, model, tagset,
-            warmup_iter=10000000, sampling_iter=10000000)
+            warmup_iter=100000, sampling_iter=100000)
     sampler.add_stat('edge_freq', stats.EdgeFrequencyStatistic(sampler))
     sampler.run_sampling()
 

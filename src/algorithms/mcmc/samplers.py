@@ -789,8 +789,8 @@ class MCMCTagSampler:
             for idx, edge in enumerate(self.edge_set):
                 write_line(fp, 
                            (str(edge.source), str(edge.target), 
-                            str(edge.rule)) + tuple([stat.val[idx]\
-                                                     for stat in stats]))
+                            str(edge.rule), str(self.edge_cost_cache[idx])) +\
+                            tuple([stat.val[idx] for stat in stats]))
 
 # 
 #     def propose_flip(self, edge :GraphEdge) \
