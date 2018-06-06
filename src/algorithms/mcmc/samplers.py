@@ -513,213 +513,35 @@ class MCMCTagSamplerRootsOnly:
                         (T, 1)).T
 
 
-class MCMCTagSamplerMove:
-    def __init__(self):
-        self.nodes_to_retag = []
-        self.edges_to_add = []
-        self.edges_to_delete = []
-        self.roots_to_add = []
-        self.roots_to_delete = []
-
-    def __bool__(self):
-        return bool(self.nodes_to_retag) or bool(self.edges_to_add) or \
-               bool(self.edges_to_delete)
-
-
-class MCMCTagSampler:
-
-    # TODO
-    # FIRST: a sampler that only retags roots, without edges
-    #        (but acting on a FullGraph)
-    # THEN: a sampler with edges, but only adding/deleting an edge when possible
-    # THEN: additional moves to make adding an edge possible
-
-    # TODO proposals: use edge IDs instead of concrete edges!!!
-    # TODO tagset as parameter
-
-    def __init__(self, full_graph :FullGraph,
-                       model :ModelSuite,
-                       tagset :List[Tuple[str]],
-                       warmup_iter :int = 1000,
-                       sampling_iter :int = 100000,
-                       iter_stat_interval :int = 1) -> None:
-        self.full_graph = full_graph
-        self.lexicon = full_graph.lexicon
-        self.edge_set = full_graph.edge_set
-        self.model = model
-        self.warmup_iter = warmup_iter
-        self.sampling_iter = sampling_iter
-        self.iter_stat_interval = iter_stat_interval
-        self.stats = {}               # type: Dict[str, MCMCStatistic]
-        self.branching = self.full_graph.empty_branching()
-        # fields related to the tags
-        self.tagset = tagset
-#         self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
-        self.current_tag = \
-            np.random.randint(len(self.tagset), size=len(self.lexicon))
-        self.root_cost_cache = np.empty((len(self.lexicon), len(self.tagset)))
-        # TODO move to a separate method: cache_costs()
-        print('Computing root costs...')
-        for w_id, entry in tqdm.tqdm(enumerate(self.lexicon), total=len(self.lexicon)):
-            for t_id, tag in enumerate(tagset):
-                self.root_cost_cache[w_id,t_id] = \
-                    self.model.root_cost(LexiconEntry(''.join(entry.word) + \
-                                                      ''.join(tag)))
-        print('Computing edge costs...')
-        self.edge_cost_cache = self.model.edges_cost(self.edge_set)
-        self.reset()
-
-    def run_sampling(self):
-        logging.getLogger('main').info('Warming up the sampler...')
-        self.reset()
-        for i in tqdm.tqdm(range(self.warmup_iter)):
-            self.next()
-        self.reset()
-        logging.getLogger('main').info('Sampling...')
-        for i in tqdm.tqdm(range(self.sampling_iter)):
-            self.next()
-        self.finalize()
-
-    def reset(self):
-        '''Reset all statistics.'''
-        self.iter_num = 0
-        self.tag_freq = np.zeros((len(self.lexicon), len(self.tagset)))
-        self.last_modified = np.zeros(len(self.lexicon))
-
-    def next(self):
-        # increase the number of iterations
-        self.iter_num += 1
-
-        # TODO
-        # - choose whether we are changing a node or an edge
-        # - if changing a node:
-        #   - choose new tag
-        #   - propose_retagging_node(node, new_tag)
-        # - if changing an edge:
-        #   - if the edge is present -> propose deleting
-        #   - the node has an ingoing edge -> break
-        #   - the edge would create a cycle -> break
-        #   - else: propose adding the edge
-        #   - propose retagging the source and the target node
-
-        try:
-            move = self.choose_and_change_a_node() \
-                   if random.random() < 0.4 \
-                   else self.choose_and_change_an_edge()
-            cost = self.move_cost(move)
-            acc_prob = 1.0 if cost < 0 else math.exp(-cost)
-            if move and random.random() < acc_prob:
-                self.accept_move(move)
-
-        except ImpossibleMoveException:
-            pass
-
-    def move_cost(self, move :MCMCTagSamplerMove) -> float:
-        cost = 0.0
-#         for (w_id, tag_id) in move.nodes_to_retag:
-#             # TODO ONLY if a word is a root
-#             cost += self.root_cost_cache[w_id, tag_id] \
-#                     - self.root_cost_cache[w_id, self.current_tag[w_id]]
-#         for (w_id, tag_id) in move.roots_to_delete:
-#             cost -= self.root_cost_cache[w_id, tag_id]
-        for e_id in move.edges_to_add:
-            cost += self.edge_cost_cache[e_id]
-        for e_id in move.edges_to_delete:
-            cost -= self.edge_cost_cache[e_id]
-        for r_id in move.roots_to_add:
-            cost += self.root_cost_cache[r_id,self.current_tag[r_id]]
-        for r_id in move.roots_to_delete:
-            cost -= self.root_cost_cache[r_id,self.current_tag[r_id]]
-        return cost
-
-    def accept_move(self, move :MCMCTagSamplerMove) -> None:
-        for (w_id, tag_id) in move.nodes_to_retag:
-            last_tag_one_hot = np.zeros(len(self.tagset))
-            last_tag_one_hot[self.current_tag[w_id]] = 1
-            self.tag_freq[w_id,:] = \
-                self.tag_freq[w_id,:] * \
-                    (self.last_modified[w_id] / self.iter_num) + \
-                last_tag_one_hot * \
-                    ((self.iter_num-self.last_modified[w_id]) / self.iter_num)
-            self.current_tag[w_id] = tag_id
-            self.last_modified[w_id] = self.iter_num
-
-    def choose_and_change_a_node(self) -> MCMCTagSamplerMove:
-        # select a root and a new tag randomly
-        w_id = np.random.randint(len(self.lexicon))
-        tag_id = np.random.randint(len(self.tagset))
-#         move = MCMCTagSamplerMove()
-#         if tag_id != self.current_tag[w_id]:
-#             move.nodes_to_retag.append((w_id, tag_id))
-        return self.propose_retagging_node(w_id, tag_id)
-
-    def choose_and_change_an_edge(self) -> MCMCTagSamplerMove:
-        edge = self.full_graph.random_edge()
-
-        # TODO check whether the edge is already present
-        if self.branching.has_edge(edge.source, edge.target, edge.rule):
-            return self.propose_deleting_edge(edge)
-        elif self.branching.has_path(edge.target, edge.source):
-            raise ImpossibleMoveException()
-#             return self.propose_flip(edge)
-        elif self.branching.parent(edge.target) is not None:
-            raise ImpossibleMoveException()
-#             return self.propose_swapping_parent(edge)
-        else:
-            return self.propose_adding_edge(edge)
-        # TODO check whether the target node already has an ingoing node
-        # TODO check whether the edge would create a cycle
-        # TODO propose adding edge and perform the required retaggings
-        
-
-    def finalize(self):
-        '''Update the statistic values after the last iteration.'''
-        self.last_tag = np.zeros((len(self.lexicon), len(self.tagset)))
-        for i in range(len(self.lexicon)):
-            self.last_tag[i, self.current_tag[i]] = 1
-        T = len(self.tagset)
-        self.tag_freq = \
-            self.tag_freq * \
-            np.tile(self.last_modified / self.iter_num, (T, 1)).T + \
-            self.last_tag * \
-                np.tile((self.iter_num-self.last_modified) / self.iter_num,
-                        (T, 1)).T
-
-    # TODO change the methods below to include retagging
-
-    def propose_retagging_node(self, w_id :int, tag_id :int) \
-                              -> MCMCTagSamplerMove:
-        move = MCMCTagSamplerMove()
-        if tag_id != self.current_tag[w_id]:
-            move.nodes_to_retag.append((w_id, tag_id))
-#             node = self.lexicon[w_id]
-#             # TODO retag the ingoing edge
-#             if self.branching.parent(node) is not None:
-#                 # TODO find the parent edge
-#                 raise NotImplementedError()
-#             # TODO retag the outgoing edges
-        return move
-
-    def propose_deleting_edge(self, edge :GraphEdge) -> MCMCTagSamplerMove:
-        move = MCMCTagSamplerMove()
-        move.edges_to_delete.append(edge)
-        return move
-
-    def propose_adding_edge(self, edge :GraphEdge) -> MCMCTagSamplerMove:
-        cur_source_tag = \
-            self.tagset[self.current_tag[self.lexicon.get_id(edge.source)]]
-        cur_target_tag = \
-            self.tagset[self.current_tag[self.lexicon.get_id(edge.target)]]
-        if cur_source_tag != edge.rule.tag_subst[0] \
-                or cur_target_tag != edge.rule.tag_subst[1]:
-            raise ImpossibleMoveException()
-        print('Adding edge: {} {} {}'.format(edge.source, edge.target, str(edge.rule)))
-        move = MCMCTagSamplerMove()
-        move.edges_to_add.append(self.edge_set.get_id(edge))
-#         move.join(propose_retagging_word(edge.source, edge.rule.tag[0]))
-#         move.join(propose_retagging_word(edge.target, edge.rule.tag[1]))
-        return move
-
+# class MCMCTagSampler(MCMCGraphSampler):
+# 
+#     # TODO
+#     # FIRST: a sampler without morphology (just the root distribution)
+#     # THEN: a sampler with edges, but only adding/deleting an edge when possible
+#     # THEN: additional moves to make adding an edge possible
+# 
+#     # TODO proposals: use edge IDs instead of concrete edges!!!
+# 
+#     def __init__(self, full_graph :FullGraph,
+#                        model :ModelSuite,
+#                        warmup_iter :int = 1000,
+#                        sampling_iter :int = 100000) -> None:
+#         self.full_graph = full_graph
+#         self.lexicon = full_graph.lexicon
+#         self.edge_set = full_graph.edge_set
+#         self.rule_set = model.rule_set
+#         self.model = model
+# #         self.root_cost_cache = np.empty(len(self.lexicon))
+# 
+#     # TODO change the methods below to include retagging
+# 
+#     def propose_adding_edge(self, edge :GraphEdge) \
+#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         return [edge], [], 1
+# 
+#     def propose_deleting_edge(self, edge :GraphEdge) \
+#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         return [], [edge], 1
 # 
 #     def propose_flip(self, edge :GraphEdge) \
 #             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
@@ -727,7 +549,7 @@ class MCMCTagSampler:
 #             return self.propose_flip_1(edge)
 #         else:
 #             return self.propose_flip_2(edge)
-
+# 
 #     def propose_flip_1(self, edge :GraphEdge) \
 #             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
 #         edges_to_add, edges_to_remove = [], []

@@ -116,19 +116,13 @@ class Graph(nx.MultiDiGraph):
         return (attr['object'] for source, target, rule, attr in \
                                    super().edges_iter(keys=True, data=True))
 
-    def edges_between(self, source :LexiconEntry, target :LexiconEntry) \
-                     -> List[GraphEdge]:
+    def find_edges(self, source :LexiconEntry, target :LexiconEntry) \
+                  -> List[GraphEdge]:
         result = []
         if source in self and target in self[source]:
             for rule, attr in self[source][target].items():
                 result.append(GraphEdge(source, target, rule, **attr))
         return result
-
-    def ingoing_edges(self, target :LexiconEntry) -> List[GraphEdge]:
-        raise NotImplementedError()
-
-    def outgoing_edges(self, source :LexiconEntry) -> List[GraphEdge]:
-        raise NotImplementedError()
 
 
 class Branching(Graph):
