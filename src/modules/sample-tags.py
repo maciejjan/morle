@@ -1,7 +1,7 @@
 import algorithms.align
 import algorithms.fst
 import algorithms.mcmc.samplers
-from datastruct.graph import EdgeSet, GraphEdge
+from datastruct.graph import EdgeSet, GraphEdge, FullGraph
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import RuleSet
 from models.suite import ModelSuite
@@ -84,13 +84,15 @@ def run() -> None:
     print(len(tagset))
     # TODO compute the graph of possible edges
     # TODO save the graph
-#     edges = compute_possible_edges(lexicon, rule_set)
-#     edges.save('possible-edges.txt')
+    edge_set = compute_possible_edges(lexicon, rule_set)
+    edge_set.save('possible-edges.txt')
+
+    full_graph = FullGraph(lexicon, edge_set)
 
     model = ModelSuite.load()
     sampler = \
-        algorithms.mcmc.samplers.MCMCTagSamplerRootsOnly(\
-            lexicon, model, tagset,
+        algorithms.mcmc.samplers.MCMCTagSampler(\
+            full_graph, model, tagset,
             warmup_iter=100000, sampling_iter=10000000)
     sampler.run_sampling()
 
