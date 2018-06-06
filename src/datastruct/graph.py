@@ -103,32 +103,39 @@ class EdgeSet:
 
 
 class Graph(nx.MultiDiGraph):
+    def __init__(self) -> None:
+        super().__init__()
+        self.edges_by_source = defaultdict(lambda: set())
+        self.edges_by_target = defaultdict(lambda: set())
 
     def add_edge(self, edge :GraphEdge) -> None:
         super().add_edge(*edge.to_tuple())
+        self.edges_by_source[edge.source].add(edge)
+        self.edges_by_target[edge.target].add(edge)
 
     def remove_edge(self, edge :GraphEdge) -> None:
         super().remove_edge(edge.source, edge.target, edge.rule)
-        if self.find_edges(edge.source, edge.target):
-            raise Exception('remove_edge apparently didn\'t work')
+        self.edges_by_source[edge.source].remove(edge)
+        self.edges_by_target[edge.target].remove(edge)
 
     def edges_iter(self) -> Iterable[GraphEdge]:
         return (attr['object'] for source, target, rule, attr in \
                                    super().edges_iter(keys=True, data=True))
 
     def edges_between(self, source :LexiconEntry, target :LexiconEntry) \
-                     -> List[GraphEdge]:
-        result = []
-        if source in self and target in self[source]:
-            for rule, attr in self[source][target].items():
-                result.append(GraphEdge(source, target, rule, **attr))
-        return result
+                     -> Set[GraphEdge]:
+        return self.edges_by_source[source] & self.edges_by_target[target]
+#         result = []
+#         if source in self and target in self[source]:
+#             for rule, attr in self[source][target].items():
+#                 result.append(GraphEdge(source, target, rule, **attr))
+#         return result
 
     def ingoing_edges(self, target :LexiconEntry) -> List[GraphEdge]:
-        raise NotImplementedError()
+        return self.edges_by_target[target]
 
     def outgoing_edges(self, source :LexiconEntry) -> List[GraphEdge]:
-        raise NotImplementedError()
+        return self.edges_by_source[source]
 
 
 class Branching(Graph):

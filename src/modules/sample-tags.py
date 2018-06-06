@@ -1,6 +1,7 @@
 import algorithms.align
 import algorithms.fst
 import algorithms.mcmc.samplers
+import algorithms.mcmc.statistics as stats
 from datastruct.graph import EdgeSet, GraphEdge, FullGraph
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import RuleSet
@@ -93,11 +94,13 @@ def run() -> None:
     sampler = \
         algorithms.mcmc.samplers.MCMCTagSampler(\
             full_graph, model, tagset,
-            warmup_iter=100000, sampling_iter=10000000)
+            warmup_iter=10000000, sampling_iter=10000000)
+    sampler.add_stat('edge_freq', stats.EdgeFrequencyStatistic(sampler))
     sampler.run_sampling()
 
     with open_to_write('tags.txt') as outfp:
         for w_id in range(len(lexicon)):
             for t_id in range(len(tagset)):    
                 write_line(outfp, (lexicon[w_id], ''.join(tagset[t_id]), sampler.tag_freq[w_id,t_id]))
+    sampler.save_edge_stats(shared.filenames['sample-edge-stats'])
 

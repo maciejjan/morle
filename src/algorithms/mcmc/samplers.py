@@ -269,7 +269,7 @@ class MCMCGraphSampler:
                 print(e.source, e.target, e.rule, \
                       self.edge_cost_cache[self.edge_set.get_id(edge)])
             logging.getLogger('main').info('deleting:')
-            for e in edges_to_delete:
+            for e in edges_to_remove:
                 print(e.source, e.target, e.rule, \
                       self.edge_cost_cache[self.edge_set.get_id(edge)])
             raise RuntimeError('NaN log-likelihood at iteration {}'\
@@ -515,23 +515,29 @@ class MCMCTagSamplerRootsOnly:
 
 class MCMCTagSamplerMove:
     def __init__(self):
-        self.nodes_to_retag = []
-        self.edges_to_add = []
-        self.edges_to_delete = []
-        self.roots_to_add = []
-        self.roots_to_delete = []
+        self.nodes_to_retag = set()
+        self.edges_to_add = set()
+        self.edges_to_remove = set()
+        self.roots_to_add = set()
+        self.roots_to_remove = set()
 
     def __bool__(self):
         return bool(self.nodes_to_retag) or bool(self.edges_to_add) or \
-               bool(self.edges_to_delete)
+               bool(self.edges_to_remove)
+
+    def join(self, other :'MCMCSamplerMove') -> None:
+        self.nodes_to_retag |= other.nodes_to_retag
+        self.roots_to_add |= other.roots_to_add
+        self.roots_to_remove |= other.roots_to_remove
+        self.edges_to_add |= other.edges_to_add
+        self.edges_to_remove |= other.edges_to_remove
 
 
 class MCMCTagSampler:
 
     # TODO
-    # FIRST: a sampler that only retags roots, without edges
-    #        (but acting on a FullGraph)
-    # THEN: a sampler with edges, but only adding/deleting an edge when possible
+    # a sampler with edges, but only adding/deleting an edge when possible
+    # NEXT: support statistics (esp. edge frequency)
     # THEN: additional moves to make adding an edge possible
 
     # TODO proposals: use edge IDs instead of concrete edges!!!
@@ -554,7 +560,7 @@ class MCMCTagSampler:
         self.branching = self.full_graph.empty_branching()
         # fields related to the tags
         self.tagset = tagset
-#         self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
+        self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
         self.current_tag = \
             np.random.randint(len(self.tagset), size=len(self.lexicon))
         self.root_cost_cache = np.empty((len(self.lexicon), len(self.tagset)))
@@ -569,6 +575,11 @@ class MCMCTagSampler:
         self.edge_cost_cache = self.model.edges_cost(self.edge_set)
         self.reset()
 
+    def add_stat(self, name: str, stat :MCMCStatistic) -> None:
+        if name in self.stats:
+            raise Exception('Duplicate statistic name: %s' % name)
+        self.stats[name] = stat
+
     def run_sampling(self):
         logging.getLogger('main').info('Warming up the sampler...')
         self.reset()
@@ -578,13 +589,19 @@ class MCMCTagSampler:
         logging.getLogger('main').info('Sampling...')
         for i in tqdm.tqdm(range(self.sampling_iter)):
             self.next()
+        print('Impossible moves: {} ({:.2} %)'\
+                  .format(self.impossible_moves,
+                          self.impossible_moves / self.sampling_iter * 100))
         self.finalize()
 
     def reset(self):
         '''Reset all statistics.'''
         self.iter_num = 0
+        self.impossible_moves = 0
         self.tag_freq = np.zeros((len(self.lexicon), len(self.tagset)))
         self.last_modified = np.zeros(len(self.lexicon))
+        for stat in self.stats.values():
+            stat.reset()
 
     def next(self):
         # increase the number of iterations
@@ -604,7 +621,7 @@ class MCMCTagSampler:
 
         try:
             move = self.choose_and_change_a_node() \
-                   if random.random() < 0.4 \
+                   if random.random() < 0.1 \
                    else self.choose_and_change_an_edge()
             cost = self.move_cost(move)
             acc_prob = 1.0 if cost < 0 else math.exp(-cost)
@@ -612,7 +629,8 @@ class MCMCTagSampler:
                 self.accept_move(move)
 
         except ImpossibleMoveException:
-            pass
+            self.impossible_moves += 1
+#             pass
 
     def move_cost(self, move :MCMCTagSamplerMove) -> float:
         cost = 0.0
@@ -624,12 +642,12 @@ class MCMCTagSampler:
 #             cost -= self.root_cost_cache[w_id, tag_id]
         for e_id in move.edges_to_add:
             cost += self.edge_cost_cache[e_id]
-        for e_id in move.edges_to_delete:
+        for e_id in move.edges_to_remove:
             cost -= self.edge_cost_cache[e_id]
-        for r_id in move.roots_to_add:
-            cost += self.root_cost_cache[r_id,self.current_tag[r_id]]
-        for r_id in move.roots_to_delete:
-            cost -= self.root_cost_cache[r_id,self.current_tag[r_id]]
+        for (r_id, t_id) in move.roots_to_add:
+            cost += self.root_cost_cache[r_id,t_id]
+        for (r_id, t_id) in move.roots_to_remove:
+            cost -= self.root_cost_cache[r_id,t_id]
         return cost
 
     def accept_move(self, move :MCMCTagSamplerMove) -> None:
@@ -643,15 +661,26 @@ class MCMCTagSampler:
                     ((self.iter_num-self.last_modified[w_id]) / self.iter_num)
             self.current_tag[w_id] = tag_id
             self.last_modified[w_id] = self.iter_num
+        for e_id in move.edges_to_add:
+#             edge = self.edge_set[e_id]
+#             print('Adding edge: {} {} {}'.format(edge.source, edge.target, str(edge.rule)))
+            self.branching.add_edge(self.edge_set[e_id])
+            edge = self.edge_set[e_id]
+            for stat in self.stats.values():
+                stat.edge_added(edge)
+        for e_id in move.edges_to_remove:
+#             edge = self.edge_set[e_id]
+#             print('Deleting edge: {} {} {}'.format(edge.source, edge.target, str(edge.rule)))
+            self.branching.remove_edge(self.edge_set[e_id])
+            edge = self.edge_set[e_id]
+            for stat in self.stats.values():
+                stat.edge_removed(edge)
 
     def choose_and_change_a_node(self) -> MCMCTagSamplerMove:
         # select a root and a new tag randomly
         w_id = np.random.randint(len(self.lexicon))
         tag_id = np.random.randint(len(self.tagset))
-#         move = MCMCTagSamplerMove()
-#         if tag_id != self.current_tag[w_id]:
-#             move.nodes_to_retag.append((w_id, tag_id))
-        return self.propose_retagging_node(w_id, tag_id)
+        return self.propose_retagging_node(self.lexicon[w_id], self.tagset[tag_id])
 
     def choose_and_change_an_edge(self) -> MCMCTagSamplerMove:
         edge = self.full_graph.random_edge()
@@ -684,25 +713,58 @@ class MCMCTagSampler:
             self.last_tag * \
                 np.tile((self.iter_num-self.last_modified) / self.iter_num,
                         (T, 1)).T
+        for stat in self.stats.values():
+            stat.update()
 
     # TODO change the methods below to include retagging
 
-    def propose_retagging_node(self, w_id :int, tag_id :int) \
+    def propose_retagging_edge(self, old_edge, new_source_tag, new_target_tag) \
+                              -> MCMCTagSamplerMove:
+        '''Change the edge rule to fit the prescribed tags. If no suitable
+           edge is found, just remove the current edge.'''
+        move = MCMCTagSamplerMove()
+        move.edges_to_remove.add(self.edge_set.get_id(old_edge))
+        new_edges = []
+        for e in self.full_graph.edges_between(old_edge.source, old_edge.target):
+            if e.rule.tag_subst[0] == new_source_tag and \
+                    e.rule.tag_subst[1] == new_target_tag:
+                new_edges.append(e)
+        if not new_edges:
+            move.roots_to_add.add((self.lexicon.get_id(old_edge.target), self.tag_idx[new_target_tag]))
+        else:
+            move.edges_to_add.add(self.edge_set.get_id(random.choice(new_edges)))
+        return move
+
+    def propose_retagging_node(self, node :LexiconEntry, tag :Tuple[str]) \
                               -> MCMCTagSamplerMove:
         move = MCMCTagSamplerMove()
+        w_id = self.lexicon.get_id(node)
+        tag_id = self.tag_idx[tag]
         if tag_id != self.current_tag[w_id]:
-            move.nodes_to_retag.append((w_id, tag_id))
-#             node = self.lexicon[w_id]
-#             # TODO retag the ingoing edge
-#             if self.branching.parent(node) is not None:
-#                 # TODO find the parent edge
-#                 raise NotImplementedError()
-#             # TODO retag the outgoing edges
+            node = self.lexicon[w_id]
+            move.nodes_to_retag.add((w_id, tag_id))
+            if self.branching.parent(node) is None:
+                # retag as root
+                move.roots_to_remove.add((w_id, self.current_tag[w_id]))
+                move.roots_to_add.add((w_id, tag_id))
+            else:
+                ingoing_edge = list(self.branching.ingoing_edges(node))[0]
+                move.join(\
+                    self.propose_retagging_edge(\
+                        ingoing_edge,
+                        ingoing_edge.rule.tag_subst[0],
+                        self.tagset[tag_id]))
+            for edge in self.branching.outgoing_edges(node):
+                move.join(\
+                    self.propose_retagging_edge(\
+                        edge,
+                        self.tagset[tag_id],
+                        edge.rule.tag_subst[1]))
         return move
 
     def propose_deleting_edge(self, edge :GraphEdge) -> MCMCTagSamplerMove:
         move = MCMCTagSamplerMove()
-        move.edges_to_delete.append(edge)
+        move.edges_to_remove.add(self.edge_set.get_id(edge))
         return move
 
     def propose_adding_edge(self, edge :GraphEdge) -> MCMCTagSamplerMove:
@@ -710,15 +772,25 @@ class MCMCTagSampler:
             self.tagset[self.current_tag[self.lexicon.get_id(edge.source)]]
         cur_target_tag = \
             self.tagset[self.current_tag[self.lexicon.get_id(edge.target)]]
-        if cur_source_tag != edge.rule.tag_subst[0] \
-                or cur_target_tag != edge.rule.tag_subst[1]:
-            raise ImpossibleMoveException()
-        print('Adding edge: {} {} {}'.format(edge.source, edge.target, str(edge.rule)))
         move = MCMCTagSamplerMove()
-        move.edges_to_add.append(self.edge_set.get_id(edge))
-#         move.join(propose_retagging_word(edge.source, edge.rule.tag[0]))
-#         move.join(propose_retagging_word(edge.target, edge.rule.tag[1]))
+        move.edges_to_add.add(self.edge_set.get_id(edge))
+        move.join(self.propose_retagging_node(edge.source, edge.rule.tag_subst[0]))
+        move.join(self.propose_retagging_node(edge.target, edge.rule.tag_subst[1]))
         return move
+
+    def save_edge_stats(self, filename):
+        stats, stat_names = [], []
+        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+            if isinstance(stat, EdgeStatistic):
+                stat_names.append(stat_name)
+                stats.append(stat)
+        with open_to_write(filename) as fp:
+            write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
+            for idx, edge in enumerate(self.edge_set):
+                write_line(fp, 
+                           (str(edge.source), str(edge.target), 
+                            str(edge.rule)) + tuple([stat.val[idx]\
+                                                     for stat in stats]))
 
 # 
 #     def propose_flip(self, edge :GraphEdge) \
