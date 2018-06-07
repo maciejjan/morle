@@ -650,9 +650,11 @@ class MCMCTagSampler:
         for e_id in move.edges_to_remove:
             cost -= self.edge_cost_cache[e_id]
         for (r_id, t_id) in move.roots_to_add:
-            cost += self.root_cost_cache[r_id,t_id]
+#             cost += self.root_cost_cache[r_id,t_id]
+            cost += np.min(self.root_cost_cache[r_id,:])
         for (r_id, t_id) in move.roots_to_remove:
-            cost -= self.root_cost_cache[r_id,t_id]
+#             cost -= self.root_cost_cache[r_id,t_id]
+            cost -= np.min(self.root_cost_cache[r_id,:])
         return cost
 
     def accept_move(self, move :MCMCTagSamplerMove) -> None:
