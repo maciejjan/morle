@@ -14,7 +14,7 @@ from operator import itemgetter
 import random
 import sys
 import tqdm
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 
 class ImpossibleMoveException(Exception):
@@ -548,7 +548,8 @@ class MCMCTagSampler:
                        tagset :List[Tuple[str]],
                        warmup_iter :int = 1000,
                        sampling_iter :int = 100000,
-                       iter_stat_interval :int = 1) -> None:
+                       iter_stat_interval :int = 1,
+                       temperature_fun :Callable = None) -> None:
         self.full_graph = full_graph
         self.lexicon = full_graph.lexicon
         self.edge_set = full_graph.edge_set
@@ -556,6 +557,7 @@ class MCMCTagSampler:
         self.warmup_iter = warmup_iter
         self.sampling_iter = sampling_iter
         self.iter_stat_interval = iter_stat_interval
+        self.temperature_fun = temperature_fun
         self.stats = {}               # type: Dict[str, MCMCStatistic]
         self.branching = self.full_graph.empty_branching()
         # fields related to the tags
@@ -624,7 +626,10 @@ class MCMCTagSampler:
                    if random.random() < 0.1 \
                    else self.choose_and_change_an_edge()
             cost = self.move_cost(move)
-            acc_prob = 1.0 if cost < 0 else math.exp(-cost)
+            temperature = self.temperature_fun(self.iter_num) \
+                          if self.temperature_fun is not None \
+                          else 1.0
+            acc_prob = 1.0 if cost < 0 else math.exp(-cost/temperature)
             if move and random.random() < acc_prob:
                 self.accept_move(move)
 
@@ -692,7 +697,7 @@ class MCMCTagSampler:
             raise ImpossibleMoveException()
 #             return self.propose_flip(edge)
         elif self.branching.parent(edge.target) is not None:
-            raise ImpossibleMoveException()
+            return self.propose_swapping_parent(edge)
 #             return self.propose_swapping_parent(edge)
         else:
             return self.propose_adding_edge(edge)
@@ -778,6 +783,13 @@ class MCMCTagSampler:
         move.join(self.propose_retagging_node(edge.target, edge.rule.tag_subst[1]))
         return move
 
+    def propose_swapping_parent(self, edge :GraphEdge) -> MCMCTagSamplerMove:
+        move = MCMCTagSamplerMove()
+        for ingoing_edge in self.branching.ingoing_edges(edge.target):
+            move.join(self.propose_deleting_edge(ingoing_edge))
+        move.join(self.propose_adding_edge(edge))
+        return move
+
     def save_edge_stats(self, filename):
         stats, stat_names = [], []
         for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
@@ -791,6 +803,21 @@ class MCMCTagSampler:
                            (str(edge.source), str(edge.target), 
                             str(edge.rule), str(self.edge_cost_cache[idx])) +\
                             tuple([stat.val[idx] for stat in stats]))
+
+    def print_scalar_stats(self):
+        stats, stat_names = [], []
+        print()
+        print()
+        print('SIMULATION STATISTICS')
+        print()
+        spacing = max([len(stat_name)\
+                       for stat_name, stat in self.stats.items() 
+                           if isinstance(stat, ScalarStatistic)]) + 2
+        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+            if isinstance(stat, ScalarStatistic):
+                print((' ' * (spacing-len(stat_name)))+stat_name, ':', stat.value())
+        print()
+        print()
 
 # 
 #     def propose_flip(self, edge :GraphEdge) \

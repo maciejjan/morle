@@ -11,6 +11,7 @@ import shared
 
 import hfst
 import logging
+import math
 import re
 import subprocess
 from typing import List
@@ -94,13 +95,19 @@ def run() -> None:
     sampler = \
         algorithms.mcmc.samplers.MCMCTagSampler(\
             full_graph, model, tagset,
-            warmup_iter=100000, sampling_iter=100000)
+            warmup_iter=100000, sampling_iter=10000000)
+#             temperature_fun = lambda x: max(1.0, 10/math.log(x/10000+2.7)))
     sampler.add_stat('edge_freq', stats.EdgeFrequencyStatistic(sampler))
+    sampler.add_stat('acc_rate', stats.AcceptanceRateStatistic(sampler))
     sampler.run_sampling()
 
     with open_to_write('tags.txt') as outfp:
         for w_id in range(len(lexicon)):
             for t_id in range(len(tagset)):    
-                write_line(outfp, (lexicon[w_id], ''.join(tagset[t_id]), sampler.tag_freq[w_id,t_id]))
+                write_line(outfp, (lexicon[w_id],
+                                   ''.join(tagset[t_id]),
+                                   sampler.tag_freq[w_id,t_id],
+                                   sampler.root_cost_cache[w_id,t_id]))
     sampler.save_edge_stats(shared.filenames['sample-edge-stats'])
+    sampler.print_scalar_stats()
 
