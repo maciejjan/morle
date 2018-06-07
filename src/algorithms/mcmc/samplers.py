@@ -790,6 +790,9 @@ class MCMCTagSampler:
         move.join(self.propose_adding_edge(edge))
         return move
 
+    def propose_flip(self, edge :GraphEdge) -> MCMCTagSamplerMove:
+        raise NotImplementedError()
+
     def save_edge_stats(self, filename):
         stats, stat_names = [], []
         for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
