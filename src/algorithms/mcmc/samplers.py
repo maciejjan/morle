@@ -7,6 +7,7 @@ from models.suite import ModelSuite
 from utils.files import open_to_write, write_line
 import shared
 
+from collections import defaultdict
 import logging
 import math
 import numpy as np
@@ -148,10 +149,10 @@ class MCMCGraphSampler:
         if not self.full_graph.has_edge(node_3, node_1):
             raise ImpossibleMoveException()
 
-        edge_3_1 = random.choice(self.full_graph.find_edges(node_3, node_1))
-        edge_3_2 = self.branching.find_edges(node_3, node_2)[0] \
+        edge_3_1 = random.choice(self.full_graph.edges_between(node_3, node_1))
+        edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
                    if self.branching.has_edge(node_3, node_2) else None
-        edge_4_1 = self.branching.find_edges(node_4, node_1)[0] \
+        edge_4_1 = self.branching.edges_between(node_4, node_1)[0] \
                    if self.branching.has_edge(node_4, node_1) else None
 
         if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
@@ -159,8 +160,8 @@ class MCMCGraphSampler:
             edges_to_remove.append(edge_4_1)
         else: raise Exception('!')
         edges_to_add.append(edge_3_1)
-        prop_prob_ratio = (1/len(self.full_graph.find_edges(node_3, node_1))) /\
-                          (1/len(self.full_graph.find_edges(node_3, node_2)))
+        prop_prob_ratio = (1/len(self.full_graph.edges_between(node_3, node_1))) /\
+                          (1/len(self.full_graph.edges_between(node_3, node_2)))
 
         return edges_to_add, edges_to_remove, prop_prob_ratio
 
@@ -172,19 +173,19 @@ class MCMCGraphSampler:
         if not self.full_graph.has_edge(node_3, node_5):
             raise ImpossibleMoveException()
 
-        edge_2_5 = self.branching.find_edges(node_2, node_5)[0] \
+        edge_2_5 = self.branching.edges_between(node_2, node_5)[0] \
                    if self.branching.has_edge(node_2, node_5) else None
-        edge_3_2 = self.branching.find_edges(node_3, node_2)[0] \
+        edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
                    if self.branching.has_edge(node_3, node_2) else None
-        edge_3_5 = random.choice(self.full_graph.find_edges(node_3, node_5))
+        edge_3_5 = random.choice(self.full_graph.edges_between(node_3, node_5))
 
         if edge_2_5 is not None:
             edges_to_remove.append(edge_2_5)
         elif node_2 != node_5: raise Exception('!')     # TODO ???
         if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
         edges_to_add.append(edge_3_5)
-        prop_prob_ratio = (1/len(self.full_graph.find_edges(node_3, node_5))) /\
-                          (1/len(self.full_graph.find_edges(node_3, node_2)))
+        prop_prob_ratio = (1/len(self.full_graph.edges_between(node_3, node_5))) /\
+                          (1/len(self.full_graph.edges_between(node_3, node_2)))
 
         return edges_to_add, edges_to_remove, prop_prob_ratio
 
@@ -204,7 +205,7 @@ class MCMCGraphSampler:
 
     def propose_swapping_parent(self, edge :GraphEdge) \
                              -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        edges_to_remove = self.branching.find_edges(
+        edges_to_remove = self.branching.edges_between(
                               self.branching.parent(edge.target),
                               edge.target)
         return [edge], edges_to_remove, 1
@@ -594,12 +595,22 @@ class MCMCTagSampler:
         print('Impossible moves: {} ({:.2} %)'\
                   .format(self.impossible_moves,
                           self.impossible_moves / self.sampling_iter * 100))
+        print()
+        print('accepted moves balance:')
+        for key in sorted(self.accepted_moves):
+            print(key, self.accepted_moves[key])
+        print()
+        print('rejected moves balance:')
+        for key in sorted(self.rejected_moves):
+            print(key, self.rejected_moves[key])
         self.finalize()
 
     def reset(self):
         '''Reset all statistics.'''
         self.iter_num = 0
         self.impossible_moves = 0
+        self.accepted_moves = defaultdict(lambda: 0)
+        self.rejected_moves = defaultdict(lambda: 0)
         self.tag_freq = np.zeros((len(self.lexicon), len(self.tagset)))
         self.last_modified = np.zeros(len(self.lexicon))
         for stat in self.stats.values():
@@ -623,15 +634,19 @@ class MCMCTagSampler:
 
         try:
             move = self.choose_and_change_a_node() \
-                   if random.random() < 0.1 \
+                   if random.random() < 1.0 \
                    else self.choose_and_change_an_edge()
             cost = self.move_cost(move)
             temperature = self.temperature_fun(self.iter_num) \
                           if self.temperature_fun is not None \
                           else 1.0
             acc_prob = 1.0 if cost < 0 else math.exp(-cost/temperature)
+            balance = len(move.edges_to_add) - len(move.edges_to_remove)
             if move and random.random() < acc_prob:
                 self.accept_move(move)
+                self.accepted_moves[balance] += 1
+            else:
+                self.rejected_moves[balance] += 1
 
         except ImpossibleMoveException:
             self.impossible_moves += 1
@@ -650,11 +665,11 @@ class MCMCTagSampler:
         for e_id in move.edges_to_remove:
             cost -= self.edge_cost_cache[e_id]
         for (r_id, t_id) in move.roots_to_add:
-#             cost += self.root_cost_cache[r_id,t_id]
-            cost += np.min(self.root_cost_cache[r_id,:])
+            cost += self.root_cost_cache[r_id,t_id]
+#             cost += np.min(self.root_cost_cache[r_id,:])
         for (r_id, t_id) in move.roots_to_remove:
-#             cost -= self.root_cost_cache[r_id,t_id]
-            cost -= np.min(self.root_cost_cache[r_id,:])
+            cost -= self.root_cost_cache[r_id,t_id]
+#             cost -= np.min(self.root_cost_cache[r_id,:])
         return cost
 
     def accept_move(self, move :MCMCTagSamplerMove) -> None:

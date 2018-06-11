@@ -3,6 +3,7 @@ from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import EdgeSet, GraphEdge
 from datastruct.rules import Rule, RuleSet
 from models.root import RootModelFactory
+from models.tag import TagModelFactory
 from models.edge import EdgeModelFactory
 from models.feature import RootFeatureModelFactory, EdgeFeatureModelFactory
 from utils.files import file_exists
@@ -25,6 +26,9 @@ class ModelSuite:
             self.edge_model = EdgeModelFactory.create(
                                   shared.config['Models'].get('edge_model'),
                                   self.rule_set)
+            self.root_tag_model = \
+                TagModelFactory.create(
+                    shared.config['Models'].get('root_tag_model'))
             self.root_feature_model = \
                 RootFeatureModelFactory.create(
                     shared.config['Models'].get('root_feature_model'),
@@ -38,6 +42,8 @@ class ModelSuite:
 
     def root_cost(self, entry :LexiconEntry) -> float:
         result = self.root_model.root_cost(entry)
+        if self.root_tag_model is not None:
+            result += self.root_tag_model.root_cost(entry)
         if self.root_feature_model is not None:
             result += self.feature_weight * \
                       self.root_feature_model.root_cost(entry)
@@ -45,6 +51,8 @@ class ModelSuite:
 
     def roots_cost(self, entries :Union[LexiconEntry, Iterable[LexiconEntry]]) -> np.ndarray:
         result = self.root_model.root_costs(entries)
+        if self.root_tag_model is not None:
+            result += self.root_tag_model.root_costs(entries)
         if self.root_feature_model is not None:
             result += self.feature_weight * \
                       self.root_feature_model.root_costs(entries)
@@ -95,6 +103,8 @@ class ModelSuite:
     def save(self) -> None:
         self.root_model.save(shared.filenames['root-model'])
         self.edge_model.save(shared.filenames['edge-model'])
+        if self.root_tag_model is not None:
+            self.root_tag_model.save(shared.filenames['root-tag-model'])
         if self.root_feature_model is not None:
             self.root_feature_model.save(shared.filenames['root-feature-model'])
         if self.edge_feature_model is not None:
@@ -104,6 +114,8 @@ class ModelSuite:
     def is_loadable() -> bool:
         return file_exists(shared.filenames['root-model']) and \
                file_exists(shared.filenames['edge-model']) and \
+               (shared.config['Models'].get('root_tag_model') == 'none' or \
+                file_exists(shared.filenames['root-tag-model'])) and \
                (shared.config['Models'].get('root_feature_model') == 'none' or \
                 file_exists(shared.filenames['root-feature-model'])) and \
                (shared.config['Models'].get('edge_feature_model') == 'none' or \
@@ -121,6 +133,10 @@ class ModelSuite:
                                 shared.config['Models'].get('edge_model'),
                                 shared.filenames['edge-model'],
                                 rule_set)
+        result.root_tag_model = \
+            TagModelFactory.load(
+                shared.config['Models'].get('root_tag_model'),
+                shared.filenames['root-tag-model'])
         result.root_feature_model = \
             RootFeatureModelFactory.load(
                 shared.config['Models'].get('root_feature_model'),

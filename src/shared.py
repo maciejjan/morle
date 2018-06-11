@@ -56,6 +56,7 @@ filenames = {\
     'wordlist.left' : 'wordlist-left.training',
     'wordlist.right' : 'wordlist-right.training',
     'root-model' : 'root.model',
+    'root-tag-model' : 'root-tag.model',
     'edge-model' : 'edge.model',
     'root-feature-model' : 'root-feature.model.npz',
     'edge-feature-model' : 'edge-feature.model.npz'
