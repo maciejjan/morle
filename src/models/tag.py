@@ -53,7 +53,7 @@ class RNNTagModel(TagModel):
         for i in range(y.shape[0]):
             probs[i] = y_pred[i,y[i]]
 #         return np.log(probs+1e-300)     # avoid zeros -- TODO a more elegant solution
-        return np.log(probs)
+        return -np.log(probs)
 
     def save(self, filename :str) -> None:
         file_full_path = os.path.join(shared.options['working_dir'], filename)
