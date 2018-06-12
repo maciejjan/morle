@@ -21,8 +21,8 @@ def tokenize_word(string :str) -> Tuple[List[str], List[str], str]:
     m = re.match(pat_word, string)
     if m is None:
         raise Exception('Error while tokenizing word: %s' % string)
-    return list(re.findall(pat_symbol, m.group('word'))),\
-           list(re.findall(pat_tag, m.group('tag'))),\
+    return tuple(re.findall(pat_symbol, m.group('word'))),\
+           tuple(re.findall(pat_tag, m.group('tag'))),\
            m.group('disamb')
 
 
@@ -33,16 +33,16 @@ def normalize_seq(seq :List[str]) -> List[str]:
 
     def _normalize_symbol(c :str) -> Iterable[str]:
         if _is_uppercase_letter(c):
-            return ['{CAP}', c.lower()]
+            return ('{CAP}', c.lower())
         elif c in shared.normalization_substitutions:
-            return [shared.normalization_substitutions[c]]
+            return (shared.normalization_substitutions[c],)
         else:
-            return [c]
+            return (c,)
 
     if all(_is_uppercase_letter(c) for c in seq):
-        return ['{ALLCAPS}'] + [c.lower() for c in seq]
+        return ('{ALLCAPS}',) + tuple(c.lower() for c in seq)
     else:
-        return list(itertools.chain.from_iterable(
+        return tuple(itertools.chain.from_iterable(
                         _normalize_symbol(c) for c in seq))
 
 
@@ -141,6 +141,7 @@ class Lexicon:
         self.items_by_symstr = {} # type: Dict[str, List[LexiconEntry]]
         self.next_id = 0
         self.alphabet = set()
+        self.tagset = set()
         self.max_word_length = 0
         if shared.config['Models'].get('root_feature_model') != 'none':
             dim = shared.config['Features'].getint('word_vec_dim')
@@ -182,6 +183,9 @@ class Lexicon:
     def get_alphabet(self) -> List[str]:
         return sorted(list(self.alphabet))
 
+    def get_tagset(self) -> List[Iterable[str]]:
+        return sorted(list(self.tagset))
+
     def get_max_word_length(self) -> int:
         return self.max_word_length
 
@@ -204,6 +208,7 @@ class Lexicon:
             self.items_by_symstr[item.symstr].append(item)
             self.next_id += 1
             self.alphabet |= set(item.word + item.tag)
+            self.tagset.add(item.tag)
             self.max_word_length = max(self.max_word_length,
                                        len(item.word) + len(item.tag))
 #         if shared.config['Models'].get('root_feature_model') != 'none':
