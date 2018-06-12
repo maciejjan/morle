@@ -29,7 +29,7 @@ def read_tsv_file(filename :str,
                 else lambda row: row
 
     with open(full_path(filename), 'r', encoding=encoding, newline='') as fp:
-        reader = csv.reader(fp, delimiter='\t')
+        reader = csv.reader(fp, delimiter='\t', quoting=csv.QUOTE_NONE)
         for row in reader:
             yield converter(row)
             if show_progressbar:
