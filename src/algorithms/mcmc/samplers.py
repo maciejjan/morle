@@ -643,7 +643,7 @@ class MCMCTagSampler:
 
         try:
             move = self.choose_and_change_a_node() \
-                   if random.random() < 0.5 \
+                   if random.random() < 1.0 \
                    else self.choose_and_change_an_edge()
             cost = self.move_cost(move)
             temperature = self.temperature_fun(self.iter_num) \
@@ -682,6 +682,8 @@ class MCMCTagSampler:
         return cost
 
     def accept_move(self, move :MCMCTagSamplerMove) -> None:
+        # TODO stat.move_accepted()
+        #      (bug: acceptance rate = 0 while sampling without edges)
         for w_id, tag_id in move.nodes_to_retag.items():
             last_tag_one_hot = np.zeros(len(self.tagset))
             last_tag_one_hot[self.current_tag[w_id]] = 1
