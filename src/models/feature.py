@@ -145,7 +145,7 @@ class RootFeatureModelFactory(ModelFactory):
             result['alphabet'] = lexicon.get_alphabet()
             logging.getLogger('main').debug(\
                 'Detected alphabet: {}'.format(', '.join(result['alphabet'])))
-            result['maxlen'] = lexicon.get_max_word_length()
+            result['maxlen'] = lexicon.get_max_symstr_length()
             logging.getLogger('main').debug(\
                 'Detected max. word length: {}'.format(result['maxlen']))
         else:

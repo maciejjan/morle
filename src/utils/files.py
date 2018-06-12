@@ -66,6 +66,13 @@ def read_tsv_file_by_key(filename :str,
         yield current_key, entries
 
 
+# TODO change to one function!!!
+
+def open_to_read(filename :str, mode :str = 'r') -> TextIO:
+    encoding = shared.config['General'].get('encoding')
+    return open(full_path(filename), mode, encoding=encoding)
+
+
 def open_to_write(filename :str, mode :str = 'w+') -> TextIO:
     encoding = shared.config['General'].get('encoding')
     return open(full_path(filename), mode, encoding=encoding)

@@ -94,6 +94,8 @@ class ModelSuite:
     def fit(self, lexicon :Lexicon, edge_set :EdgeSet, 
             root_weights :np.ndarray, edge_weights :np.ndarray) -> None:
         self.edge_model.fit(edge_set, edge_weights)
+        if self.root_tag_model is not None:
+            self.root_tag_model.fit(lexicon, root_weights)
         if self.root_feature_model is not None:
             self.root_feature_model.fit(lexicon, root_weights)
         if self.edge_feature_model is not None:

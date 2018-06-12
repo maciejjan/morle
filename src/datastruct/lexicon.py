@@ -143,6 +143,7 @@ class Lexicon:
         self.alphabet = set()
         self.tagset = set()
         self.max_word_length = 0
+        self.max_symstr_length = 0
         if shared.config['Models'].get('root_feature_model') != 'none':
             dim = shared.config['Features'].getint('word_vec_dim')
 #             self.feature_matrix = np.ndarray((0, dim))
@@ -189,6 +190,9 @@ class Lexicon:
     def get_max_word_length(self) -> int:
         return self.max_word_length
 
+    def get_max_symstr_length(self) -> int:
+        return self.max_symstr_length
+
     def symstrs(self) -> Iterable[str]:
         return self.items_by_symstr.keys()
 
@@ -209,7 +213,8 @@ class Lexicon:
             self.next_id += 1
             self.alphabet |= set(item.word + item.tag)
             self.tagset.add(item.tag)
-            self.max_word_length = max(self.max_word_length,
+            self.max_word_length = max(self.max_word_length, len(item.word))
+            self.max_symstr_length = max(self.max_symstr_length,
                                        len(item.word) + len(item.tag))
 #         if shared.config['Models'].get('root_feature_model') != 'none':
 #             self.feature_matrix = \
