@@ -12,6 +12,7 @@ import shared
 import hfst
 import logging
 import math
+import os.path
 import re
 import subprocess
 from typing import List
@@ -43,7 +44,8 @@ def compute_possible_edges(lexicon :Lexicon, rule_set :RuleSet) -> EdgeSet:
     tr.minimize()
     algorithms.fst.save_transducer(tr, 'tr.fsm')
     
-    cmd = ['hfst-fst2strings', 'tr.fsm']
+    tr_path = os.path.join(shared.options['working_dir'], 'tr.fsm')
+    cmd = ['hfst-fst2strings', tr_path]
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE,
                          stderr=subprocess.DEVNULL, 

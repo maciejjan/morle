@@ -643,7 +643,7 @@ class MCMCTagSampler:
 
         try:
             move = self.choose_and_change_a_node() \
-                   if random.random() < 1.0 \
+                   if random.random() < 0.5 \
                    else self.choose_and_change_an_edge()
             cost = self.move_cost(move)
             temperature = self.temperature_fun(self.iter_num) \
