@@ -97,7 +97,10 @@ def run() -> None:
     sampler = \
         algorithms.mcmc.samplers.MCMCTagSampler(\
             full_graph, model, tagset,
-            warmup_iter=1000000, sampling_iter=20000000)
+            warmup_iter=shared.config['sample-tags']\
+                              .getint('warmup_iterations'),
+            sampling_iter=shared.config['sample-tags']\
+                                .getint('sampling_iterations'))
 #             temperature_fun = lambda x: max(1.0, 10/math.log(x/10000+2.7)))
     sampler.add_stat('edge_freq', stats.EdgeFrequencyStatistic(sampler))
     sampler.add_stat('acc_rate', stats.AcceptanceRateStatistic(sampler))
