@@ -108,11 +108,9 @@ def run() -> None:
 
     with open_to_write('tags.txt') as outfp:
         for w_id in range(len(lexicon)):
-            for t_id in range(len(tagset)):    
-                write_line(outfp, (lexicon[w_id],
-                                   ''.join(tagset[t_id]),
-                                   sampler.tag_freq[w_id,t_id],
-                                   sampler.root_cost_cache[w_id,t_id]))
+            tag_str = ' '.join([''.join(tag)+':'+str(sampler.tag_freq[w_id,t_id]) \
+                               for t_id, tag in enumerate(tagset)])
+            write_line(outfp, (lexicon[w_id], tag_str))
     sampler.save_edge_stats(shared.filenames['sample-edge-stats'])
     sampler.print_scalar_stats()
 
