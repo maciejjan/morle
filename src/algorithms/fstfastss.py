@@ -4,6 +4,7 @@ import shared
 
 import hfst
 from operator import itemgetter
+import os
 import subprocess
 import sys
 
@@ -104,8 +105,8 @@ def build_fastss_cascade(lexicon_tr_file, max_word_len=20):
     p.wait()
     
     # cleanup
-    remove_file(delenv_file)
-    remove_file(delfilter_file)
+    os.remove(delenv_file)
+    os.remove(delfilter_file)
 
 def similar_words_with_lookup(words, transducer_path):
     cmd = ['hfst-lookup', '-i', full_path(transducer_path),  
