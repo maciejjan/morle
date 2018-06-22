@@ -1,10 +1,9 @@
-from algorithms.fst import load_cascade
-from utils.files import full_path, remove_file
+import algorithms.fst
+from utils.files import full_path, open_to_write, remove_file
 import shared
 
 import hfst
 from operator import itemgetter
-import os
 import subprocess
 import sys
 
@@ -30,7 +29,7 @@ def write_delenv_transducer(filename, max_affix_size, max_infix_size,\
               sep='\t', file=outfp)
         return state+1
 
-    with open(filename, 'w+') as outfp:
+    with open_to_write(filename) as outfp:
         # prefix
         state = add_deletion_chain(outfp, 0, max_affix_size)
         state = add_identity_loop(outfp, state)
@@ -44,7 +43,7 @@ def write_delenv_transducer(filename, max_affix_size, max_infix_size,\
         print(state, file=outfp)
 
 def write_delfilter_transducer(filename, length):
-    with open(filename, 'w+') as outfp:
+    with open_to_write(filename) as outfp:
         print(0, 0, '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@', sep='\t',
               file=outfp)
         for i in range(length):
@@ -73,21 +72,36 @@ def write_delfilter_transducer(filename, length):
                   '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@', sep='\t',
                   file=outfp)
 
-def build_fastss_cascade(lexicon_tr_file, max_word_len=20):
-    delenv_file = full_path('delenv.att')
+def write_tag_absorber(filename, alphabet):
+    with open_to_write(filename) as outfp:
+        for c in alphabet:
+            if shared.compiled_patterns['symbol'].match(c):
+                print(0, 0, c, c, 0.0, sep='\t', file=outfp)
+            elif shared.compiled_patterns['tag'].match(c):
+                print(0, 1, c, hfst.EPSILON, 0.0, sep='\t', file=outfp)
+                print(1, 1, c, hfst.EPSILON, 0.0, sep='\t', file=outfp)
+        print(0, file=outfp)
+        print(1, file=outfp)
+
+def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20):
+    delenv_file = 'delenv.att'
+    delfilter_file = 'delfilter.att'
+    tag_absorber_file = 'tag_absorber.att'
+
     write_delenv_transducer(
         delenv_file,
         shared.config['preprocess'].getint('max_affix_length'),
         shared.config['preprocess'].getint('max_infix_length'),
         shared.config['preprocess'].getint('max_infix_slots'))
-    delfilter_file = full_path('delfilter.att')
     write_delfilter_transducer(delfilter_file, max_word_len)
+    write_tag_absorber(tag_absorber_file, alphabet)
 
     cmd = ['hfst-xfst', '-f', 'sfst']
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                          stderr=None, universal_newlines=True)
-    p.stdin.write('read att {}\n'.format(delfilter_file))
-    p.stdin.write('read att {}\n'.format(delenv_file))
+    p.stdin.write('read att {}\n'.format(full_path(delfilter_file)))
+    p.stdin.write('read att {}\n'.format(full_path(delenv_file)))
+    p.stdin.write('read att {}\n'.format(full_path(tag_absorber_file)))
     p.stdin.write('compose\n')
     p.stdin.write('minimize\n')
     p.stdin.write('define T\n')
@@ -105,8 +119,9 @@ def build_fastss_cascade(lexicon_tr_file, max_word_len=20):
     p.wait()
     
     # cleanup
-    os.remove(delenv_file)
-    os.remove(delfilter_file)
+    remove_file(delenv_file)
+    remove_file(delfilter_file)
+    remove_file(tag_absorber_file)
 
 def similar_words_with_lookup(words, transducer_path):
     cmd = ['hfst-lookup', '-i', full_path(transducer_path),  
@@ -198,10 +213,13 @@ def similar_words_with_block_composition(words, transducer_path):
             results_dict[word_1].append(word_2)
         return results_dict
 
-    delenv, right_tr = load_cascade(transducer_path)
+    delenv, right_tr = algorithms.fst.load_cascade(transducer_path)
     tok = hfst.HfstTokenizer()
     for sym in shared.multichar_symbols:
         tok.add_multichar_symbol(sym)
+    for sym in delenv.get_alphabet():
+        if len(sym) > 1:
+            tok.add_multichar_symbol(sym)
     block_size = shared.config['preprocess'].getint('block_size')
     count = 0
     while count < len(words):

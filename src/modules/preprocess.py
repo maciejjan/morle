@@ -1,4 +1,5 @@
 import algorithms.align
+import algorithms.fst
 import algorithms.fstfastss
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import Rule
@@ -123,6 +124,7 @@ def build_graph_fstfastss(
     logging.getLogger('main').info('Building the FastSS cascade...')
     max_word_len = max([len(e.word) for e in lexicon])
     algorithms.fstfastss.build_fastss_cascade(lex_tr_file,
+                                              lexicon.alphabet,
                                               max_word_len=max_word_len)
 
     def _is_possible_edge(v1 :LexiconEntry, v2 :LexiconEntry) -> bool:
@@ -227,6 +229,8 @@ def run() -> None:
                                                 key=3, show_progressbar=False):
 #         rule_freq[rule_str] = len(edges)
         rules.append(Rule.from_string(rule_str))
+    lexicon_tr = lexicon.to_fst()
+    algorithms.fst.save_transducer(lexicon_tr, shared.filenames['lexicon-tr'])
     logging.getLogger('main').info('Computing rule domain sizes...')
     write_tsv_file(shared.filenames['rules'],
                    ((str(rule), domsize)\
