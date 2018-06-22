@@ -124,7 +124,7 @@ class Graph(nx.MultiDiGraph):
 
     def edges_between(self, source :LexiconEntry, target :LexiconEntry) \
                      -> Set[GraphEdge]:
-        return self.edges_by_source[source] & self.edges_by_target[target]
+        return list(self.edges_by_source[source] & self.edges_by_target[target])
 #         result = []
 #         if source in self and target in self[source]:
 #             for rule, attr in self[source][target].items():
