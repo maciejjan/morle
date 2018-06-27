@@ -836,3 +836,86 @@ class MCMCTagSampler:
         print()
         print()
 
+class MCMCImprovedTagSampler:
+
+    def __init__(self, full_graph :FullGraph,
+                       model :ModelSuite,
+                       tagset :List[Tuple[str]],
+                       warmup_iter :int = 1000,
+                       sampling_iter :int = 100000,
+                       iter_stat_interval :int = 1):
+        # TODO
+        self.lexicon = full_graph.lexicon
+        self.model = model
+        self.tagset = tagset
+        self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
+        self.root_prob = np.zeros((len(self.lexicon), len(self.tagset)))
+        logging.getLogger('main').info('Computing root probabilities...')
+        for w_id, entry in tqdm.tqdm(enumerate(self.lexicon),
+                                     total=len(self.lexicon)):
+            for t_id, tag in enumerate(tagset):
+                entry_with_tag = \
+                    LexiconEntry(''.join(entry.word) + ''.join(tag))
+                self.root_prob[w_id,t_id] = \
+                    np.exp(-self.model.root_cost(entry_with_tag))
+        logging.getLogger('main').info('Computing leaf probabilities...')
+        edge_prob = np.exp(-self.model.edges_cost(full_graph.edge_set))
+        self.leaf_prob = np.ones((len(self.lexicon), len(self.tagset)))
+        for e_id, edge in enumerate(full_graph.edge_set):
+            w_id = self.lexicon.get_id(edge.source)
+            t_id = self.tag_idx[edge.rule.tag_subst[0]]
+            self.leaf_prob[w_id, t_id] *= (1-edge_prob[e_id])
+        # - obliczyć leaf_prob
+        logging.getLogger('main').info('Computing transition matrices...')
+        # - obliczyć edge_tag_matrix
+#         untagged_edge_set, self.edge_tr_mat = \
+#             self.compute_untagged_edges_and_transition_mat(full_graph.edge_set)
+        self.write_debug_info()
+        # TODO obliczyć nowy FullGraph i wziąć go jako bazowy dla samplera
+        raise NotImplementedError()
+#         self.full_graph = full_graph
+#         self.lexicon = full_graph.lexicon
+#         self.edge_set = full_graph.edge_set
+#         self.model = model
+#         self.warmup_iter = warmup_iter
+#         self.sampling_iter = sampling_iter
+#         self.iter_stat_interval = iter_stat_interval
+#         self.temperature_fun = temperature_fun
+#         self.stats = {}               # type: Dict[str, MCMCStatistic]
+#         self.branching = self.full_graph.empty_branching()
+#         # fields related to the tags
+#         self.tagset = tagset
+#         self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
+#         self.current_tag = \
+#             np.random.randint(len(self.tagset), size=len(self.lexicon))
+#         self.root_cost_cache = np.empty((len(self.lexicon), len(self.tagset)))
+#         # TODO move to a separate method: cache_costs()
+#         print('Computing root costs...')
+#         for w_id, entry in tqdm.tqdm(enumerate(self.lexicon), total=len(self.lexicon)):
+#             for t_id, tag in enumerate(tagset):
+#                 self.root_cost_cache[w_id,t_id] = \
+#                     self.model.root_cost(LexiconEntry(''.join(entry.word) + \
+#                                                       ''.join(tag)))
+#         print('Computing edge costs...')
+#         self.edge_cost_cache = self.model.edges_cost(self.edge_set)
+#         self.reset()
+# 
+
+    def write_root_prob(self, filename):
+        with open_to_write(filename) as fp:
+            for w_id, entry in enumerate(self.lexicon):
+                tag_probs = [''.join(tag)+':'+str(self.root_prob[w_id,t_id]) \
+                             for t_id, tag in enumerate(self.tagset)]
+                write_line(fp, (str(entry), ' '.join(tag_probs)))
+
+    def write_leaf_prob(self, filename):
+        with open_to_write(filename) as fp:
+            for w_id, entry in enumerate(self.lexicon):
+                tag_probs = [''.join(tag)+':'+str(self.leaf_prob[w_id,t_id]) \
+                             for t_id, tag in enumerate(self.tagset)]
+                write_line(fp, (str(entry), ' '.join(tag_probs)))
+
+    def write_debug_info(self):
+        self.write_root_prob('sampler-root-prob.txt')
+        self.write_leaf_prob('sampler-leaf-prob.txt')
+#         self.write_edge_tr_mat('sampler-edge-tr-mat.txt')

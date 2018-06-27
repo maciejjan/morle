@@ -31,7 +31,7 @@ def run() -> None:
     model = ModelSuite.load()
     tagset = model.root_tag_model.tagset
     sampler = \
-        algorithms.mcmc.samplers.MCMCTagSampler(\
+        algorithms.mcmc.samplers.MCMCImprovedTagSampler(\
             full_graph, model, tagset,
             warmup_iter=shared.config['sample-tags']\
                               .getint('warmup_iterations'),
