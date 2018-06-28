@@ -1,3 +1,12 @@
+import algorithms.fst
+import algorithms.align
+from datastruct.graph import EdgeSet
+from datastruct.rules import Rule
+import hfst
+from utils.files import full_path
+import subprocess
+from scipy.sparse import csr_matrix
+
 from algorithms.mcmc.statistics import \
     MCMCStatistic, ScalarStatistic, IterationStatistic, EdgeStatistic, \
     RuleStatistic, UnorderedWordPairStatistic
@@ -849,6 +858,10 @@ class MCMCImprovedTagSampler:
         self.model = model
         self.tagset = tagset
         self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
+        self.warmup_iter = warmup_iter
+        self.sampling_iter = sampling_iter
+        self.iter_stat_interval = iter_stat_interval
+        self.stats = {}
         self.root_prob = np.zeros((len(self.lexicon), len(self.tagset)))
         logging.getLogger('main').info('Computing root probabilities...')
         for w_id, entry in tqdm.tqdm(enumerate(self.lexicon),
@@ -859,47 +872,285 @@ class MCMCImprovedTagSampler:
                 self.root_prob[w_id,t_id] = \
                     np.exp(-self.model.root_cost(entry_with_tag))
         logging.getLogger('main').info('Computing leaf probabilities...')
-        edge_prob = np.exp(-self.model.edges_cost(full_graph.edge_set))
-        self.leaf_prob = np.ones((len(self.lexicon), len(self.tagset)))
-        for e_id, edge in enumerate(full_graph.edge_set):
-            w_id = self.lexicon.get_id(edge.source)
-            t_id = self.tag_idx[edge.rule.tag_subst[0]]
-            self.leaf_prob[w_id, t_id] *= (1-edge_prob[e_id])
-        # - obliczyć leaf_prob
+        self.fast_compute_leaf_prob(self.lexicon, model.rule_set)
         logging.getLogger('main').info('Computing transition matrices...')
-        # - obliczyć edge_tag_matrix
-#         untagged_edge_set, self.edge_tr_mat = \
-#             self.compute_untagged_edges_and_transition_mat(full_graph.edge_set)
-        self.write_debug_info()
-        # TODO obliczyć nowy FullGraph i wziąć go jako bazowy dla samplera
-        raise NotImplementedError()
-#         self.full_graph = full_graph
-#         self.lexicon = full_graph.lexicon
-#         self.edge_set = full_graph.edge_set
-#         self.model = model
-#         self.warmup_iter = warmup_iter
-#         self.sampling_iter = sampling_iter
-#         self.iter_stat_interval = iter_stat_interval
-#         self.temperature_fun = temperature_fun
-#         self.stats = {}               # type: Dict[str, MCMCStatistic]
-#         self.branching = self.full_graph.empty_branching()
-#         # fields related to the tags
-#         self.tagset = tagset
-#         self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
-#         self.current_tag = \
-#             np.random.randint(len(self.tagset), size=len(self.lexicon))
-#         self.root_cost_cache = np.empty((len(self.lexicon), len(self.tagset)))
-#         # TODO move to a separate method: cache_costs()
-#         print('Computing root costs...')
-#         for w_id, entry in tqdm.tqdm(enumerate(self.lexicon), total=len(self.lexicon)):
-#             for t_id, tag in enumerate(tagset):
-#                 self.root_cost_cache[w_id,t_id] = \
-#                     self.model.root_cost(LexiconEntry(''.join(entry.word) + \
-#                                                       ''.join(tag)))
-#         print('Computing edge costs...')
-#         self.edge_cost_cache = self.model.edges_cost(self.edge_set)
-#         self.reset()
+        untagged_edge_set, self.edge_tr_mat = \
+            self.compute_untagged_edges_and_transition_mat(full_graph)
+        self.full_graph = FullGraph(self.lexicon, untagged_edge_set)
+        self.init_forward_prob()
+        self.init_backward_prob()
+#         self.write_debug_info()
+
+    def fast_compute_leaf_prob(self, lexicon, rule_set):
+        self.leaf_prob = np.ones((len(self.lexicon), len(self.tagset)))   # ;-)
+
+    def compute_leaf_prob(self, lexicon, rule_set):
+
+        self.leaf_prob = np.ones((len(self.lexicon), len(self.tagset)))
+        edge_set = EdgeSet(lexicon)
+
+        def _empty_edge_set(edge_set):
+            lexicon = edge_set.lexicon
+            n = len(edge_set)
+            probs = 1-self.model.edges_prob(edge_set)
+            for e_id, edge in enumerate(edge_set):
+                word = lexicon.get_by_symstr(''.join(edge.source.word))[0]
+                w_id = lexicon.get_id(word)
+                t_id = self.tag_idx[edge.source.tag]
+                self.leaf_prob[w_id,t_id] *= probs[e_id]
+            edge_set = EdgeSet(lexicon)
+            print(n)
+            return edge_set
+
+        lexicon_tr = lexicon.to_fst()
+        lexicon_tr.concatenate(algorithms.fst.generator(self.tagset))
+        rules_tr = rule_set.to_fst()
+        tr = hfst.HfstTransducer(lexicon_tr)
+        tr.compose(rules_tr)
+        tr.determinize()
+        tr.minimize()
+        algorithms.fst.save_transducer(tr, 'tr.fsm')
+        
+        tr_path = full_path('tr.fsm')
+        cmd = ['hfst-fst2strings', tr_path]
+        p = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, 
+                             universal_newlines=True, bufsize=1)
+        while True:
+            line = p.stdout.readline().strip()
+            if line:
+                w1, w2 = line.split(':')
+                n1 = LexiconEntry(w1)
+                n2 = LexiconEntry(w2)
+                rules = algorithms.align.extract_all_rules(n1, n2)
+                for rule in rules:
+                    if rule in rule_set:
+                        edge_set.add(GraphEdge(n1, n2, rule))
+            else:
+                break
+            if len(edge_set) > 300000:
+                edge_set = _empty_edge_set(edge_set)
+        edge_set = _empty_edge_set(edge_set)
+
+    def compute_untagged_edges_and_transition_mat(self, full_graph):
+
+        def _untag_edge(lexicon, edge):
+            source = lexicon.get_by_symstr(''.join(edge.source.word))[0]
+            target = lexicon.get_by_symstr(''.join(edge.target.word))[0]
+            rule = Rule(edge.rule.subst)
+            return GraphEdge(source, target, rule)
+
+        edge_prob = self.model.edges_prob(full_graph.edge_set)
+        edge_prob_ratios = edge_prob / (1-edge_prob)
+        untagged_edge_set = EdgeSet(full_graph.lexicon)
+        T = len(self.tagset)
+        edge_tr_mat = []
+        for e_id, edge in enumerate(full_graph.edge_set):
+            untagged_edge = _untag_edge(self.lexicon, edge)
+            if untagged_edge not in untagged_edge_set:
+                untagged_edge_set.add(untagged_edge)
+                edge_tr_mat.append(csr_matrix((T, T)))
+            ue_id = untagged_edge_set.get_id(untagged_edge)
+            t1_id = self.tag_idx[edge.rule.tag_subst[0]]
+            t2_id = self.tag_idx[edge.rule.tag_subst[1]]
+            edge_tr_mat[ue_id][t1_id, t2_id] = edge_prob_ratios[e_id]
+        return untagged_edge_set, edge_tr_mat
+
+    def init_forward_prob(self):
+        self.forward_prob = np.empty((len(self.lexicon), len(self.tagset)))
+        for w_id in range(len(self.lexicon)):
+            self.forward_prob[w_id,:] = self.root_prob[w_id,:]
+
+    def init_backward_prob(self):
+        self.backward_prob = np.empty((len(self.lexicon), len(self.tagset)))
+        for w_id in range(len(self.lexicon)):
+            self.backward_prob[w_id,:] = self.leaf_prob[w_id,:]
+
+    def reset(self):
+        self.iter_num = 0
+        self.tag_freq = np.zeros((len(self.lexicon), len(self.tagset)))
+        self.last_modified = np.zeros(len(self.lexicon))
+        for stat in self.stats.values():
+            stat.reset()
+
+
+
+
+    def run_sampling(self) -> None:
+        self.branching = self.full_graph.empty_branching()
+        self.reset()
+        logging.getLogger('main').info('Warming up the sampler...')
+        for i in tqdm.tqdm(range(self.warmup_iter)):
+            self.next()
+        self.reset()
+        logging.getLogger('main').info('Sampling...')
+        for i in tqdm.tqdm(range(self.sampling_iter)):
+            self.next()
+        self.finalize()
+
+    def next(self) -> None:
+        # increase the number of iterations
+        self.iter_num += 1
+
+        # select an edge randomly
+        edge = self.full_graph.random_edge()
+
+        # try the move determined by the selected edge
+        try:
+            edges_to_add, edges_to_remove, acc_prob =\
+                self.determine_move_proposal(edge)
+            for edge in edges_to_add:
+                print('Adding:', edge)
+            for edge in edges_to_remove:
+                print('Removing:', edge)
+            print('acc_prob =', acc_prob)
+            if acc_prob >= 1 or acc_prob >= random.random():
+                self.accept_move(edges_to_add, edges_to_remove)
+                print('accepted')
+            else:
+                print('rejected')
+        # if move impossible -- propose staying in the current graph
+        # (the acceptance probability for that is 1, so this move
+        # is automatically accepted and nothing needs to be done
+        except ImpossibleMoveException:
+            pass
+
+        # inform all the statistics that the iteration is completed
+        for stat in self.stats.values():
+            stat.next_iter()
+
+    # TODO fit to the new Branching class
+    # TODO a more reasonable return value?
+    def determine_move_proposal(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        if self.branching.has_edge(edge.source, edge.target, edge.rule):
+            return self.propose_deleting_edge(edge)
+        elif self.branching.has_path(edge.target, edge.source):
+#             return self.propose_flip(edge)
+            raise ImpossibleMoveException()
+        elif self.branching.parent(edge.target) is not None:
+            return self.propose_swapping_parent(edge)
+        else:
+            return self.propose_adding_edge(edge)
+
+    def propose_adding_edge(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        src_id = self.lexicon.get_id(edge.source)
+        tgt_id = self.lexicon.get_id(edge.target)
+        e_id = self.full_graph.edge_set.get_id(edge)
+        tr_mat = self.edge_tr_mat[e_id]
+        new_src_backward_prob = \
+            self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id])
+#         print(self.forward_prob[src_id])
+#         print(self.backward_prob[src_id])
+#         print(self.forward_prob[tgt_id])
+#         print(self.backward_prob[tgt_id])
+#         print(new_src_backward_prob)
+#         print()
+#         print(np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]))
+#         print(np.sum(self.forward_prob[tgt_id]*self.backward_prob[tgt_id]))
+#         print(np.sum(self.forward_prob[src_id]*new_src_backward_prob))
+        acc_prob = \
+            np.sum(self.forward_prob[src_id]*new_src_backward_prob) /\
+            (np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]) * \
+             np.sum(self.forward_prob[tgt_id]*self.backward_prob[tgt_id]))
+        return [edge], [], acc_prob
+
+    def propose_deleting_edge(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        src_id = self.lexicon.get_id(edge.source)
+        tgt_id = self.lexicon.get_id(edge.target)
+        e_id = self.full_graph.edge_set.get_id(edge)
+        tr_mat = self.edge_tr_mat[e_id]
+        # TODO do not divide!!! recompute instead
+        new_src_backward_prob = \
+            self.backward_prob[src_id] / tr_mat.dot(self.backward_prob[tgt_id])
+        acc_prob = \
+            np.sum(self.forward_prob[tgt_id]*self.backward_prob[tgt_id]) *
+            np.sum(self.forward_prob[src_id]*new_src_backward_prob) /\
+            np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]) / \
+        return [], [edge], acc_prob
+
+    def propose_swapping_parent(self, edge :GraphEdge) \
+                             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        edge_to_remove = self.branching.edges_between(
+                              self.branching.parent(edge.target),
+                              edge.target)[0]
+        src_id = self.lexicon.get_id(edge.source)
+        tgt_id = self.lexicon.get_id(edge.target)
+        e_id = self.full_graph.edge_set.get_id(edge)
+        e2_id = self.full_graph.edge_set.get_id(edge_to_remove)
+        tr_mat = self.edge_tr_mat[e_id]
+        tr_mat_2 = self.edge_tr_mat[e2_id]
+        # TODO do not divide!!! recompute instead
+        new_src_backward_prob = \
+            self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id]) /\
+            tr_mat_2.dot(self.backward_prob[tgt_id])
+#         print(self.forward_prob[src_id])
+#         print(self.backward_prob[src_id])
+#         print(self.forward_prob[tgt_id])
+#         print(self.backward_prob[tgt_id])
+#         print(new_src_backward_prob)
+#         print()
+#         print(np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]))
+#         print(np.sum(self.forward_prob[tgt_id]*self.backward_prob[tgt_id]))
+#         print(np.sum(self.forward_prob[src_id]*new_src_backward_prob))
+        acc_prob = \
+            np.sum(self.forward_prob[src_id]*new_src_backward_prob) /\
+            np.sum(self.forward_prob[src_id]*self.backward_prob[src_id])
+        return [edge], [edge_to_remove], acc_prob
+
+#     def compute_acc_prob(self, edges_to_add :List[GraphEdge], 
+#                          edges_to_remove :List[GraphEdge], 
+#                          prop_prob_ratio :float) -> float:
 # 
+#         pass
+# 
+#         for edge in edges_to_add:
+#             print('Adding:', edge)
+#         for edge in edges_to_remove:
+#             print('Removing:', edge)
+#         print('acc_prob =', acc_prob)
+#         return acc_prob
+
+    def recompute_forward_prob_for_node(self, node):
+        raise NotImplementedError()
+
+    def recompute_forward_prob_for_subtree(self, root):
+        raise NotImplementedError()
+
+    def recompute_backward_prob_for_node(self, node):
+        raise NotImplementedError()
+
+    def recompute_backward_prob_for_subtree(self, root):
+        raise NotImplementedError()
+
+    def update_tag_freq_for_node(self, node):
+        raise NotImplementedError()
+
+    def update_tag_freq_for_subtree(self, root):
+        raise NotImplementedError()
+
+    def accept_move(self, edges_to_add, edges_to_remove):
+        # remove edges and update stats
+        roots_changed = set()
+        for e in edges_to_remove:
+            self.branching.remove_edge(e)
+            roots_changed.add(self.branching.root(e.source))
+            roots_changed.add(e.target)
+            for stat in self.stats.values():
+                stat.edge_removed(e)
+        # add edges and update stats
+        for e in edges_to_add:
+            self.branching.add_edge(e)
+            roots_changed.add(self.branching.root(e.source))
+            for stat in self.stats.values():
+                stat.edge_added(e)
+        for root in roots_changed:
+            self.recompute_backward_prob_for_subtree(root)
+            self.recompute_forward_prob_for_subtree(root)
+            self.update_tag_freq_for_subtree(root)
 
     def write_root_prob(self, filename):
         with open_to_write(filename) as fp:
@@ -915,7 +1166,20 @@ class MCMCImprovedTagSampler:
                              for t_id, tag in enumerate(self.tagset)]
                 write_line(fp, (str(entry), ' '.join(tag_probs)))
 
+    def write_edge_tr_mat(self, filename):
+        with open_to_write(filename) as fp:
+            for e_id, edge in enumerate(self.full_graph.edge_set):
+                tag_probs = []
+                edge_tr_mat = self.edge_tr_mat[e_id].toarray()
+                for t1_id, tag_1 in enumerate(self.tagset):
+                    for t2_id, tag_2 in enumerate(self.tagset):
+                        prob = edge_tr_mat[t1_id,t2_id]
+                        if prob > 0:
+                            tag_probs.append((''.join(tag_1), ''.join(tag_2), str(prob)))
+                write_line(fp, (str(edge), ' '.join([t1+':'+t2+':'+prob \
+                                                     for t1, t2, prob in tag_probs])))
+
     def write_debug_info(self):
         self.write_root_prob('sampler-root-prob.txt')
-        self.write_leaf_prob('sampler-leaf-prob.txt')
-#         self.write_edge_tr_mat('sampler-edge-tr-mat.txt')
+#         self.write_leaf_prob('sampler-leaf-prob.txt')
+        self.write_edge_tr_mat('sampler-edge-tr-mat.txt')

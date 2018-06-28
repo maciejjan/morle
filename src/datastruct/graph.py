@@ -166,10 +166,8 @@ class Branching(Graph):
         return predecessors[0] if predecessors else None
 
     def root(self, node :LexiconEntry) -> LexiconEntry:
-        if self.parent(node) is None:
-            return None
-        root = self.parent(node)
-        while root.parent() is not None:
+        root = node
+        while self.parent(root) is not None:
             root = self.parent(root)
         return root
 

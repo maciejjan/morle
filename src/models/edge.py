@@ -57,6 +57,12 @@ class SimpleEdgeModel(EdgeModel):
         self.alpha = alpha
         self.beta = beta
 
+    def edges_prob(self, edges :EdgeSet) -> np.ndarray:
+        result = np.zeros(len(edges))
+        for rule, edge_ids in edges.get_edge_ids_by_rule().items():
+            result[edge_ids] = self.rule_prob[self.rule_set.get_id(rule)]
+        return result
+
     def edge_cost(self, edge :GraphEdge) -> float:
         return self._rule_appl_cost[self.rule_set.get_id(edge.rule)]
 
@@ -168,9 +174,15 @@ class NeuralEdgeModel(EdgeModel):
         self.ngram_extractor = ngram_extractor
         self._compile_network()
 
-    def edges_cost(self, edges :EdgeSet) -> np.ndarray:
+    def edges_prob(self, edges :EdgeSet) -> np.ndarray:
         X_attr, X_rule = self._prepare_data(edges)
         probs = self.nn.predict([X_attr, X_rule]).reshape((len(edges),))
+        return probs
+
+    def edges_cost(self, edges :EdgeSet) -> np.ndarray:
+#         X_attr, X_rule = self._prepare_data(edges)
+#         probs = self.nn.predict([X_attr, X_rule]).reshape((len(edges),))
+        probs = self.edges_prob(edges)
         return np.log(probs / (1-probs))
 
     def null_cost(self) -> float:
