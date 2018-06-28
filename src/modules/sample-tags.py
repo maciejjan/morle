@@ -38,8 +38,8 @@ def run() -> None:
             sampling_iter=shared.config['sample-tags']\
                                 .getint('sampling_iterations'))
 #             temperature_fun = lambda x: max(1.0, 10/math.log(x/10000+2.7)))
-#     sampler.add_stat('edge_freq', stats.EdgeFrequencyStatistic(sampler))
-#     sampler.add_stat('acc_rate', stats.AcceptanceRateStatistic(sampler))
+    sampler.add_stat('edge_freq', stats.EdgeFrequencyStatistic(sampler))
+    sampler.add_stat('acc_rate', stats.AcceptanceRateStatistic(sampler))
     sampler.run_sampling()
 
     with open_to_write('tags.txt') as outfp:
@@ -47,6 +47,6 @@ def run() -> None:
             tag_str = ' '.join([''.join(tag)+':'+str(sampler.tag_freq[w_id,t_id]) \
                                for t_id, tag in enumerate(tagset)])
             write_line(outfp, (lexicon[w_id], tag_str))
-#     sampler.save_edge_stats(shared.filenames['sample-edge-stats'])
-#     sampler.print_scalar_stats()
+    sampler.save_edge_stats(shared.filenames['sample-edge-stats'])
+    sampler.print_scalar_stats()
 

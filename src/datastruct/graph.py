@@ -132,10 +132,10 @@ class Graph(nx.MultiDiGraph):
 #         return result
 
     def ingoing_edges(self, target :LexiconEntry) -> List[GraphEdge]:
-        return self.edges_by_target[target]
+        return list(self.edges_by_target[target])
 
     def outgoing_edges(self, source :LexiconEntry) -> List[GraphEdge]:
-        return self.edges_by_source[source]
+        return list(self.edges_by_source[source])
 
 
 class Branching(Graph):
@@ -170,6 +170,19 @@ class Branching(Graph):
         while self.parent(root) is not None:
             root = self.parent(root)
         return root
+
+    def depth(self, node :LexiconEntry) -> int:
+        if self.parent(node) is None:
+            return 1
+        else:
+            return 1 + self.depth(self.parent(node))
+
+    def height(self, node :LexiconEntry) -> int:
+        child_heights = [self.height(child) for child in self.successors(node)]
+        if not child_heights:
+            return 1
+        else:
+            return max(child_heights) + 1
 
     def has_path(self, source :LexiconEntry, target :LexiconEntry) -> bool:
         node = target

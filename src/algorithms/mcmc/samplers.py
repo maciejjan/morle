@@ -862,7 +862,8 @@ class MCMCImprovedTagSampler:
         self.sampling_iter = sampling_iter
         self.iter_stat_interval = iter_stat_interval
         self.stats = {}
-        self.root_prob = np.zeros((len(self.lexicon), len(self.tagset)))
+        self.root_prob = \
+            np.zeros((len(self.lexicon), len(self.tagset)), dtype=np.float64)
         logging.getLogger('main').info('Computing root probabilities...')
         for w_id, entry in tqdm.tqdm(enumerate(self.lexicon),
                                      total=len(self.lexicon)):
@@ -871,12 +872,15 @@ class MCMCImprovedTagSampler:
                     LexiconEntry(''.join(entry.word) + ''.join(tag))
                 self.root_prob[w_id,t_id] = \
                     np.exp(-self.model.root_cost(entry_with_tag))
+#             if not np.any(self.root_prob[w_id,:] > 0):
+#                 raise Exception('Zero root prob: {}'.format(self.lexicon[w_id]))
         logging.getLogger('main').info('Computing leaf probabilities...')
         self.fast_compute_leaf_prob(self.lexicon, model.rule_set)
         logging.getLogger('main').info('Computing transition matrices...')
         untagged_edge_set, self.edge_tr_mat = \
             self.compute_untagged_edges_and_transition_mat(full_graph)
         self.full_graph = FullGraph(self.lexicon, untagged_edge_set)
+        self.edge_set = self.full_graph.edge_set
         self.init_forward_prob()
         self.init_backward_prob()
 #         self.write_debug_info()
@@ -886,7 +890,7 @@ class MCMCImprovedTagSampler:
 
     def compute_leaf_prob(self, lexicon, rule_set):
 
-        self.leaf_prob = np.ones((len(self.lexicon), len(self.tagset)))
+        self.leaf_prob = np.ones((len(self.lexicon), len(self.tagset)), dtype=np.float64)
         edge_set = EdgeSet(lexicon)
 
         def _empty_edge_set(edge_set):
@@ -958,14 +962,23 @@ class MCMCImprovedTagSampler:
         return untagged_edge_set, edge_tr_mat
 
     def init_forward_prob(self):
-        self.forward_prob = np.empty((len(self.lexicon), len(self.tagset)))
+        self.forward_prob = \
+            np.empty((len(self.lexicon), len(self.tagset)), dtype=np.float64)
         for w_id in range(len(self.lexicon)):
             self.forward_prob[w_id,:] = self.root_prob[w_id,:]
+#             if not np.any(self.forward_prob[w_id,:] > 0):
+#                 raise Exception('Zero root prob: {}'.format(self.lexicon[w_id]))
 
     def init_backward_prob(self):
-        self.backward_prob = np.empty((len(self.lexicon), len(self.tagset)))
+        self.backward_prob = \
+            np.empty((len(self.lexicon), len(self.tagset)), dtype=np.float64)
         for w_id in range(len(self.lexicon)):
             self.backward_prob[w_id,:] = self.leaf_prob[w_id,:]
+
+    def add_stat(self, name: str, stat :MCMCStatistic) -> None:
+        if name in self.stats:
+            raise Exception('Duplicate statistic name: %s' % name)
+        self.stats[name] = stat
 
     def reset(self):
         self.iter_num = 0
@@ -973,9 +986,6 @@ class MCMCImprovedTagSampler:
         self.last_modified = np.zeros(len(self.lexicon))
         for stat in self.stats.values():
             stat.reset()
-
-
-
 
     def run_sampling(self) -> None:
         self.branching = self.full_graph.empty_branching()
@@ -998,18 +1008,23 @@ class MCMCImprovedTagSampler:
 
         # try the move determined by the selected edge
         try:
+            if not np.any(self.root_prob[self.lexicon.get_id(edge.source)] > 0) \
+                    or not np.any(self.root_prob[self.lexicon.get_id(edge.target)] > 0):
+                raise ImpossibleMoveException
             edges_to_add, edges_to_remove, acc_prob =\
                 self.determine_move_proposal(edge)
-            for edge in edges_to_add:
-                print('Adding:', edge)
-            for edge in edges_to_remove:
-                print('Removing:', edge)
-            print('acc_prob =', acc_prob)
+#             for edge in edges_to_add:
+#                 logging.getLogger('main').info('Adding: {}'.format(edge))
+#             for edge in edges_to_remove:
+#                 logging.getLogger('main').info('Removing: {}'.format(edge))
+#             print('acc_prob =', acc_prob)
+            if np.isnan(acc_prob):
+                raise Exception()
             if acc_prob >= 1 or acc_prob >= random.random():
                 self.accept_move(edges_to_add, edges_to_remove)
-                print('accepted')
-            else:
-                print('rejected')
+#                 logging.getLogger('main').info('accepted')
+#             else:
+#                 logging.getLogger('main').info('rejected')
         # if move impossible -- propose staying in the current graph
         # (the acceptance probability for that is 1, so this move
         # is automatically accepted and nothing needs to be done
@@ -1034,8 +1049,18 @@ class MCMCImprovedTagSampler:
         else:
             return self.propose_adding_edge(edge)
 
+    def check_edge(self, edge :GraphEdge):
+#         return True
+        if self.branching.degree(edge.source) >= 10:
+            return False
+        if self.branching.depth(edge.source) + self.branching.height(edge.target) >= 10:
+            return False
+        return True
+
     def propose_adding_edge(self, edge :GraphEdge) \
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        if not self.check_edge(edge):
+            raise ImpossibleMoveException()
         src_id = self.lexicon.get_id(edge.source)
         tgt_id = self.lexicon.get_id(edge.target)
         e_id = self.full_graph.edge_set.get_id(edge)
@@ -1063,30 +1088,56 @@ class MCMCImprovedTagSampler:
         tgt_id = self.lexicon.get_id(edge.target)
         e_id = self.full_graph.edge_set.get_id(edge)
         tr_mat = self.edge_tr_mat[e_id]
-        # TODO do not divide!!! recompute instead
-        new_src_backward_prob = \
-            self.backward_prob[src_id] / tr_mat.dot(self.backward_prob[tgt_id])
+#         print()
+#         print('delete')
+#         print(self.leaf_prob[src_id,:])
+        new_src_backward_prob = np.copy(self.leaf_prob[src_id,:])
+        for o_edge in self.branching.outgoing_edges(edge.source):
+            if o_edge != edge:
+                o_e_id = self.full_graph.edge_set.get_id(o_edge)
+                o_tgt_id = self.lexicon.get_id(o_edge.target)
+                new_src_backward_prob *= \
+                    self.edge_tr_mat[o_e_id].dot(self.backward_prob[o_tgt_id,:])
         acc_prob = \
-            np.sum(self.forward_prob[tgt_id]*self.backward_prob[tgt_id]) *
+            np.sum(self.root_prob[tgt_id]*self.backward_prob[tgt_id]) * \
             np.sum(self.forward_prob[src_id]*new_src_backward_prob) /\
-            np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]) / \
+            np.sum(self.forward_prob[src_id]*self.backward_prob[src_id])
+#         print(self.leaf_prob[src_id,:])
+#         print()
         return [], [edge], acc_prob
 
     def propose_swapping_parent(self, edge :GraphEdge) \
                              -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        if not self.check_edge(edge):
+            raise ImpossibleMoveException()
         edge_to_remove = self.branching.edges_between(
                               self.branching.parent(edge.target),
                               edge.target)[0]
         src_id = self.lexicon.get_id(edge.source)
+        src_2_id = self.lexicon.get_id(edge_to_remove.source)
         tgt_id = self.lexicon.get_id(edge.target)
         e_id = self.full_graph.edge_set.get_id(edge)
         e2_id = self.full_graph.edge_set.get_id(edge_to_remove)
         tr_mat = self.edge_tr_mat[e_id]
-        tr_mat_2 = self.edge_tr_mat[e2_id]
-        # TODO do not divide!!! recompute instead
+#         print()
+#         print('swap')
+#         print(self.leaf_prob[src_2_id,:])
         new_src_backward_prob = \
-            self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id]) /\
-            tr_mat_2.dot(self.backward_prob[tgt_id])
+            self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id])
+        new_src_2_backward_prob = np.copy(self.leaf_prob[src_2_id,:])
+        for o_edge in self.branching.outgoing_edges(edge_to_remove.source):
+            if o_edge != edge_to_remove:
+                o_e_id = self.full_graph.edge_set.get_id(o_edge)
+                o_tgt_id = self.lexicon.get_id(o_edge.target)
+                new_src_2_backward_prob *= \
+                    self.edge_tr_mat[o_e_id].dot(self.backward_prob[o_tgt_id,:])
+        # TODO do not divide!!! recompute instead
+#         new_src_backward_prob = self.leaf_prob[src_id,:]
+#         for outgoing_edge in self.branching.outgoing_edges(edge.source):
+#             if outgoing_edge.target != edge.target:
+#         new_src_backward_prob = \
+#             self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id]) /\
+#             tr_mat_2.dot(self.backward_prob[tgt_id])
 #         print(self.forward_prob[src_id])
 #         print(self.backward_prob[src_id])
 #         print(self.forward_prob[tgt_id])
@@ -1096,9 +1147,17 @@ class MCMCImprovedTagSampler:
 #         print(np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]))
 #         print(np.sum(self.forward_prob[tgt_id]*self.backward_prob[tgt_id]))
 #         print(np.sum(self.forward_prob[src_id]*new_src_backward_prob))
+#         print(self.forward_prob[src_id]*new_src_backward_prob)
+#         print(self.forward_prob[src_id]*self.backward_prob[src_id])
+#         print(self.forward_prob[src_2_id]*new_src_2_backward_prob)
+#         print(self.forward_prob[src_2_id]*self.backward_prob[src_2_id])
+#         print(self.leaf_prob[src_2_id,:])
+#         print()
         acc_prob = \
             np.sum(self.forward_prob[src_id]*new_src_backward_prob) /\
-            np.sum(self.forward_prob[src_id]*self.backward_prob[src_id])
+            np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]) * \
+            np.sum(self.forward_prob[src_2_id]*new_src_2_backward_prob) /\
+            np.sum(self.forward_prob[src_2_id]*self.backward_prob[src_2_id])
         return [edge], [edge_to_remove], acc_prob
 
 #     def compute_acc_prob(self, edges_to_add :List[GraphEdge], 
@@ -1115,22 +1174,80 @@ class MCMCImprovedTagSampler:
 #         return acc_prob
 
     def recompute_forward_prob_for_node(self, node):
-        raise NotImplementedError()
+        w_id = self.lexicon.get_id(node)
+        if self.branching.parent(node) is None:
+            result = np.copy(self.root_prob[w_id,:])
+        else:
+            parent = self.branching.parent(node)
+            par_id = self.lexicon.get_id(parent)
+            result = np.copy(self.forward_prob[par_id,:])
+#             print(result)
+            for edge in self.branching.outgoing_edges(parent):
+                if edge.target != node:
+                    e_id = self.full_graph.edge_set.get_id(edge)
+                    w2_id = self.lexicon.get_id(edge.target)
+#                     print()
+#                     print(edge)
+#                     print(self.edge_tr_mat[e_id].toarray())
+#                     print(self.backward_prob[w2_id,:])
+                    result *= self.edge_tr_mat[e_id].dot(self.backward_prob[w2_id,:])
+#                     print(result)
+#                     print()
+            e_id = self.full_graph.edge_set.get_id(\
+                       self.branching.ingoing_edges(node)[0])
+#             print(result)
+#             print(self.edge_tr_mat[e_id].toarray())
+            result = np.dot(result, self.edge_tr_mat[e_id].toarray())
+        self.forward_prob[w_id,:] = result
+        if not np.any(result > 0):
+            raise Exception('Zero forward prob. for: {}'.format(self.lexicon[w_id]))
 
     def recompute_forward_prob_for_subtree(self, root):
-        raise NotImplementedError()
+        self.recompute_forward_prob_for_node(root)
+        for node in self.branching.successors(root):
+            self.recompute_forward_prob_for_subtree(node)
 
     def recompute_backward_prob_for_node(self, node):
-        raise NotImplementedError()
+        w_id = self.lexicon.get_id(node)
+        result = np.copy(self.leaf_prob[w_id,:])
+#         print(node)
+#         print(self.leaf_prob[w_id,:])
+#         print(result)
+        for edge in self.branching.outgoing_edges(node):
+            e_id = self.full_graph.edge_set.get_id(edge)
+            w2_id = self.lexicon.get_id(edge.target)
+            result *= self.edge_tr_mat[e_id].dot(self.backward_prob[w2_id,:])
+#             print(edge)
+#             print(self.backward_prob[w2_id,:])
+#             print(result)
+#         print()
+        self.backward_prob[w_id,:] = result
+        if not np.any(result > 0):
+            raise Exception('Zero backward prob. for: {}'.format(self.lexicon[w_id]))
 
     def recompute_backward_prob_for_subtree(self, root):
-        raise NotImplementedError()
+        for node in self.branching.successors(root):
+            self.recompute_backward_prob_for_subtree(node)
+        self.recompute_backward_prob_for_node(root)
 
     def update_tag_freq_for_node(self, node):
-        raise NotImplementedError()
+        w_id = self.lexicon.get_id(node)
+        cur_tag_freq = self.forward_prob[w_id,:] * self.backward_prob[w_id,:]
+        cur_tag_freq_sum = np.sum(cur_tag_freq)
+        if cur_tag_freq_sum > 0:
+            cur_tag_freq /= np.sum(cur_tag_freq)
+        else:
+            cur_tag_freq = np.ones(len(self.tagset)) / len(self.tagset)
+        self.tag_freq[w_id,:] = \
+            (self.tag_freq[w_id,:] * self.last_modified[w_id] + \
+             cur_tag_freq * (self.iter_num - self.last_modified[w_id])) /\
+            self.iter_num
+        self.last_modified[w_id] = self.iter_num
 
     def update_tag_freq_for_subtree(self, root):
-        raise NotImplementedError()
+        self.update_tag_freq_for_node(root)
+        for node in self.branching.successors(root):
+            self.update_tag_freq_for_subtree(node)
 
     def accept_move(self, edges_to_add, edges_to_remove):
         # remove edges and update stats
@@ -1148,9 +1265,15 @@ class MCMCImprovedTagSampler:
             for stat in self.stats.values():
                 stat.edge_added(e)
         for root in roots_changed:
+            self.update_tag_freq_for_subtree(root)
             self.recompute_backward_prob_for_subtree(root)
             self.recompute_forward_prob_for_subtree(root)
-            self.update_tag_freq_for_subtree(root)
+
+    def finalize(self):
+        for node in self.lexicon:
+            self.update_tag_freq_for_node(node)
+        for stat in self.stats.values():
+            stat.update()
 
     def write_root_prob(self, filename):
         with open_to_write(filename) as fp:
@@ -1183,3 +1306,33 @@ class MCMCImprovedTagSampler:
         self.write_root_prob('sampler-root-prob.txt')
 #         self.write_leaf_prob('sampler-leaf-prob.txt')
         self.write_edge_tr_mat('sampler-edge-tr-mat.txt')
+
+    def save_edge_stats(self, filename):
+        stats, stat_names = [], []
+        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+            if isinstance(stat, EdgeStatistic):
+                stat_names.append(stat_name)
+                stats.append(stat)
+        with open_to_write(filename) as fp:
+            write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
+            for idx, edge in enumerate(self.edge_set):
+                write_line(fp, 
+                           (str(edge.source), str(edge.target), 
+                            str(edge.rule)) + tuple([stat.val[idx]\
+                                                     for stat in stats]))
+
+    def print_scalar_stats(self):
+        stats, stat_names = [], []
+        print()
+        print()
+        print('SIMULATION STATISTICS')
+        print()
+        spacing = max([len(stat_name)\
+                       for stat_name, stat in self.stats.items() 
+                           if isinstance(stat, ScalarStatistic)]) + 2
+        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+            if isinstance(stat, ScalarStatistic):
+                print((' ' * (spacing-len(stat_name)))+stat_name, ':', stat.value())
+        print()
+        print()
+
