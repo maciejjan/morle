@@ -852,7 +852,9 @@ class MCMCImprovedTagSampler:
                        tagset :List[Tuple[str]],
                        warmup_iter :int = 1000,
                        sampling_iter :int = 100000,
-                       iter_stat_interval :int = 1):
+                       iter_stat_interval :int = 1,
+                       max_degree = None,
+                       max_height = None):
         # TODO
         self.lexicon = full_graph.lexicon
         self.model = model
@@ -861,17 +863,25 @@ class MCMCImprovedTagSampler:
         self.warmup_iter = warmup_iter
         self.sampling_iter = sampling_iter
         self.iter_stat_interval = iter_stat_interval
+        self.max_degree = max_degree \
+                          if max_degree is not None and max_degree > 0 \
+                          else None
+        self.max_height = max_height \
+                          if max_height is not None and max_height > 0 \
+                          else None
         self.stats = {}
         self.root_prob = \
             np.zeros((len(self.lexicon), len(self.tagset)), dtype=np.float64)
         logging.getLogger('main').info('Computing root probabilities...')
         for w_id, entry in tqdm.tqdm(enumerate(self.lexicon),
                                      total=len(self.lexicon)):
-            for t_id, tag in enumerate(tagset):
-                entry_with_tag = \
-                    LexiconEntry(''.join(entry.word) + ''.join(tag))
-                self.root_prob[w_id,t_id] = \
-                    np.exp(-self.model.root_cost(entry_with_tag))
+            self.root_prob[w_id,:] = \
+                np.exp(-self.model.root_model.root_cost(entry)) * \
+                self.model.root_tag_model.predict_tags([entry])
+#                 entry_with_tag = \
+#                     LexiconEntry(''.join(entry.word) + ''.join(tag))
+#                 self.root_prob[w_id,t_id] = \
+#                     np.exp(-self.model.root_cost(entry_with_tag))
 #             if not np.any(self.root_prob[w_id,:] > 0):
 #                 raise Exception('Zero root prob: {}'.format(self.lexicon[w_id]))
         logging.getLogger('main').info('Computing leaf probabilities...')
@@ -982,6 +992,7 @@ class MCMCImprovedTagSampler:
 
     def reset(self):
         self.iter_num = 0
+        self.impossible_moves = 0
         self.tag_freq = np.zeros((len(self.lexicon), len(self.tagset)))
         self.last_modified = np.zeros(len(self.lexicon))
         for stat in self.stats.values():
@@ -1008,18 +1019,19 @@ class MCMCImprovedTagSampler:
 
         # try the move determined by the selected edge
         try:
-            if not np.any(self.root_prob[self.lexicon.get_id(edge.source)] > 0) \
-                    or not np.any(self.root_prob[self.lexicon.get_id(edge.target)] > 0):
-                raise ImpossibleMoveException
+#             if not np.any(self.root_prob[self.lexicon.get_id(edge.source)] > 0) \
+#                     or not np.any(self.root_prob[self.lexicon.get_id(edge.target)] > 0):
+#                 raise ImpossibleMoveException
             edges_to_add, edges_to_remove, acc_prob =\
                 self.determine_move_proposal(edge)
 #             for edge in edges_to_add:
 #                 logging.getLogger('main').info('Adding: {}'.format(edge))
 #             for edge in edges_to_remove:
 #                 logging.getLogger('main').info('Removing: {}'.format(edge))
-#             print('acc_prob =', acc_prob)
+#             logging.getLogger('main').info('acc_prob = {}'.format(acc_prob))
             if np.isnan(acc_prob):
-                raise Exception()
+                raise ImpossibleMoveException()
+#                 raise Exception()
             if acc_prob >= 1 or acc_prob >= random.random():
                 self.accept_move(edges_to_add, edges_to_remove)
 #                 logging.getLogger('main').info('accepted')
@@ -1029,7 +1041,7 @@ class MCMCImprovedTagSampler:
         # (the acceptance probability for that is 1, so this move
         # is automatically accepted and nothing needs to be done
         except ImpossibleMoveException:
-            pass
+            self.impossible_moves += 1
 
         # inform all the statistics that the iteration is completed
         for stat in self.stats.values():
@@ -1050,10 +1062,12 @@ class MCMCImprovedTagSampler:
             return self.propose_adding_edge(edge)
 
     def check_edge(self, edge :GraphEdge):
-#         return True
-        if self.branching.degree(edge.source) >= 10:
+        if self.max_degree is not None and \
+                self.branching.degree(edge.source) >= self.max_degree:
             return False
-        if self.branching.depth(edge.source) + self.branching.height(edge.target) >= 10:
+        if self.max_height is not None and \
+                self.branching.depth(edge.source) + \
+                    self.branching.height(edge.target) >= self.max_height:
             return False
         return True
 
@@ -1175,6 +1189,7 @@ class MCMCImprovedTagSampler:
 
     def recompute_forward_prob_for_node(self, node):
         w_id = self.lexicon.get_id(node)
+        old_value = np.copy(self.forward_prob[w_id,:])
         if self.branching.parent(node) is None:
             result = np.copy(self.root_prob[w_id,:])
         else:
@@ -1199,8 +1214,10 @@ class MCMCImprovedTagSampler:
 #             print(self.edge_tr_mat[e_id].toarray())
             result = np.dot(result, self.edge_tr_mat[e_id].toarray())
         self.forward_prob[w_id,:] = result
+#         logging.getLogger('main').info('forward('+str(node)+') =  '+str(result))
         if not np.any(result > 0):
-            raise Exception('Zero forward prob. for: {}'.format(self.lexicon[w_id]))
+            raise Exception('Zero forward prob. for: {} (old value = {})'\
+                            .format(self.lexicon[w_id], old_value))
 
     def recompute_forward_prob_for_subtree(self, root):
         self.recompute_forward_prob_for_node(root)
@@ -1333,6 +1350,8 @@ class MCMCImprovedTagSampler:
         for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
             if isinstance(stat, ScalarStatistic):
                 print((' ' * (spacing-len(stat_name)))+stat_name, ':', stat.value())
+        print('Impossible moves: {} ({} %)'.format(
+                  self.impossible_moves, self.impossible_moves/self.sampling_iter * 100))
         print()
         print()
 

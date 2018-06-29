@@ -42,6 +42,16 @@ class RNNTagModel(TagModel):
         X, y = self._prepare_data(lexicon)
         self.nn.fit(X, y, epochs=5, sample_weight=weights, batch_size=64,
                     verbose=1)
+        
+    def predict_tags(self, entries :Iterable[LexiconEntry]) -> np.ndarray:
+        X_lst = []
+        for entry in entries:
+            X_lst.append([(self.alphabet_idx[sym] \
+                             if sym in self.alphabet_idx \
+                             else 0) \
+                          for sym in entry.word])
+        X = keras.preprocessing.sequence.pad_sequences(X_lst, maxlen=self.maxlen)
+        return self.nn.predict(X)
 
     def root_cost(self, entry :LexiconEntry) -> float:
         return self.root_costs([entry])[0]

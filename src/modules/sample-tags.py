@@ -36,7 +36,9 @@ def run() -> None:
             warmup_iter=shared.config['sample-tags']\
                               .getint('warmup_iterations'),
             sampling_iter=shared.config['sample-tags']\
-                                .getint('sampling_iterations'))
+                                .getint('sampling_iterations'),
+            max_degree=shared.config['sample-tags'].getint('max_node_degree'),\
+            max_height=shared.config['sample-tags'].getint('max_tree_height'))
 #             temperature_fun = lambda x: max(1.0, 10/math.log(x/10000+2.7)))
     sampler.add_stat('edge_freq', stats.EdgeFrequencyStatistic(sampler))
     sampler.add_stat('acc_rate', stats.AcceptanceRateStatistic(sampler))
