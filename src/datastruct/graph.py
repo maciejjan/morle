@@ -177,6 +177,10 @@ class Branching(Graph):
         else:
             return 1 + self.depth(self.parent(node))
 
+    def subtree_size(self, node :LexiconEntry) -> int:
+        return 1 + \
+               sum(self.subtree_size(child) for child in self.successors(node))
+
     def height(self, node :LexiconEntry) -> int:
         child_heights = [self.height(child) for child in self.successors(node)]
         if not child_heights:

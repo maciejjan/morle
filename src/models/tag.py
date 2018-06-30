@@ -40,15 +40,15 @@ class RNNTagModel(TagModel):
             self._set_parameters(lexicon)
             self._compile_network()
         X, y = self._prepare_data(lexicon)
-        self.nn.fit(X, y, epochs=5, sample_weight=weights, batch_size=64,
+        self.nn.fit(X, y, epochs=10, sample_weight=weights, batch_size=64,
                     verbose=1)
         
     def predict_tags(self, entries :Iterable[LexiconEntry]) -> np.ndarray:
         X_lst = []
         for entry in entries:
             X_lst.append([(self.alphabet_idx[sym] \
-                             if sym in self.alphabet_idx \
-                             else 0) \
+                           if sym in self.alphabet_idx \
+                           else 0) \
                           for sym in entry.word])
         X = keras.preprocessing.sequence.pad_sequences(X_lst, maxlen=self.maxlen)
         return self.nn.predict(X)
