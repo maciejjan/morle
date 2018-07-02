@@ -7,6 +7,7 @@ from models.suite import ModelSuite
 from utils.files import open_to_write, write_line
 import shared
 
+from collections import defaultdict
 import logging
 import math
 import numpy as np
