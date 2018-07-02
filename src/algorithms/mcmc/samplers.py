@@ -853,8 +853,7 @@ class MCMCImprovedTagSampler:
                        warmup_iter :int = 1000,
                        sampling_iter :int = 100000,
                        iter_stat_interval :int = 1,
-                       max_degree = None,
-                       max_height = None):
+                       min_subtree_prob = 1e-100):
         # TODO
         self.lexicon = full_graph.lexicon
         self.model = model
@@ -863,12 +862,13 @@ class MCMCImprovedTagSampler:
         self.warmup_iter = warmup_iter
         self.sampling_iter = sampling_iter
         self.iter_stat_interval = iter_stat_interval
-        self.max_degree = max_degree \
-                          if max_degree is not None and max_degree > 0 \
-                          else None
-        self.max_height = max_height \
-                          if max_height is not None and max_height > 0 \
-                          else None
+        self.min_subtree_prob = min_subtree_prob
+#         self.max_degree = max_degree \
+#                           if max_degree is not None and max_degree > 0 \
+#                           else None
+#         self.max_height = max_height \
+#                           if max_height is not None and max_height > 0 \
+#                           else None
         # c is the constant by which every edge prob. ratio is multiplied
         # in order to avoid numerical issues with too small numbers
 #         self.c = 50
@@ -1034,18 +1034,18 @@ class MCMCImprovedTagSampler:
             edges_to_add, edges_to_remove, acc_prob =\
                 self.determine_move_proposal(edge)
             for edge in edges_to_add:
-                logging.getLogger('main').info('Adding: {}'.format(edge))
+                logging.getLogger('main').debug('Adding: {}'.format(edge))
             for edge in edges_to_remove:
-                logging.getLogger('main').info('Removing: {}'.format(edge))
+                logging.getLogger('main').debug('Removing: {}'.format(edge))
             logging.getLogger('main').info('acc_prob = {}'.format(acc_prob))
             if np.isnan(acc_prob):
                 raise ImpossibleMoveException()
 #                 raise Exception()
             if acc_prob >= 1 or acc_prob >= random.random():
                 self.accept_move(edges_to_add, edges_to_remove)
-                logging.getLogger('main').info('accepted')
+                logging.getLogger('main').debug('accepted')
             else:
-                logging.getLogger('main').info('rejected')
+                logging.getLogger('main').debug('rejected')
         # if move impossible -- propose staying in the current graph
         # (the acceptance probability for that is 1, so this move
         # is automatically accepted and nothing needs to be done
@@ -1063,6 +1063,7 @@ class MCMCImprovedTagSampler:
         if self.branching.has_edge(edge.source, edge.target, edge.rule):
             return self.propose_deleting_edge(edge)
         elif self.branching.has_path(edge.target, edge.source):
+            # TODO flip?
 #             return self.propose_flip(edge)
             raise ImpossibleMoveException()
         elif self.branching.parent(edge.target) is not None:
@@ -1110,10 +1111,10 @@ class MCMCImprovedTagSampler:
         new_graph_prob = \
             np.sum(self.forward_prob[src_id]*new_src_backward_prob)
         acc_prob = 0 \
-                   if new_graph_prob < 1e-100 \
+                   if new_graph_prob < self.min_subtree_prob \
                    else new_graph_prob / old_graph_prob
-        logging.getLogger('main').info('old_graph_prob = {}'.format(old_graph_prob))
-        logging.getLogger('main').info('new_graph_prob = {}'.format(new_graph_prob))
+        logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
+        logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
         return [edge], [], acc_prob
 
     def propose_deleting_edge(self, edge :GraphEdge) \
@@ -1141,11 +1142,11 @@ class MCMCImprovedTagSampler:
             np.sum(self.forward_prob[src_id]*new_src_backward_prob),
             np.sum(self.root_prob[tgt_id]*self.backward_prob[tgt_id]))
         acc_prob = 0 \
-                   if new_min_subgraph_prob < 1e-100 \
+                   if new_min_subgraph_prob < self.min_subtree_prob \
                    else new_graph_prob / old_graph_prob
-        logging.getLogger('main').info('old_graph_prob = {}'.format(old_graph_prob))
-        logging.getLogger('main').info('new_graph_prob = {}'.format(new_graph_prob))
-        logging.getLogger('main').info('new_min_subgraph_prob = {}'.format(new_min_subgraph_prob))
+        logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
+        logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
+        logging.getLogger('main').debug('new_min_subgraph_prob = {}'.format(new_min_subgraph_prob))
 #         acc_prob = \
 #             self.c * \
 #             np.sum(self.root_prob[tgt_id]*self.backward_prob[tgt_id]) * \
@@ -1159,6 +1160,8 @@ class MCMCImprovedTagSampler:
                              -> Tuple[List[GraphEdge], List[GraphEdge], float]:
 #         if not self.check_edge(edge):
 #             raise ImpossibleMoveException()
+        # TODO is the old and the new source in the same subtree or not?
+        # -> change accordingly
         edge_to_remove = self.branching.edges_between(
                               self.branching.parent(edge.target),
                               edge.target)[0]
@@ -1215,12 +1218,12 @@ class MCMCImprovedTagSampler:
             np.sum(self.forward_prob[src_id]*new_src_backward_prob),
             np.sum(self.forward_prob[src_2_id]*new_src_2_backward_prob))
         acc_prob = 0 \
-                   if new_min_subgraph_prob < 1e-100 \
+                   if new_min_subgraph_prob < self.min_subtree_prob \
                    else new_graph_prob / old_graph_prob
-        logging.getLogger('main').info('old_graph_prob = {}'.format(old_graph_prob))
-        logging.getLogger('main').info('new_graph_prob = {}'.format(new_graph_prob))
-        logging.getLogger('main').info('old_min_subgraph_prob = {}'.format(old_min_subgraph_prob))
-        logging.getLogger('main').info('new_min_subgraph_prob = {}'.format(new_min_subgraph_prob))
+        logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
+        logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
+        logging.getLogger('main').debug('old_min_subgraph_prob = {}'.format(old_min_subgraph_prob))
+        logging.getLogger('main').debug('new_min_subgraph_prob = {}'.format(new_min_subgraph_prob))
         return [edge], [edge_to_remove], acc_prob
 
 #     def compute_acc_prob(self, edges_to_add :List[GraphEdge], 
