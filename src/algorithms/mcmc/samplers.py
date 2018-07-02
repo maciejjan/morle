@@ -949,16 +949,35 @@ class MCMCImprovedTagSampler:
         edge_prob_ratios = edge_prob / (1-edge_prob)
         untagged_edge_set = EdgeSet(full_graph.lexicon)
         T = len(self.tagset)
-        edge_tr_mat = []
+        edge_ids_by_untagged_edge = []
         for e_id, edge in enumerate(full_graph.edge_set):
             untagged_edge = _untag_edge(self.lexicon, edge)
             if untagged_edge not in untagged_edge_set:
                 untagged_edge_set.add(untagged_edge)
-                edge_tr_mat.append(csr_matrix((T, T)))
+                edge_ids_by_untagged_edge.append(list())
             ue_id = untagged_edge_set.get_id(untagged_edge)
-            t1_id = self.tag_idx[edge.rule.tag_subst[0]]
-            t2_id = self.tag_idx[edge.rule.tag_subst[1]]
-            edge_tr_mat[ue_id][t1_id, t2_id] = edge_prob_ratios[e_id]
+            edge_ids_by_untagged_edge[ue_id].append(e_id)
+        edge_tr_mat = []
+        for ue_id, e_ids in tqdm.tqdm(enumerate(edge_ids_by_untagged_edge), \
+                                      total=len(edge_ids_by_untagged_edge)):
+            tr_array = np.zeros((T, T))
+            for e_id in e_ids:
+                edge = full_graph.edge_set[e_id]
+                t1_id = self.tag_idx[edge.rule.tag_subst[0]]
+                t2_id = self.tag_idx[edge.rule.tag_subst[1]]
+                tr_array[t1_id,t2_id] = edge_prob_ratios[e_id]
+            if ue_id != len(edge_tr_mat):
+                raise Exception('Inconsistent untagged edge IDs!')
+            edge_tr_mat.append(csr_matrix(tr_array))
+#         for e_id, edge in enumerate(full_graph.edge_set):
+#             untagged_edge = _untag_edge(self.lexicon, edge)
+#             if untagged_edge not in untagged_edge_set:
+#                 untagged_edge_set.add(untagged_edge)
+#                 edge_tr_mat.append(csr_matrix((T, T)))
+#             ue_id = untagged_edge_set.get_id(untagged_edge)
+#             t1_id = self.tag_idx[edge.rule.tag_subst[0]]
+#             t2_id = self.tag_idx[edge.rule.tag_subst[1]]
+#             edge_tr_mat[ue_id][t1_id, t2_id] = edge_prob_ratios[e_id]
         return untagged_edge_set, edge_tr_mat
 
     def init_forward_prob(self):
@@ -1013,7 +1032,7 @@ class MCMCImprovedTagSampler:
                 logging.getLogger('main').debug('Adding: {}'.format(edge))
             for edge in edges_to_remove:
                 logging.getLogger('main').debug('Removing: {}'.format(edge))
-            logging.getLogger('main').info('acc_prob = {}'.format(acc_prob))
+            logging.getLogger('main').debug('acc_prob = {}'.format(acc_prob))
             if np.isnan(acc_prob):
                 raise ImpossibleMoveException()
 #                 raise Exception()
@@ -1264,12 +1283,17 @@ class MCMCImprovedTagSampler:
         with open_to_write(filename) as fp:
             for e_id, edge in enumerate(self.full_graph.edge_set):
                 tag_probs = []
-                edge_tr_mat = self.edge_tr_mat[e_id].toarray()
-                for t1_id, tag_1 in enumerate(self.tagset):
-                    for t2_id, tag_2 in enumerate(self.tagset):
-                        prob = edge_tr_mat[t1_id,t2_id]
-                        if prob > 0:
-                            tag_probs.append((''.join(tag_1), ''.join(tag_2), str(prob)))
+#                 edge_tr_mat = self.edge_tr_mat[e_id].toarray()
+                edge_tr_mat = self.edge_tr_mat[e_id]
+                for (t1_id, t2_id), val in edge_tr_mat.todok().items():
+                    tag_1 = self.tagset[t1_id]
+                    tag_2 = self.tagset[t2_id]
+                    tag_probs.append((''.join(tag_1), ''.join(tag_2), str(val)))
+#                 for t1_id, tag_1 in enumerate(self.tagset):
+#                     for t2_id, tag_2 in enumerate(self.tagset):
+#                         prob = edge_tr_mat[t1_id,t2_id]
+#                         if prob > 0:
+#                             tag_probs.append((''.join(tag_1), ''.join(tag_2), str(prob)))
                 write_line(fp, (str(edge), ' '.join([t1+':'+t2+':'+prob \
                                                      for t1, t2, prob in tag_probs])))
 

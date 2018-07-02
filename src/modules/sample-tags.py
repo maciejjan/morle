@@ -31,6 +31,19 @@ def run() -> None:
 
     model = ModelSuite.load()
     tagset = model.root_tag_model.tagset
+
+    # save baseline
+    with open_to_write('tags-baseline.txt') as outfp:
+        probs = model.root_tag_model.predict_tags(lexicon)
+        for w_id in range(len(lexicon)):
+            tag_probs = sorted([(tag, probs[w_id,t_id]) \
+                                for t_id, tag in enumerate(tagset)],
+                               reverse=True, key=itemgetter(1))
+            tag_str = ' '.join([''.join(tag)+':'+str(prob) \
+                               for (tag, prob) in tag_probs])
+            write_line(outfp, (lexicon[w_id], tag_str))
+
+    # prepare the sampler + run sampling
     sampler = \
         algorithms.mcmc.samplers.MCMCImprovedTagSampler(\
             full_graph, model, tagset,
@@ -42,6 +55,7 @@ def run() -> None:
     sampler.add_stat('acc_rate', stats.AcceptanceRateStatistic(sampler))
     sampler.run_sampling()
 
+    # save the sampled tags and other statistics
     with open_to_write('tags.txt') as outfp:
         for w_id in range(len(lexicon)):
 #             tag_probs = [(tag, sampler.tag_freq[w_id, t_id]) \
@@ -54,4 +68,5 @@ def run() -> None:
             write_line(outfp, (lexicon[w_id], tag_str))
     sampler.save_edge_stats(shared.filenames['sample-edge-stats'])
     sampler.print_scalar_stats()
+
 
