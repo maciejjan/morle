@@ -854,7 +854,6 @@ class MCMCImprovedTagSampler:
                        sampling_iter :int = 100000,
                        iter_stat_interval :int = 1,
                        min_subtree_prob = 1e-100):
-        # TODO
         self.lexicon = full_graph.lexicon
         self.model = model
         self.tagset = tagset
