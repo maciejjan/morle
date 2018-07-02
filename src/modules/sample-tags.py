@@ -8,6 +8,7 @@ from utils.files import file_exists, open_to_write, write_line
 import shared
 
 import logging
+from operator import itemgetter
 
 
 def run() -> None:
@@ -43,8 +44,11 @@ def run() -> None:
 
     with open_to_write('tags.txt') as outfp:
         for w_id in range(len(lexicon)):
-            tag_str = ' '.join([''.join(tag)+':'+str(sampler.tag_freq[w_id,t_id]) \
-                               for t_id, tag in enumerate(tagset)])
+            tag_probs = sorted([(tag, sampler.tag_freq[w_id, t_id]) \
+                                for t_id, tag in enumerate(tagset)],
+                               reverse=True, key=itemgetter(1))
+            tag_str = ' '.join([''.join(tag)+':'+str(prob) \
+                               for (tag, prob) in tag_probs])
             write_line(outfp, (lexicon[w_id], tag_str))
     sampler.save_edge_stats(shared.filenames['sample-edge-stats'])
     sampler.print_scalar_stats()

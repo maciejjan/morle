@@ -864,30 +864,32 @@ class MCMCImprovedTagSampler:
         self.iter_stat_interval = iter_stat_interval
         self.min_subtree_prob = min_subtree_prob
         self.stats = {}
+        self._compute_root_prob()
+        self._fast_compute_leaf_prob()
+        untagged_edge_set, self.edge_tr_mat = \
+            self._compute_untagged_edges_and_transition_mat(full_graph)
+        self.full_graph = FullGraph(self.lexicon, untagged_edge_set)
+        self.edge_set = untagged_edge_set
+        self.init_forward_prob()
+        self.init_backward_prob()
+        self.write_debug_info()
+
+    def _compute_root_prob(self):
+        logging.getLogger('main').info('Computing root probabilities...')
         self.root_prob = \
             np.zeros((len(self.lexicon), len(self.tagset)), dtype=np.float64)
-        logging.getLogger('main').info('Computing root probabilities...')
         for w_id, entry in tqdm.tqdm(enumerate(self.lexicon),
                                      total=len(self.lexicon)):
             self.root_prob[w_id,:] = \
                 np.exp(-self.model.root_model.root_cost(entry)) * \
                 self.model.root_tag_model.predict_tags([entry])
-        logging.getLogger('main').info('Computing leaf probabilities...')
-        self.fast_compute_leaf_prob(self.lexicon, model.rule_set)
-        logging.getLogger('main').info('Computing transition matrices...')
-        untagged_edge_set, self.edge_tr_mat = \
-            self.compute_untagged_edges_and_transition_mat(full_graph)
-        self.full_graph = FullGraph(self.lexicon, untagged_edge_set)
-        self.edge_set = self.full_graph.edge_set
-        self.init_forward_prob()
-        self.init_backward_prob()
-        self.write_debug_info()
 
-    def fast_compute_leaf_prob(self, lexicon, rule_set):
+    def _fast_compute_leaf_prob(self):
+        logging.getLogger('main').info('Computing leaf probabilities...')
         self.leaf_prob = np.ones((len(self.lexicon), len(self.tagset)))   # ;-)
 
-    def compute_leaf_prob(self, lexicon, rule_set):
-
+    def _compute_leaf_prob(self):
+        logging.getLogger('main').info('Computing leaf probabilities...')
         self.leaf_prob = np.ones((len(self.lexicon), len(self.tagset)), dtype=np.float64)
         edge_set = EdgeSet(lexicon)
 
@@ -904,9 +906,9 @@ class MCMCImprovedTagSampler:
             print(n)
             return edge_set
 
-        lexicon_tr = lexicon.to_fst()
+        lexicon_tr = self.lexicon.to_fst()
         lexicon_tr.concatenate(algorithms.fst.generator(self.tagset))
-        rules_tr = rule_set.to_fst()
+        rules_tr = self.model.rule_set.to_fst()
         tr = hfst.HfstTransducer(lexicon_tr)
         tr.compose(rules_tr)
         tr.determinize()
@@ -935,7 +937,8 @@ class MCMCImprovedTagSampler:
                 edge_set = _empty_edge_set(edge_set)
         edge_set = _empty_edge_set(edge_set)
 
-    def compute_untagged_edges_and_transition_mat(self, full_graph):
+    def _compute_untagged_edges_and_transition_mat(self, full_graph):
+        logging.getLogger('main').info('Computing transition matrices...')
 
         def _untag_edge(lexicon, edge):
             source = lexicon.get_by_symstr(''.join(edge.source.word))[0]
