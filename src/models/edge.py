@@ -8,7 +8,7 @@ import shared
 
 from collections import defaultdict
 from itertools import chain
-from keras.models import Model
+import keras.models
 from keras.layers import concatenate, Dense, Embedding, Flatten, Input
 import logging
 import numpy as np
@@ -274,7 +274,7 @@ class NeuralEdgeModel(EdgeModel):
         concat = concatenate([attr_dr, rule_emb_fl])
         internal = Dense(5, activation='relu', name='internal')(concat)
         output = Dense(1, activation='sigmoid', name='dense')(internal)
-        self.nn = Model(inputs=[input_attr, input_rule], outputs=[output])
+        self.nn = keras.models.Model(inputs=[input_attr, input_rule], outputs=[output])
         self.nn.compile(optimizer='adam', loss='binary_crossentropy')
 
     def _prepare_data(self, edge_set :EdgeSet) -> \

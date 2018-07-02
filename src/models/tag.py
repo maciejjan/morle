@@ -3,7 +3,7 @@ from models.generic import Model, ModelFactory, UnknownModelTypeException
 import shared
 from utils.files import open_to_read, open_to_write, write_line
 
-from keras.models import Model, Sequential
+from keras.models import Sequential
 from keras.layers import Dense, Embedding, SimpleRNN
 import keras
 import numpy as np
