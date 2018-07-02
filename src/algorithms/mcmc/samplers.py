@@ -871,7 +871,7 @@ class MCMCImprovedTagSampler:
         self.edge_set = untagged_edge_set
         self.init_forward_prob()
         self.init_backward_prob()
-        self.write_debug_info()
+#         self.write_debug_info()
 
     def _compute_root_prob(self):
         logging.getLogger('main').info('Computing root probabilities...')

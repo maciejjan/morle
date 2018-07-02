@@ -44,6 +44,8 @@ def run() -> None:
 
     with open_to_write('tags.txt') as outfp:
         for w_id in range(len(lexicon)):
+#             tag_probs = [(tag, sampler.tag_freq[w_id, t_id]) \
+#                          for t_id, tag in enumerate(tagset)]
             tag_probs = sorted([(tag, sampler.tag_freq[w_id, t_id]) \
                                 for t_id, tag in enumerate(tagset)],
                                reverse=True, key=itemgetter(1))
