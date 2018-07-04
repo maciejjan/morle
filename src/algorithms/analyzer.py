@@ -9,6 +9,7 @@ import shared
 
 import hfst
 import logging
+import re
 from typing import List
 
 # TODO special cases:
@@ -29,8 +30,15 @@ class Analyzer:
         self._compile_fst()
         self.predict_vec = 'predict_vec' in kwargs and \
                            kwargs['predict_vec'] == True
+        self.enable_back_formation = 'enable_back_formation' in kwargs and \
+                                     kwargs['enable_back_formation'] == True
         self.max_results = kwargs['max_results'] if 'max_results' in kwargs \
                                                  else None
+        if self.predict_vec and self.enable_back_formation:
+            logging.getLogger('main').warning(\
+                'Vector prediction and back-formation cannot be done'
+                'simultaneously. Disabling vector prediction.')
+            self.predict_vec = False
 
     def analyze(self, target :LexiconEntry, **kwargs) -> List[GraphEdge]:
         # TODO 1a. if predict_tag: get possible tags from the tag predictor
@@ -52,9 +60,24 @@ class Analyzer:
                         edge_set.add(edge)
                     else:
                         edge_set.add(GraphEdge(source, target, rule))
+        # back-formation
+        if self.enable_back_formation and \
+                (self.max_results is None or len(edge_set) < self.max_results):
+            lookup_results = set()
+            for w, c in self.inv_rules_tr.lookup(target.symstr):
+                lookup_results.add(re.sub(hfst.EPSILON, '', w))
+            sources = [LexiconEntry(word) for word in lookup_results]
+            for source in sources:
+                rules = extract_all_rules(source, target)
+                for rule in rules:
+                    if rule in self.model.rule_set:
+                        edge_set.add(GraphEdge(source, target, rule))
         if not edge_set:
             return list()
         edge_costs = self.model.edges_cost(edge_set)
+        for i, edge in enumerate(edge_set):
+            if edge.source not in self.lexicon:
+                edge_costs[i] += self.model.root_cost(edge.source)
         results = [edge for edge in edge_set]
         for i, edge in enumerate(results):
             edge.attr['cost'] = edge_costs[i]
@@ -66,6 +89,8 @@ class Analyzer:
 
     def _compile_fst(self) -> None:
         rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+        self.inv_rules_tr = hfst.HfstTransducer(rules_tr)
+        self.inv_rules_tr.invert()
         logging.getLogger('main').info('Building lexicon transducer...')
         lexicon_tr = algorithms.fst.load_transducer(\
                        shared.filenames['lexicon-tr'])

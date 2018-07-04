@@ -305,6 +305,10 @@ class Lexicon:
 def load_raw_vocabulary(filename :str) -> Lexicon:
     lexicon = Lexicon()
     for (word,) in read_tsv_file(filename):
-        lexicon.add(LexiconEntry(word))
+        try:
+            lexicon.add(LexiconEntry(word))
+        except Exception as e:
+            logging.getLogger('main').warning('ignoring %s: %s' %\
+                                              (word, str(e)))
     return lexicon
 
