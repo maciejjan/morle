@@ -1226,8 +1226,8 @@ class MCMCImprovedTagSampler:
         cur_tag_freq_sum = np.sum(cur_tag_freq)
         if cur_tag_freq_sum > 0:
             cur_tag_freq /= np.sum(cur_tag_freq)
-        else:
-            cur_tag_freq = np.ones(len(self.tagset)) / len(self.tagset)
+#         else:
+#             cur_tag_freq = np.ones(len(self.tagset)) / len(self.tagset)
         self.tag_freq[w_id,:] = \
             (self.tag_freq[w_id,:] * self.last_modified[w_id] + \
              cur_tag_freq * (self.iter_num - self.last_modified[w_id])) /\

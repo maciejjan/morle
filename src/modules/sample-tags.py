@@ -8,6 +8,7 @@ from utils.files import file_exists, open_to_write, write_line
 import shared
 
 import logging
+import numpy as np
 from operator import itemgetter
 
 
@@ -57,15 +58,23 @@ def run() -> None:
 
     # save the sampled tags and other statistics
     with open_to_write('tags.txt') as outfp:
+        num_zero_probs = 0
         for w_id in range(len(lexicon)):
 #             tag_probs = [(tag, sampler.tag_freq[w_id, t_id]) \
 #                          for t_id, tag in enumerate(tagset)]
-            tag_probs = sorted([(tag, sampler.tag_freq[w_id, t_id]) \
+            probs = sampler.tag_freq[w_id,:]
+            if np.sum(probs) <= 0:
+                probs = model.root_tag_model.predict_tags([lexicon[w_id]])[0,:]
+                num_zero_probs += 1
+            tag_probs = sorted([(tag, probs[t_id]) \
                                 for t_id, tag in enumerate(tagset)],
                                reverse=True, key=itemgetter(1))
             tag_str = ' '.join([''.join(tag)+':'+str(prob) \
                                for (tag, prob) in tag_probs])
             write_line(outfp, (lexicon[w_id], tag_str))
+        logging.getLogger('main').info(\
+            '{} words with zero probs ({} %).'\
+            .format(num_zero_probs, num_zero_probs*100/len(lexicon)))
     sampler.save_edge_stats(shared.filenames['sample-edge-stats'])
     sampler.print_scalar_stats()
 
