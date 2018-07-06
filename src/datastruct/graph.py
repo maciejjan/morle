@@ -200,6 +200,13 @@ class Branching(Graph):
                 raise Exception('Cycle detected!')
         return False
 
+    def path(self, source :LexiconEntry, target :LexiconEntry) \
+            -> List[LexiconEntry]:
+        if source == target:
+            return [source]
+        else:
+            return self.path(source, self.parent(target)) + [target]
+
     def get_edges_for_rule(self, rule :Rule) -> List[GraphEdge]:
         return self.edges_by_rule[rule]
 

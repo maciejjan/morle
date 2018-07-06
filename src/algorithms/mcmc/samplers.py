@@ -208,10 +208,6 @@ class MCMCGraphSampler:
                 node_5 = self.branching.parent(node_5)
         return [node_1, node_2, node_3, node_4, node_5]
 
-    def find_edge_in_full_graph(self, source, target):
-        edges = [e for e in source.edges if e.target == target] 
-        return edges[0] if edges else None
-
     def propose_swapping_parent(self, edge :GraphEdge) \
                              -> Tuple[List[GraphEdge], List[GraphEdge], float]:
         edges_to_remove = self.branching.edges_between(
@@ -1026,17 +1022,19 @@ class MCMCImprovedTagSampler:
 
         # try the move determined by the selected edge
         try:
-            edges_to_add, edges_to_remove, acc_prob =\
+            edges_to_add, edges_to_remove, prop_prob_ratio =\
                 self.determine_move_proposal(edge)
             for edge in edges_to_add:
                 logging.getLogger('main').debug('Adding: {}'.format(edge))
             for edge in edges_to_remove:
                 logging.getLogger('main').debug('Removing: {}'.format(edge))
+            acc_prob = self.compute_acc_prob(edges_to_add, edges_to_remove) * \
+                       prop_prob_ratio
             logging.getLogger('main').debug('acc_prob = {}'.format(acc_prob))
             if np.isnan(acc_prob):
                 raise ImpossibleMoveException()
 #                 raise Exception()
-            if acc_prob >= 1 or acc_prob >= random.random():
+            if acc_prob >= 1 or (acc_prob > 0 and acc_prob >= random.random()):
                 self.accept_move(edges_to_add, edges_to_remove)
                 logging.getLogger('main').debug('accepted')
             else:
@@ -1058,105 +1056,300 @@ class MCMCImprovedTagSampler:
         if self.branching.has_edge(edge.source, edge.target, edge.rule):
             return self.propose_deleting_edge(edge)
         elif self.branching.has_path(edge.target, edge.source):
-            # TODO flip?
-#             return self.propose_flip(edge)
-            raise ImpossibleMoveException()
+            return self.propose_flip(edge)
         elif self.branching.parent(edge.target) is not None:
             return self.propose_swapping_parent(edge)
         else:
             return self.propose_adding_edge(edge)
 
+#     def propose_adding_edge(self, edge :GraphEdge) \
+#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         src_id = self.lexicon.get_id(edge.source)
+#         tgt_id = self.lexicon.get_id(edge.target)
+#         e_id = self.full_graph.edge_set.get_id(edge)
+#         tr_mat = self.edge_tr_mat[e_id]
+#         new_src_backward_prob = \
+#             self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id])
+#         old_graph_prob = \
+#             np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]) * \
+#             np.sum(self.forward_prob[tgt_id]*self.backward_prob[tgt_id])
+#         new_graph_prob = \
+#             np.sum(self.forward_prob[src_id]*new_src_backward_prob)
+#         acc_prob = 0 \
+#                    if new_graph_prob < self.min_subtree_prob \
+#                    else new_graph_prob / old_graph_prob
+#         logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
+#         logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
+#         return [edge], [], acc_prob
+# 
+#     def propose_deleting_edge(self, edge :GraphEdge) \
+#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         src_id = self.lexicon.get_id(edge.source)
+#         tgt_id = self.lexicon.get_id(edge.target)
+#         e_id = self.full_graph.edge_set.get_id(edge)
+#         tr_mat = self.edge_tr_mat[e_id]
+#         new_src_backward_prob = np.copy(self.leaf_prob[src_id,:])
+#         for o_edge in self.branching.outgoing_edges(edge.source):
+#             if o_edge != edge:
+#                 o_e_id = self.full_graph.edge_set.get_id(o_edge)
+#                 o_tgt_id = self.lexicon.get_id(o_edge.target)
+#                 new_src_backward_prob *= \
+#                     self.edge_tr_mat[o_e_id].dot(self.backward_prob[o_tgt_id,:])
+#         old_graph_prob = \
+#             np.sum(self.forward_prob[src_id]*self.backward_prob[src_id])
+#         new_graph_prob = \
+#             np.sum(self.forward_prob[src_id]*new_src_backward_prob) * \
+#             np.sum(self.root_prob[tgt_id]*self.backward_prob[tgt_id])
+#         new_min_subgraph_prob = min(\
+#             np.sum(self.forward_prob[src_id]*new_src_backward_prob),
+#             np.sum(self.root_prob[tgt_id]*self.backward_prob[tgt_id]))
+#         acc_prob = 0 \
+#                    if new_min_subgraph_prob < self.min_subtree_prob \
+#                    else new_graph_prob / old_graph_prob
+#         logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
+#         logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
+#         logging.getLogger('main').debug('new_min_subgraph_prob = {}'.format(new_min_subgraph_prob))
+#         return [], [edge], acc_prob
+# 
+#     def propose_swapping_parent(self, edge :GraphEdge) \
+#                              -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         # TODO is the old and the new source in the same subtree or not?
+#         # -> change accordingly
+#         edge_to_remove = self.branching.edges_between(
+#                               self.branching.parent(edge.target),
+#                               edge.target)[0]
+#         src_id = self.lexicon.get_id(edge.source)
+#         src_2_id = self.lexicon.get_id(edge_to_remove.source)
+#         tgt_id = self.lexicon.get_id(edge.target)
+#         e_id = self.full_graph.edge_set.get_id(edge)
+#         e2_id = self.full_graph.edge_set.get_id(edge_to_remove)
+#         tr_mat = self.edge_tr_mat[e_id]
+#         new_src_backward_prob = \
+#             self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id])
+#         new_src_2_backward_prob = np.copy(self.leaf_prob[src_2_id,:])
+#         for o_edge in self.branching.outgoing_edges(edge_to_remove.source):
+#             if o_edge != edge_to_remove:
+#                 o_e_id = self.full_graph.edge_set.get_id(o_edge)
+#                 o_tgt_id = self.lexicon.get_id(o_edge.target)
+#                 new_src_2_backward_prob *= \
+#                     self.edge_tr_mat[o_e_id].dot(self.backward_prob[o_tgt_id,:])
+#         old_graph_prob = \
+#             np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]) * \
+#             np.sum(self.forward_prob[src_2_id]*self.backward_prob[src_2_id])
+#         new_graph_prob = \
+#             np.sum(self.forward_prob[src_id]*new_src_backward_prob) *\
+#             np.sum(self.forward_prob[src_2_id]*new_src_2_backward_prob)
+#         old_min_subgraph_prob = min(\
+#             np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]),
+#             np.sum(self.forward_prob[src_2_id]*self.backward_prob[src_2_id]))
+#         new_min_subgraph_prob = min(\
+#             np.sum(self.forward_prob[src_id]*new_src_backward_prob),
+#             np.sum(self.forward_prob[src_2_id]*new_src_2_backward_prob))
+#         acc_prob = 0 \
+#                    if new_min_subgraph_prob < self.min_subtree_prob \
+#                    else new_graph_prob / old_graph_prob
+#         logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
+#         logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
+#         logging.getLogger('main').debug('old_min_subgraph_prob = {}'.format(old_min_subgraph_prob))
+#         logging.getLogger('main').debug('new_min_subgraph_prob = {}'.format(new_min_subgraph_prob))
+#         return [edge], [edge_to_remove], acc_prob
+
     def propose_adding_edge(self, edge :GraphEdge) \
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        src_id = self.lexicon.get_id(edge.source)
-        tgt_id = self.lexicon.get_id(edge.target)
-        e_id = self.full_graph.edge_set.get_id(edge)
-        tr_mat = self.edge_tr_mat[e_id]
-        new_src_backward_prob = \
-            self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id])
-        old_graph_prob = \
-            np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]) * \
-            np.sum(self.forward_prob[tgt_id]*self.backward_prob[tgt_id])
-        new_graph_prob = \
-            np.sum(self.forward_prob[src_id]*new_src_backward_prob)
-        acc_prob = 0 \
-                   if new_graph_prob < self.min_subtree_prob \
-                   else new_graph_prob / old_graph_prob
-        logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
-        logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
-        return [edge], [], acc_prob
+        return [edge], [], 1
 
     def propose_deleting_edge(self, edge :GraphEdge) \
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        src_id = self.lexicon.get_id(edge.source)
-        tgt_id = self.lexicon.get_id(edge.target)
-        e_id = self.full_graph.edge_set.get_id(edge)
-        tr_mat = self.edge_tr_mat[e_id]
-        new_src_backward_prob = np.copy(self.leaf_prob[src_id,:])
-        for o_edge in self.branching.outgoing_edges(edge.source):
-            if o_edge != edge:
-                o_e_id = self.full_graph.edge_set.get_id(o_edge)
-                o_tgt_id = self.lexicon.get_id(o_edge.target)
-                new_src_backward_prob *= \
-                    self.edge_tr_mat[o_e_id].dot(self.backward_prob[o_tgt_id,:])
-        old_graph_prob = \
-            np.sum(self.forward_prob[src_id]*self.backward_prob[src_id])
-        new_graph_prob = \
-            np.sum(self.forward_prob[src_id]*new_src_backward_prob) * \
-            np.sum(self.root_prob[tgt_id]*self.backward_prob[tgt_id])
-        new_min_subgraph_prob = min(\
-            np.sum(self.forward_prob[src_id]*new_src_backward_prob),
-            np.sum(self.root_prob[tgt_id]*self.backward_prob[tgt_id]))
-        acc_prob = 0 \
-                   if new_min_subgraph_prob < self.min_subtree_prob \
-                   else new_graph_prob / old_graph_prob
-        logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
-        logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
-        logging.getLogger('main').debug('new_min_subgraph_prob = {}'.format(new_min_subgraph_prob))
-        return [], [edge], acc_prob
+        return [], [edge], 1
+
+    def propose_flip(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        if random.random() < 0.5:
+            return self.propose_flip_1(edge)
+        else:
+            return self.propose_flip_2(edge)
+
+    def propose_flip_1(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        edges_to_add, edges_to_remove = [], []
+        node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
+
+        if not self.full_graph.has_edge(node_3, node_1):
+            raise ImpossibleMoveException()
+
+        edge_3_1 = random.choice(self.full_graph.edges_between(node_3, node_1))
+        edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
+                   if self.branching.has_edge(node_3, node_2) else None
+        edge_4_1 = self.branching.edges_between(node_4, node_1)[0] \
+                   if self.branching.has_edge(node_4, node_1) else None
+
+        if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
+        if edge_4_1 is not None:
+            edges_to_remove.append(edge_4_1)
+        else: raise Exception('!')
+        edges_to_add.append(edge_3_1)
+        prop_prob_ratio = (1/len(self.full_graph.edges_between(node_3, node_1))) /\
+                          (1/len(self.full_graph.edges_between(node_3, node_2)))
+
+        return edges_to_add, edges_to_remove, prop_prob_ratio
+
+    def propose_flip_2(self, edge :GraphEdge) \
+            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+        edges_to_add, edges_to_remove = [], []
+        node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
+
+        if not self.full_graph.has_edge(node_3, node_5):
+            raise ImpossibleMoveException()
+
+        edge_2_5 = self.branching.edges_between(node_2, node_5)[0] \
+                   if self.branching.has_edge(node_2, node_5) else None
+        edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
+                   if self.branching.has_edge(node_3, node_2) else None
+        edge_3_5 = random.choice(self.full_graph.edges_between(node_3, node_5))
+
+        if edge_2_5 is not None:
+            edges_to_remove.append(edge_2_5)
+        elif node_2 != node_5: raise Exception('!')     # TODO ???
+        if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
+        edges_to_add.append(edge_3_5)
+        prop_prob_ratio = (1/len(self.full_graph.edges_between(node_3, node_5))) /\
+                          (1/len(self.full_graph.edges_between(node_3, node_2)))
+
+        return edges_to_add, edges_to_remove, prop_prob_ratio
+
+    def nodes_for_flip(self, edge :GraphEdge) -> List[LexiconEntry]:
+        node_1, node_2 = edge.source, edge.target
+        node_3 = self.branching.parent(node_2)
+        node_4 = self.branching.parent(node_1)
+        node_5 = node_4
+        if node_5 != node_2:
+            while self.branching.parent(node_5) != node_2: 
+                node_5 = self.branching.parent(node_5)
+        return [node_1, node_2, node_3, node_4, node_5]
 
     def propose_swapping_parent(self, edge :GraphEdge) \
                              -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        # TODO is the old and the new source in the same subtree or not?
-        # -> change accordingly
-        edge_to_remove = self.branching.edges_between(
+        edges_to_remove = self.branching.edges_between(
                               self.branching.parent(edge.target),
-                              edge.target)[0]
-        src_id = self.lexicon.get_id(edge.source)
-        src_2_id = self.lexicon.get_id(edge_to_remove.source)
-        tgt_id = self.lexicon.get_id(edge.target)
-        e_id = self.full_graph.edge_set.get_id(edge)
-        e2_id = self.full_graph.edge_set.get_id(edge_to_remove)
-        tr_mat = self.edge_tr_mat[e_id]
-        new_src_backward_prob = \
-            self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id])
-        new_src_2_backward_prob = np.copy(self.leaf_prob[src_2_id,:])
-        for o_edge in self.branching.outgoing_edges(edge_to_remove.source):
-            if o_edge != edge_to_remove:
-                o_e_id = self.full_graph.edge_set.get_id(o_edge)
-                o_tgt_id = self.lexicon.get_id(o_edge.target)
-                new_src_2_backward_prob *= \
-                    self.edge_tr_mat[o_e_id].dot(self.backward_prob[o_tgt_id,:])
-        old_graph_prob = \
-            np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]) * \
-            np.sum(self.forward_prob[src_2_id]*self.backward_prob[src_2_id])
-        new_graph_prob = \
-            np.sum(self.forward_prob[src_id]*new_src_backward_prob) *\
-            np.sum(self.forward_prob[src_2_id]*new_src_2_backward_prob)
-        old_min_subgraph_prob = min(\
-            np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]),
-            np.sum(self.forward_prob[src_2_id]*self.backward_prob[src_2_id]))
-        new_min_subgraph_prob = min(\
-            np.sum(self.forward_prob[src_id]*new_src_backward_prob),
-            np.sum(self.forward_prob[src_2_id]*new_src_2_backward_prob))
+                              edge.target)
+        return [edge], edges_to_remove, 1
+
+
+    def compute_acc_prob(self, edges_to_add, edges_to_remove):
+        if len(edges_to_add) == 1 and len(edges_to_remove) == 0:
+            t_id = self.lexicon.get_id(edges_to_add[0].target)
+            prob = np.sum(self.root_prob[t_id,:])
+            if prob == 0:
+                return 0
+            return self.compute_acc_prob_for_subtree(\
+                       edges_to_add, edges_to_remove) / prob
+        elif len(edges_to_add) == 0 and len(edges_to_remove) == 1:
+            t_id = self.lexicon.get_id(edges_to_remove[0].target)
+            prob = np.sum(self.root_prob[t_id,:])
+            return self.compute_acc_prob_for_subtree(\
+                       edges_to_add, edges_to_remove) * prob
+#         if len(edges_to_add) + len(edges_to_remove) == 1:
+#             return self.compute_acc_prob_for_subtree(\
+#                        edges_to_add, edges_to_remove)
+        else:
+            edges_to_change_by_root = {}
+            for edge in edges_to_add:
+                root = self.branching.root(edge.source)
+                if root not in edges_to_change_by_root:
+                    edges_to_change_by_root[root] = (list(), list())
+                edges_to_change_by_root[root][0].append(edge)
+            for edge in edges_to_remove:
+                root = self.branching.root(edge.source)
+                if root not in edges_to_change_by_root:
+                    edges_to_change_by_root[root] = (list(), list())
+                edges_to_change_by_root[root][1].append(edge)
+            prob = 1.0
+            for root, (edges_to_add, edges_to_remove) in \
+                    edges_to_change_by_root.items():
+                prob *= self.compute_acc_prob_for_subtree(\
+                            edges_to_add, edges_to_remove)
+            return prob
+
+    def compute_acc_prob_for_subtree(self, edges_to_add, edges_to_remove):
+
+        def _common_ancestor(node_1, node_2, depth_1=None, depth_2=None):
+            if node_1 == node_2:
+                return node_1
+            if depth_1 is None:
+                depth_1 = self.branching.depth(node_1)
+            if depth_2 is None:
+                depth_2 = self.branching.depth(node_2)
+            if max(depth_1, depth_2) <= 0:
+                return None
+            if depth_1 < depth_2:
+                return _common_ancestor(node_1, self.branching.parent(node_2),\
+                                        depth_1, depth_2-1)
+            elif depth_1 > depth_2:
+                return _common_ancestor(self.branching.parent(node_1), node_2,\
+                                        depth_1-1, depth_2)
+            else:
+                return _common_ancestor(self.branching.parent(node_1), \
+                                        self.branching.parent(node_2), \
+                                        depth_1-1, depth_2-1)
+        # TODO
+        # subtree_root is the common ancestor of all edge sources
+        #   from edges_to_add + edges_to_remove
+        edges_to_change = edges_to_add + edges_to_remove
+        subtree_root = edges_to_change[0].source
+        for edge in edges_to_change[1:]:
+            subtree_root = _common_ancestor(subtree_root, edge.source)
+        r_id = self.lexicon.get_id(subtree_root)
+        root_depth = self.branching.depth(subtree_root)
+        nodes_to_recompute_backward_prob = set()
+        for edge in edges_to_change:
+            for d, node in enumerate(self.branching.path(subtree_root, edge.source)):
+                nodes_to_recompute_backward_prob.add((node, root_depth+d))
+        nodes_to_recompute_backward_prob = \
+            list(map(itemgetter(0),
+                     sorted(list(nodes_to_recompute_backward_prob), \
+                                 reverse=True, key=itemgetter(1))))
+        new_backward_prob = np.empty((len(nodes_to_recompute_backward_prob), \
+                                      len(self.tagset)), dtype=np.float64)
+        # TODO refactor
+        edges_to_add_by_source = {}
+        for edge in edges_to_add:
+            if edge.source not in edges_to_add_by_source:
+                edges_to_add_by_source[edge.source] = set()
+            edges_to_add_by_source[edge.source].add(edge)
+        edges_to_remove_by_source = {} 
+        for edge in edges_to_remove:
+            if edge.source not in edges_to_remove_by_source:
+                edges_to_remove_by_source[edge.source] = set()
+            edges_to_remove_by_source[edge.source].add(edge)
+        for i, node in enumerate(nodes_to_recompute_backward_prob):
+            w_id = self.lexicon.get_id(node)
+            new_backward_prob[i,:] = self.leaf_prob[w_id,:]
+            edges_to_add_for_node = edges_to_add_by_source[node] \
+                                    if node in edges_to_add_by_source \
+                                    else set()
+            edges_to_remove_for_node = edges_to_remove_by_source[node] \
+                                    if node in edges_to_remove_by_source \
+                                    else set()
+            edges = set(self.branching.outgoing_edges(node)) | \
+                    edges_to_add_for_node - \
+                    edges_to_remove_for_node
+            for edge in edges:
+                e_id = self.edge_set.get_id(edge)
+                b = None
+                try:
+                    b = new_backward_prob[nodes_to_recompute_backward_prob\
+                                          .index(edge.target)]
+                except ValueError:
+                    b = self.backward_prob[self.lexicon.get_id(edge.target),:]
+                new_backward_prob[i,:] *= self.edge_tr_mat[e_id].dot(b)
+        old_prob = np.sum(self.forward_prob[r_id,:] * \
+                          self.backward_prob[r_id,:])
+        new_prob = np.sum(self.forward_prob[r_id,:] * \
+                          new_backward_prob[-1,:])
         acc_prob = 0 \
-                   if new_min_subgraph_prob < self.min_subtree_prob \
-                   else new_graph_prob / old_graph_prob
-        logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
-        logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
-        logging.getLogger('main').debug('old_min_subgraph_prob = {}'.format(old_min_subgraph_prob))
-        logging.getLogger('main').debug('new_min_subgraph_prob = {}'.format(new_min_subgraph_prob))
-        return [edge], [edge_to_remove], acc_prob
+                   if new_prob < self.min_subtree_prob \
+                   else new_prob / old_prob
+        return acc_prob
 
     def recompute_forward_prob_for_node(self, node):
         w_id = self.lexicon.get_id(node)
