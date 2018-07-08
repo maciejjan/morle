@@ -1237,15 +1237,19 @@ class MCMCImprovedTagSampler:
 
     def compute_acc_prob(self, edges_to_add, edges_to_remove):
         if len(edges_to_add) == 1 and len(edges_to_remove) == 0:
-            t_id = self.lexicon.get_id(edges_to_add[0].target)
-            prob = np.sum(self.root_prob[t_id,:])
+            tgt_id = self.lexicon.get_id(edges_to_add[0].target)
+            prob = np.sum(self.root_prob[tgt_id,:]*self.backward_prob[tgt_id,:])
+            logging.getLogger('main').debug(\
+                'old subtree prob: {}'.format(prob))
             if prob == 0:
                 return 0
             return self.compute_acc_prob_for_subtree(\
                        edges_to_add, edges_to_remove) / prob
         elif len(edges_to_add) == 0 and len(edges_to_remove) == 1:
-            t_id = self.lexicon.get_id(edges_to_remove[0].target)
-            prob = np.sum(self.root_prob[t_id,:])
+            tgt_id = self.lexicon.get_id(edges_to_remove[1].target)
+            prob = np.sum(self.root_prob[tgt_id,:]*self.backward_prob[tgt_id,:])
+            logging.getLogger('main').debug(\
+                'new subtree prob: {}'.format(prob))
             return self.compute_acc_prob_for_subtree(\
                        edges_to_add, edges_to_remove) * prob
 #         if len(edges_to_add) + len(edges_to_remove) == 1:
@@ -1346,6 +1350,8 @@ class MCMCImprovedTagSampler:
                           self.backward_prob[r_id,:])
         new_prob = np.sum(self.forward_prob[r_id,:] * \
                           new_backward_prob[-1,:])
+        logging.getLogger('main').debug('old_prob = {}'.format(old_prob))
+        logging.getLogger('main').debug('new_prob = {}'.format(new_prob))
         acc_prob = 0 \
                    if new_prob < self.min_subtree_prob \
                    else new_prob / old_prob
