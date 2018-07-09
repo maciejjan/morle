@@ -1062,98 +1062,6 @@ class MCMCImprovedTagSampler:
         else:
             return self.propose_adding_edge(edge)
 
-#     def propose_adding_edge(self, edge :GraphEdge) \
-#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-#         src_id = self.lexicon.get_id(edge.source)
-#         tgt_id = self.lexicon.get_id(edge.target)
-#         e_id = self.full_graph.edge_set.get_id(edge)
-#         tr_mat = self.edge_tr_mat[e_id]
-#         new_src_backward_prob = \
-#             self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id])
-#         old_graph_prob = \
-#             np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]) * \
-#             np.sum(self.forward_prob[tgt_id]*self.backward_prob[tgt_id])
-#         new_graph_prob = \
-#             np.sum(self.forward_prob[src_id]*new_src_backward_prob)
-#         acc_prob = 0 \
-#                    if new_graph_prob < self.min_subtree_prob \
-#                    else new_graph_prob / old_graph_prob
-#         logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
-#         logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
-#         return [edge], [], acc_prob
-# 
-#     def propose_deleting_edge(self, edge :GraphEdge) \
-#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-#         src_id = self.lexicon.get_id(edge.source)
-#         tgt_id = self.lexicon.get_id(edge.target)
-#         e_id = self.full_graph.edge_set.get_id(edge)
-#         tr_mat = self.edge_tr_mat[e_id]
-#         new_src_backward_prob = np.copy(self.leaf_prob[src_id,:])
-#         for o_edge in self.branching.outgoing_edges(edge.source):
-#             if o_edge != edge:
-#                 o_e_id = self.full_graph.edge_set.get_id(o_edge)
-#                 o_tgt_id = self.lexicon.get_id(o_edge.target)
-#                 new_src_backward_prob *= \
-#                     self.edge_tr_mat[o_e_id].dot(self.backward_prob[o_tgt_id,:])
-#         old_graph_prob = \
-#             np.sum(self.forward_prob[src_id]*self.backward_prob[src_id])
-#         new_graph_prob = \
-#             np.sum(self.forward_prob[src_id]*new_src_backward_prob) * \
-#             np.sum(self.root_prob[tgt_id]*self.backward_prob[tgt_id])
-#         new_min_subgraph_prob = min(\
-#             np.sum(self.forward_prob[src_id]*new_src_backward_prob),
-#             np.sum(self.root_prob[tgt_id]*self.backward_prob[tgt_id]))
-#         acc_prob = 0 \
-#                    if new_min_subgraph_prob < self.min_subtree_prob \
-#                    else new_graph_prob / old_graph_prob
-#         logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
-#         logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
-#         logging.getLogger('main').debug('new_min_subgraph_prob = {}'.format(new_min_subgraph_prob))
-#         return [], [edge], acc_prob
-# 
-#     def propose_swapping_parent(self, edge :GraphEdge) \
-#                              -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-#         # TODO is the old and the new source in the same subtree or not?
-#         # -> change accordingly
-#         edge_to_remove = self.branching.edges_between(
-#                               self.branching.parent(edge.target),
-#                               edge.target)[0]
-#         src_id = self.lexicon.get_id(edge.source)
-#         src_2_id = self.lexicon.get_id(edge_to_remove.source)
-#         tgt_id = self.lexicon.get_id(edge.target)
-#         e_id = self.full_graph.edge_set.get_id(edge)
-#         e2_id = self.full_graph.edge_set.get_id(edge_to_remove)
-#         tr_mat = self.edge_tr_mat[e_id]
-#         new_src_backward_prob = \
-#             self.backward_prob[src_id] * tr_mat.dot(self.backward_prob[tgt_id])
-#         new_src_2_backward_prob = np.copy(self.leaf_prob[src_2_id,:])
-#         for o_edge in self.branching.outgoing_edges(edge_to_remove.source):
-#             if o_edge != edge_to_remove:
-#                 o_e_id = self.full_graph.edge_set.get_id(o_edge)
-#                 o_tgt_id = self.lexicon.get_id(o_edge.target)
-#                 new_src_2_backward_prob *= \
-#                     self.edge_tr_mat[o_e_id].dot(self.backward_prob[o_tgt_id,:])
-#         old_graph_prob = \
-#             np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]) * \
-#             np.sum(self.forward_prob[src_2_id]*self.backward_prob[src_2_id])
-#         new_graph_prob = \
-#             np.sum(self.forward_prob[src_id]*new_src_backward_prob) *\
-#             np.sum(self.forward_prob[src_2_id]*new_src_2_backward_prob)
-#         old_min_subgraph_prob = min(\
-#             np.sum(self.forward_prob[src_id]*self.backward_prob[src_id]),
-#             np.sum(self.forward_prob[src_2_id]*self.backward_prob[src_2_id]))
-#         new_min_subgraph_prob = min(\
-#             np.sum(self.forward_prob[src_id]*new_src_backward_prob),
-#             np.sum(self.forward_prob[src_2_id]*new_src_2_backward_prob))
-#         acc_prob = 0 \
-#                    if new_min_subgraph_prob < self.min_subtree_prob \
-#                    else new_graph_prob / old_graph_prob
-#         logging.getLogger('main').debug('old_graph_prob = {}'.format(old_graph_prob))
-#         logging.getLogger('main').debug('new_graph_prob = {}'.format(new_graph_prob))
-#         logging.getLogger('main').debug('old_min_subgraph_prob = {}'.format(old_min_subgraph_prob))
-#         logging.getLogger('main').debug('new_min_subgraph_prob = {}'.format(new_min_subgraph_prob))
-#         return [edge], [edge_to_remove], acc_prob
-
     def propose_adding_edge(self, edge :GraphEdge) \
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
         return [edge], [], 1
@@ -1246,7 +1154,7 @@ class MCMCImprovedTagSampler:
             return self.compute_acc_prob_for_subtree(\
                        edges_to_add, edges_to_remove) / prob
         elif len(edges_to_add) == 0 and len(edges_to_remove) == 1:
-            tgt_id = self.lexicon.get_id(edges_to_remove[1].target)
+            tgt_id = self.lexicon.get_id(edges_to_remove[0].target)
             prob = np.sum(self.root_prob[tgt_id,:]*self.backward_prob[tgt_id,:])
             logging.getLogger('main').debug(\
                 'new subtree prob: {}'.format(prob))
