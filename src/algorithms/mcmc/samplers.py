@@ -152,7 +152,7 @@ class MCMCGraphSampler:
 
     def propose_flip_1(self, edge :GraphEdge) \
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        edges_to_add, edges_to_remove = [], []
+        edges_to_add, edges_to_remove = [edge], []
         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
 
         if not self.full_graph.has_edge(node_3, node_1):
@@ -176,7 +176,7 @@ class MCMCGraphSampler:
 
     def propose_flip_2(self, edge :GraphEdge) \
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        edges_to_add, edges_to_remove = [], []
+        edges_to_add, edges_to_remove = [edge], []
         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
 
         if not self.full_graph.has_edge(node_3, node_5):
@@ -853,6 +853,7 @@ class MCMCImprovedTagSampler:
         self.lexicon = full_graph.lexicon
         self.model = model
         self.tagset = tagset
+        logging.getLogger('main').debug('tagset = {}'.format(str(tagset)))
         self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
         self.warmup_iter = warmup_iter
         self.sampling_iter = sampling_iter
@@ -867,7 +868,7 @@ class MCMCImprovedTagSampler:
         self.edge_set = untagged_edge_set
         self.init_forward_prob()
         self.init_backward_prob()
-#         self.write_debug_info()
+        self.write_debug_info()
 
     def _compute_root_prob(self):
         logging.getLogger('main').info('Computing root probabilities...')
@@ -1056,6 +1057,7 @@ class MCMCImprovedTagSampler:
         if self.branching.has_edge(edge.source, edge.target, edge.rule):
             return self.propose_deleting_edge(edge)
         elif self.branching.has_path(edge.target, edge.source):
+#             raise ImpossibleMoveException()
             return self.propose_flip(edge)
         elif self.branching.parent(edge.target) is not None:
             return self.propose_swapping_parent(edge)
@@ -1079,7 +1081,7 @@ class MCMCImprovedTagSampler:
 
     def propose_flip_1(self, edge :GraphEdge) \
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        edges_to_add, edges_to_remove = [], []
+        edges_to_add, edges_to_remove = [edge], []
         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
 
         if not self.full_graph.has_edge(node_3, node_1):
@@ -1090,6 +1092,16 @@ class MCMCImprovedTagSampler:
                    if self.branching.has_edge(node_3, node_2) else None
         edge_4_1 = self.branching.edges_between(node_4, node_1)[0] \
                    if self.branching.has_edge(node_4, node_1) else None
+
+        logging.getLogger('main').debug('flip-1')
+        logging.getLogger('main').debug('v1 = {}'.format(str(node_1)))
+        logging.getLogger('main').debug('v2 = {}'.format(str(node_2)))
+        logging.getLogger('main').debug('v3 = {}'.format(str(node_3)))
+        logging.getLogger('main').debug('v4 = {}'.format(str(node_4)))
+        logging.getLogger('main').debug('v5 = {}'.format(str(node_5)))
+        logging.getLogger('main').debug('v3 -> v1 = {}'.format(str(edge_3_1)))
+        logging.getLogger('main').debug('v3 -> v2 = {}'.format(str(edge_3_2)))
+        logging.getLogger('main').debug('v4 -> v1 = {}'.format(str(edge_4_1)))
 
         if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
         if edge_4_1 is not None:
@@ -1103,7 +1115,7 @@ class MCMCImprovedTagSampler:
 
     def propose_flip_2(self, edge :GraphEdge) \
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        edges_to_add, edges_to_remove = [], []
+        edges_to_add, edges_to_remove = [edge], []
         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
 
         if not self.full_graph.has_edge(node_3, node_5):
@@ -1114,6 +1126,16 @@ class MCMCImprovedTagSampler:
         edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
                    if self.branching.has_edge(node_3, node_2) else None
         edge_3_5 = random.choice(self.full_graph.edges_between(node_3, node_5))
+
+        logging.getLogger('main').debug('flip-2')
+        logging.getLogger('main').debug('v1 = {}'.format(str(node_1)))
+        logging.getLogger('main').debug('v2 = {}'.format(str(node_2)))
+        logging.getLogger('main').debug('v3 = {}'.format(str(node_3)))
+        logging.getLogger('main').debug('v4 = {}'.format(str(node_4)))
+        logging.getLogger('main').debug('v5 = {}'.format(str(node_5)))
+        logging.getLogger('main').debug('v2 -> v5 = {}'.format(str(edge_2_5)))
+        logging.getLogger('main').debug('v3 -> v2 = {}'.format(str(edge_3_2)))
+        logging.getLogger('main').debug('v3 -> v5 = {}'.format(str(edge_3_5)))
 
         if edge_2_5 is not None:
             edges_to_remove.append(edge_2_5)
@@ -1129,10 +1151,10 @@ class MCMCImprovedTagSampler:
         node_1, node_2 = edge.source, edge.target
         node_3 = self.branching.parent(node_2)
         node_4 = self.branching.parent(node_1)
-        node_5 = node_4
-        if node_5 != node_2:
-            while self.branching.parent(node_5) != node_2: 
-                node_5 = self.branching.parent(node_5)
+        node_5 = node_1
+#         if node_5 != node_2:
+        while self.branching.parent(node_5) != node_2: 
+            node_5 = self.branching.parent(node_5)
         return [node_1, node_2, node_3, node_4, node_5]
 
     def propose_swapping_parent(self, edge :GraphEdge) \
@@ -1178,6 +1200,11 @@ class MCMCImprovedTagSampler:
             prob = 1.0
             for root, (edges_to_add, edges_to_remove) in \
                     edges_to_change_by_root.items():
+                logging.getLogger('main').debug(\
+                    'edges_to_change_by_root[{}] = {} ;;; {}'\
+                    .format(str(root),
+                            '; '.join(str(edge) for edge in edges_to_add),
+                            '; '.join(str(edge) for edge in edges_to_remove)))
                 prob *= self.compute_acc_prob_for_subtree(\
                             edges_to_add, edges_to_remove)
             return prob
@@ -1203,6 +1230,21 @@ class MCMCImprovedTagSampler:
                 return _common_ancestor(self.branching.parent(node_1), \
                                         self.branching.parent(node_2), \
                                         depth_1-1, depth_2-1)
+
+        # TODO very ugly -- refactor!!!
+        def _compute_new_node_depth(result, relevant_nodes, node, edges_to_add, edges_to_remove):
+            for edge in self.branching.outgoing_edges(node):
+                if edge.target in relevant_nodes:
+                    if edge not in edges_to_remove:
+                        result[edge.target] = result[node] + 1
+                        _compute_new_node_depth(result, relevant_nodes,
+                            edge.target, edges_to_add, edges_to_remove)
+            for edge in edges_to_add:
+                if edge.source == node and edge.target in relevant_nodes:
+                    result[edge.target] = result[node] + 1
+                    _compute_new_node_depth(result, relevant_nodes,
+                        edge.target, edges_to_add, edges_to_remove)
+
         # TODO
         # subtree_root is the common ancestor of all edge sources
         #   from edges_to_add + edges_to_remove
@@ -1211,15 +1253,23 @@ class MCMCImprovedTagSampler:
         for edge in edges_to_change[1:]:
             subtree_root = _common_ancestor(subtree_root, edge.source)
         r_id = self.lexicon.get_id(subtree_root)
-        root_depth = self.branching.depth(subtree_root)
+#         root_depth = self.branching.depth(subtree_root)
         nodes_to_recompute_backward_prob = set()
         for edge in edges_to_change:
-            for d, node in enumerate(self.branching.path(subtree_root, edge.source)):
-                nodes_to_recompute_backward_prob.add((node, root_depth+d))
+            path = self.branching.path(subtree_root, edge.source)
+            logging.getLogger('main').debug(' -> '.join(str(node) for node in path))
+            for node in path:
+                nodes_to_recompute_backward_prob.add(node)
+        new_node_depth = { subtree_root : 0 }
+        _compute_new_node_depth(new_node_depth, nodes_to_recompute_backward_prob,
+            subtree_root, edges_to_add, edges_to_remove)
         nodes_to_recompute_backward_prob = \
-            list(map(itemgetter(0),
-                     sorted(list(nodes_to_recompute_backward_prob), \
-                                 reverse=True, key=itemgetter(1))))
+             sorted(list(nodes_to_recompute_backward_prob), \
+                    reverse=True, key=lambda n: new_node_depth[n])
+        logging.getLogger('main').debug(\
+            'nodes_to_recompute_backward_prob = {}'\
+            .format(', '.join(str(node) \
+                    for node in nodes_to_recompute_backward_prob)))
         new_backward_prob = np.empty((len(nodes_to_recompute_backward_prob), \
                                       len(self.tagset)), dtype=np.float64)
         # TODO refactor
@@ -1234,30 +1284,57 @@ class MCMCImprovedTagSampler:
                 edges_to_remove_by_source[edge.source] = set()
             edges_to_remove_by_source[edge.source].add(edge)
         for i, node in enumerate(nodes_to_recompute_backward_prob):
+            logging.getLogger('main').debug('+ {}'.format(i))
             w_id = self.lexicon.get_id(node)
             new_backward_prob[i,:] = self.leaf_prob[w_id,:]
             edges_to_add_for_node = edges_to_add_by_source[node] \
                                     if node in edges_to_add_by_source \
                                     else set()
             edges_to_remove_for_node = edges_to_remove_by_source[node] \
-                                    if node in edges_to_remove_by_source \
-                                    else set()
-            edges = set(self.branching.outgoing_edges(node)) | \
-                    edges_to_add_for_node - \
+                                       if node in edges_to_remove_by_source \
+                                       else set()
+            logging.getLogger('main').debug('edges_to_add_for_node = {}'\
+                .format('; '.join(str(edge) for edge in edges_to_add_for_node)))
+            logging.getLogger('main').debug('edges_to_remove_for_node = {}'\
+                .format('; '.join(str(edge) for edge in edges_to_remove_for_node)))
+            edges = (set(self.branching.outgoing_edges(node)) | \
+                     edges_to_add_for_node) - \
                     edges_to_remove_for_node
+            logging.getLogger('main').debug('')
+            logging.getLogger('main').debug('old outgoing edges for: {}'.format(str(node)))
+            for edge in self.branching.outgoing_edges(node):
+                logging.getLogger('main').debug('{}'.format(str(edge)))
+            logging.getLogger('main').debug('')
+            logging.getLogger('main').debug('new outgoing edges for: {}'.format(str(node)))
             for edge in edges:
-                e_id = self.edge_set.get_id(edge)
-                b = None
-                try:
-                    b = new_backward_prob[nodes_to_recompute_backward_prob\
-                                          .index(edge.target)]
-                except ValueError:
-                    b = self.backward_prob[self.lexicon.get_id(edge.target),:]
+                logging.getLogger('main').debug('{}'.format(str(edge)))
+            logging.getLogger('main').debug('')
+            for edge in edges:
+                e_id = self.full_graph.edge_set.get_id(edge)
+                b = new_backward_prob[nodes_to_recompute_backward_prob\
+                                      .index(edge.target),:] \
+                    if edge.target in nodes_to_recompute_backward_prob \
+                    else self.backward_prob[self.lexicon.get_id(edge.target),:]
+                if edge.target in nodes_to_recompute_backward_prob:
+                    logging.getLogger('main').debug('  - {}'.format(\
+                        nodes_to_recompute_backward_prob.index(edge.target)))
                 new_backward_prob[i,:] *= self.edge_tr_mat[e_id].dot(b)
+#         logging.getLogger('main').debug(\
+#             'new_backward_prob[-1,:] = {}'\
+#             .format(new_backward_prob[-1,:]))
         old_prob = np.sum(self.forward_prob[r_id,:] * \
                           self.backward_prob[r_id,:])
         new_prob = np.sum(self.forward_prob[r_id,:] * \
                           new_backward_prob[-1,:])
+        if new_prob == 0:
+            logging.getLogger('main').debug('{} == {}'.format(\
+                str(self.lexicon[r_id]), str(nodes_to_recompute_backward_prob[-1])))
+            logging.getLogger('main').debug(\
+                'common ancestor forward prob > 0:  {}'\
+                .format(np.where(self.forward_prob[r_id,:] > 0)))
+            for i in range(new_backward_prob.shape[0]):
+                logging.getLogger('main').debug(\
+                    'new_backward_prob[{},:] = {}'.format(i, np.where(new_backward_prob[i,:] > 0)))
         logging.getLogger('main').debug('old_prob = {}'.format(old_prob))
         logging.getLogger('main').debug('new_prob = {}'.format(new_prob))
         acc_prob = 0 \
@@ -1285,11 +1362,13 @@ class MCMCImprovedTagSampler:
         self.forward_prob[w_id,:] = result
         if not np.any(result > 0):
             root = self.branching.root(node)
+            parent = self.branching.parent(node)
             print()
             print('root =', root)
             print('subtree size =', self.branching.subtree_size(root))
             print('subtree height =', self.branching.height(root))
             print('root prob.=', self.root_prob[self.lexicon.get_id(root),:])
+            print('parent forward prob.=', self.forward_prob[self.lexicon.get_id(parent),:])
             print('Zero forward prob. for: {} (old value = {})'\
                   .format(self.lexicon[w_id], old_value))
             raise Exception()
@@ -1361,9 +1440,15 @@ class MCMCImprovedTagSampler:
             roots_changed.add(self.branching.root(e.source))
             for stat in self.stats.values():
                 stat.edge_added(e)
+        logging.getLogger('main').debug('roots_changed = {}'\
+            .format(', '.join(str(root) for root in roots_changed)))
+        roots_changed = { root for root in roots_changed \
+                          if self.branching.parent(root) is None }
         for root in roots_changed:
             self.update_tag_freq_for_subtree(root)
+        for root in roots_changed:
             self.recompute_backward_prob_for_subtree(root)
+        for root in roots_changed:
             self.recompute_forward_prob_for_subtree(root)
 
     def finalize(self):
