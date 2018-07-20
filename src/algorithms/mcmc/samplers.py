@@ -524,15 +524,6 @@ class MCMCTagSampler:
             if ue_id != len(edge_tr_mat):
                 raise Exception('Inconsistent untagged edge IDs!')
             edge_tr_mat.append(csr_matrix(tr_array))
-#         for e_id, edge in enumerate(full_graph.edge_set):
-#             untagged_edge = _untag_edge(self.lexicon, edge)
-#             if untagged_edge not in untagged_edge_set:
-#                 untagged_edge_set.add(untagged_edge)
-#                 edge_tr_mat.append(csr_matrix((T, T)))
-#             ue_id = untagged_edge_set.get_id(untagged_edge)
-#             t1_id = self.tag_idx[edge.rule.tag_subst[0]]
-#             t2_id = self.tag_idx[edge.rule.tag_subst[1]]
-#             edge_tr_mat[ue_id][t1_id, t2_id] = edge_prob_ratios[e_id]
         return untagged_edge_set, edge_tr_mat
 
     def init_forward_prob(self):
@@ -583,21 +574,12 @@ class MCMCTagSampler:
         try:
             edges_to_add, edges_to_remove, prop_prob_ratio =\
                 self.determine_move_proposal(edge)
-#             for edge in edges_to_add:
-#                 logging.getLogger('main').debug('Adding: {}'.format(edge))
-#             for edge in edges_to_remove:
-#                 logging.getLogger('main').debug('Removing: {}'.format(edge))
             acc_prob = self.compute_acc_prob(edges_to_add, edges_to_remove) * \
                        prop_prob_ratio
-#             logging.getLogger('main').debug('acc_prob = {}'.format(acc_prob))
             if np.isnan(acc_prob):
                 raise ImpossibleMoveException()
-#                 raise Exception()
             if acc_prob >= 1 or (acc_prob > 0 and acc_prob >= random.random()):
                 self.accept_move(edges_to_add, edges_to_remove)
-#                 logging.getLogger('main').debug('accepted')
-#             else:
-#                 logging.getLogger('main').debug('rejected')
         # if move impossible -- propose staying in the current graph
         # (the acceptance probability for that is 1, so this move
         # is automatically accepted and nothing needs to be done
@@ -615,7 +597,6 @@ class MCMCTagSampler:
         if self.branching.has_edge(edge.source, edge.target, edge.rule):
             return self.propose_deleting_edge(edge)
         elif self.branching.has_path(edge.target, edge.source):
-#             raise ImpossibleMoveException()
             return self.propose_flip(edge)
         elif self.branching.parent(edge.target) is not None:
             return self.propose_swapping_parent(edge)
@@ -651,16 +632,6 @@ class MCMCTagSampler:
         edge_4_1 = self.branching.edges_between(node_4, node_1)[0] \
                    if self.branching.has_edge(node_4, node_1) else None
 
-#         logging.getLogger('main').debug('flip-1')
-#         logging.getLogger('main').debug('v1 = {}'.format(str(node_1)))
-#         logging.getLogger('main').debug('v2 = {}'.format(str(node_2)))
-#         logging.getLogger('main').debug('v3 = {}'.format(str(node_3)))
-#         logging.getLogger('main').debug('v4 = {}'.format(str(node_4)))
-#         logging.getLogger('main').debug('v5 = {}'.format(str(node_5)))
-#         logging.getLogger('main').debug('v3 -> v1 = {}'.format(str(edge_3_1)))
-#         logging.getLogger('main').debug('v3 -> v2 = {}'.format(str(edge_3_2)))
-#         logging.getLogger('main').debug('v4 -> v1 = {}'.format(str(edge_4_1)))
-
         if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
         if edge_4_1 is not None:
             edges_to_remove.append(edge_4_1)
@@ -684,16 +655,6 @@ class MCMCTagSampler:
         edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
                    if self.branching.has_edge(node_3, node_2) else None
         edge_3_5 = random.choice(self.full_graph.edges_between(node_3, node_5))
-
-#         logging.getLogger('main').debug('flip-2')
-#         logging.getLogger('main').debug('v1 = {}'.format(str(node_1)))
-#         logging.getLogger('main').debug('v2 = {}'.format(str(node_2)))
-#         logging.getLogger('main').debug('v3 = {}'.format(str(node_3)))
-#         logging.getLogger('main').debug('v4 = {}'.format(str(node_4)))
-#         logging.getLogger('main').debug('v5 = {}'.format(str(node_5)))
-#         logging.getLogger('main').debug('v2 -> v5 = {}'.format(str(edge_2_5)))
-#         logging.getLogger('main').debug('v3 -> v2 = {}'.format(str(edge_3_2)))
-#         logging.getLogger('main').debug('v3 -> v5 = {}'.format(str(edge_3_5)))
 
         if edge_2_5 is not None:
             edges_to_remove.append(edge_2_5)
@@ -727,8 +688,6 @@ class MCMCTagSampler:
         if len(edges_to_add) == 1 and len(edges_to_remove) == 0:
             tgt_id = self.lexicon.get_id(edges_to_add[0].target)
             prob = np.sum(self.root_prob[tgt_id,:]*self.backward_prob[tgt_id,:])
-#             logging.getLogger('main').debug(\
-#                 'old subtree prob: {}'.format(prob))
             if prob == 0:
                 return 0
             return self.compute_acc_prob_for_subtree(\
@@ -736,13 +695,8 @@ class MCMCTagSampler:
         elif len(edges_to_add) == 0 and len(edges_to_remove) == 1:
             tgt_id = self.lexicon.get_id(edges_to_remove[0].target)
             prob = np.sum(self.root_prob[tgt_id,:]*self.backward_prob[tgt_id,:])
-#             logging.getLogger('main').debug(\
-#                 'new subtree prob: {}'.format(prob))
             return self.compute_acc_prob_for_subtree(\
                        edges_to_add, edges_to_remove) * prob
-#         if len(edges_to_add) + len(edges_to_remove) == 1:
-#             return self.compute_acc_prob_for_subtree(\
-#                        edges_to_add, edges_to_remove)
         else:
             edges_to_change_by_root = {}
             for edge in edges_to_add:
@@ -803,7 +757,6 @@ class MCMCTagSampler:
                     _compute_new_node_depth(result, relevant_nodes,
                         edge.target, edges_to_add, edges_to_remove)
 
-        # TODO
         # subtree_root is the common ancestor of all edge sources
         #   from edges_to_add + edges_to_remove
         edges_to_change = edges_to_add + edges_to_remove
@@ -811,11 +764,9 @@ class MCMCTagSampler:
         for edge in edges_to_change[1:]:
             subtree_root = _common_ancestor(subtree_root, edge.source)
         r_id = self.lexicon.get_id(subtree_root)
-#         root_depth = self.branching.depth(subtree_root)
         nodes_to_recompute_backward_prob = set()
         for edge in edges_to_change:
             path = self.branching.path(subtree_root, edge.source)
-#             logging.getLogger('main').debug(' -> '.join(str(node) for node in path))
             for node in path:
                 nodes_to_recompute_backward_prob.add(node)
         new_node_depth = { subtree_root : 0 }
@@ -824,10 +775,6 @@ class MCMCTagSampler:
         nodes_to_recompute_backward_prob = \
              sorted(list(nodes_to_recompute_backward_prob), \
                     reverse=True, key=lambda n: new_node_depth[n])
-#         logging.getLogger('main').debug(\
-#             'nodes_to_recompute_backward_prob = {}'\
-#             .format(', '.join(str(node) \
-#                     for node in nodes_to_recompute_backward_prob)))
         new_backward_prob = np.empty((len(nodes_to_recompute_backward_prob), \
                                       len(self.tagset)), dtype=np.float64)
         # TODO refactor
@@ -851,50 +798,20 @@ class MCMCTagSampler:
             edges_to_remove_for_node = edges_to_remove_by_source[node] \
                                        if node in edges_to_remove_by_source \
                                        else set()
-#             logging.getLogger('main').debug('edges_to_add_for_node = {}'\
-#                 .format('; '.join(str(edge) for edge in edges_to_add_for_node)))
-#             logging.getLogger('main').debug('edges_to_remove_for_node = {}'\
-#                 .format('; '.join(str(edge) for edge in edges_to_remove_for_node)))
             edges = (set(self.branching.outgoing_edges(node)) | \
                      edges_to_add_for_node) - \
                     edges_to_remove_for_node
-#             logging.getLogger('main').debug('')
-#             logging.getLogger('main').debug('old outgoing edges for: {}'.format(str(node)))
-#             for edge in self.branching.outgoing_edges(node):
-#                 logging.getLogger('main').debug('{}'.format(str(edge)))
-#             logging.getLogger('main').debug('')
-#             logging.getLogger('main').debug('new outgoing edges for: {}'.format(str(node)))
-#             for edge in edges:
-#                 logging.getLogger('main').debug('{}'.format(str(edge)))
-#             logging.getLogger('main').debug('')
             for edge in edges:
                 e_id = self.full_graph.edge_set.get_id(edge)
                 b = new_backward_prob[nodes_to_recompute_backward_prob\
                                       .index(edge.target),:] \
                     if edge.target in nodes_to_recompute_backward_prob \
                     else self.backward_prob[self.lexicon.get_id(edge.target),:]
-#                 if edge.target in nodes_to_recompute_backward_prob:
-#                     logging.getLogger('main').debug('  - {}'.format(\
-#                         nodes_to_recompute_backward_prob.index(edge.target)))
                 new_backward_prob[i,:] *= self.edge_tr_mat[e_id].dot(b)
-#         logging.getLogger('main').debug(\
-#             'new_backward_prob[-1,:] = {}'\
-#             .format(new_backward_prob[-1,:]))
         old_prob = np.sum(self.forward_prob[r_id,:] * \
                           self.backward_prob[r_id,:])
         new_prob = np.sum(self.forward_prob[r_id,:] * \
                           new_backward_prob[-1,:])
-#         if new_prob == 0:
-#             logging.getLogger('main').debug('{} == {}'.format(\
-#                 str(self.lexicon[r_id]), str(nodes_to_recompute_backward_prob[-1])))
-#             logging.getLogger('main').debug(\
-#                 'common ancestor forward prob > 0:  {}'\
-#                 .format(np.where(self.forward_prob[r_id,:] > 0)))
-#             for i in range(new_backward_prob.shape[0]):
-#                 logging.getLogger('main').debug(\
-#                     'new_backward_prob[{},:] = {}'.format(i, np.where(new_backward_prob[i,:] > 0)))
-#         logging.getLogger('main').debug('old_prob = {}'.format(old_prob))
-#         logging.getLogger('main').debug('new_prob = {}'.format(new_prob))
         acc_prob = 0 \
                    if new_prob < self.min_subtree_prob \
                    else new_prob / old_prob
@@ -970,8 +887,6 @@ class MCMCTagSampler:
         cur_tag_freq_sum = np.sum(cur_tag_freq)
         if cur_tag_freq_sum > 0:
             cur_tag_freq /= np.sum(cur_tag_freq)
-#         else:
-#             cur_tag_freq = np.ones(len(self.tagset)) / len(self.tagset)
         self.tag_freq[w_id,:] = \
             (self.tag_freq[w_id,:] * self.last_modified[w_id] + \
              cur_tag_freq * (self.iter_num - self.last_modified[w_id])) /\
@@ -998,8 +913,6 @@ class MCMCTagSampler:
             roots_changed.add(self.branching.root(e.source))
             for stat in self.stats.values():
                 stat.edge_added(e)
-#         logging.getLogger('main').debug('roots_changed = {}'\
-#             .format(', '.join(str(root) for root in roots_changed)))
         roots_changed = { root for root in roots_changed \
                           if self.branching.parent(root) is None }
         for root in roots_changed:
@@ -1033,17 +946,11 @@ class MCMCTagSampler:
         with open_to_write(filename) as fp:
             for e_id, edge in enumerate(self.full_graph.edge_set):
                 tag_probs = []
-#                 edge_tr_mat = self.edge_tr_mat[e_id].toarray()
                 edge_tr_mat = self.edge_tr_mat[e_id]
                 for (t1_id, t2_id), val in edge_tr_mat.todok().items():
                     tag_1 = self.tagset[t1_id]
                     tag_2 = self.tagset[t2_id]
                     tag_probs.append((''.join(tag_1), ''.join(tag_2), str(val)))
-#                 for t1_id, tag_1 in enumerate(self.tagset):
-#                     for t2_id, tag_2 in enumerate(self.tagset):
-#                         prob = edge_tr_mat[t1_id,t2_id]
-#                         if prob > 0:
-#                             tag_probs.append((''.join(tag_1), ''.join(tag_2), str(prob)))
                 write_line(fp, (str(edge), ' '.join([t1+':'+t2+':'+prob \
                                                      for t1, t2, prob in tag_probs])))
 
