@@ -107,6 +107,7 @@ class MCMCGraphSampler:
         try:
             edges_to_add, edges_to_remove, prop_prob_ratio =\
                 self.determine_move_proposal(edge)
+            print(len(edges_to_add), len(edges_to_remove))
             acc_prob = self.compute_acc_prob(\
                 edges_to_add, edges_to_remove, prop_prob_ratio)
             if acc_prob >= 1 or acc_prob >= random.random():
@@ -399,7 +400,7 @@ class MCMCGraphSamplerFactory:
             return MCMCGraphSampler(*args, **kwargs)
 
 
-class MCMCTagSampler:
+class MCMCTagSampler(MCMCGraphSampler):
 
     def __init__(self, full_graph :FullGraph,
                        model :ModelSuite,
@@ -538,10 +539,10 @@ class MCMCTagSampler:
         for w_id in range(len(self.lexicon)):
             self.backward_prob[w_id,:] = self.leaf_prob[w_id,:]
 
-    def add_stat(self, name: str, stat :MCMCStatistic) -> None:
-        if name in self.stats:
-            raise Exception('Duplicate statistic name: %s' % name)
-        self.stats[name] = stat
+#     def add_stat(self, name: str, stat :MCMCStatistic) -> None:
+#         if name in self.stats:
+#             raise Exception('Duplicate statistic name: %s' % name)
+#         self.stats[name] = stat
 
     def reset(self):
         self.iter_num = 0
@@ -563,140 +564,140 @@ class MCMCTagSampler:
             self.next()
         self.finalize()
 
-    def next(self) -> None:
-        # increase the number of iterations
-        self.iter_num += 1
-
-        # select an edge randomly
-        edge = self.full_graph.random_edge()
-
-        # try the move determined by the selected edge
-        try:
-            edges_to_add, edges_to_remove, prop_prob_ratio =\
-                self.determine_move_proposal(edge)
-            acc_prob = self.compute_acc_prob(edges_to_add, edges_to_remove) * \
-                       prop_prob_ratio
-            if np.isnan(acc_prob):
-                raise ImpossibleMoveException()
-            if acc_prob >= 1 or (acc_prob > 0 and acc_prob >= random.random()):
-                self.accept_move(edges_to_add, edges_to_remove)
-        # if move impossible -- propose staying in the current graph
-        # (the acceptance probability for that is 1, so this move
-        # is automatically accepted and nothing needs to be done
-        except ImpossibleMoveException:
-            self.impossible_moves += 1
-
-        # inform all the statistics that the iteration is completed
-        for stat in self.stats.values():
-            stat.next_iter()
+#     def next(self) -> None:
+#         # increase the number of iterations
+#         self.iter_num += 1
+# 
+#         # select an edge randomly
+#         edge = self.full_graph.random_edge()
+# 
+#         # try the move determined by the selected edge
+#         try:
+#             edges_to_add, edges_to_remove, prop_prob_ratio =\
+#                 self.determine_move_proposal(edge)
+#             acc_prob = self.compute_acc_prob(edges_to_add, edges_to_remove) * \
+#                        prop_prob_ratio
+#             if np.isnan(acc_prob):
+#                 raise ImpossibleMoveException()
+#             if acc_prob >= 1 or (acc_prob > 0 and acc_prob >= random.random()):
+#                 self.accept_move(edges_to_add, edges_to_remove)
+#         # if move impossible -- propose staying in the current graph
+#         # (the acceptance probability for that is 1, so this move
+#         # is automatically accepted and nothing needs to be done
+#         except ImpossibleMoveException:
+#             self.impossible_moves += 1
+# 
+#         # inform all the statistics that the iteration is completed
+#         for stat in self.stats.values():
+#             stat.next_iter()
 
     # TODO fit to the new Branching class
     # TODO a more reasonable return value?
-    def determine_move_proposal(self, edge :GraphEdge) \
-            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        if self.branching.has_edge(edge.source, edge.target, edge.rule):
-            return self.propose_deleting_edge(edge)
-        elif self.branching.has_path(edge.target, edge.source):
-            return self.propose_flip(edge)
-        elif self.branching.parent(edge.target) is not None:
-            return self.propose_swapping_parent(edge)
-        else:
-            return self.propose_adding_edge(edge)
+#     def determine_move_proposal(self, edge :GraphEdge) \
+#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         if self.branching.has_edge(edge.source, edge.target, edge.rule):
+#             return self.propose_deleting_edge(edge)
+#         elif self.branching.has_path(edge.target, edge.source):
+#             return self.propose_flip(edge)
+#         elif self.branching.parent(edge.target) is not None:
+#             return self.propose_swapping_parent(edge)
+#         else:
+#             return self.propose_adding_edge(edge)
 
-    def propose_adding_edge(self, edge :GraphEdge) \
-            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        return [edge], [], 1
+#     def propose_adding_edge(self, edge :GraphEdge) \
+#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         return [edge], [], 1
+# 
+#     def propose_deleting_edge(self, edge :GraphEdge) \
+#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         return [], [edge], 1
 
-    def propose_deleting_edge(self, edge :GraphEdge) \
-            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        return [], [edge], 1
+#     def propose_flip(self, edge :GraphEdge) \
+#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         if random.random() < 0.5:
+#             return self.propose_flip_1(edge)
+#         else:
+#             return self.propose_flip_2(edge)
+# 
+#     def propose_flip_1(self, edge :GraphEdge) \
+#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         edges_to_add, edges_to_remove = [edge], []
+#         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
+# 
+#         if not self.full_graph.has_edge(node_3, node_1):
+#             raise ImpossibleMoveException()
+# 
+#         edge_3_1 = random.choice(self.full_graph.edges_between(node_3, node_1))
+#         edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
+#                    if self.branching.has_edge(node_3, node_2) else None
+#         edge_4_1 = self.branching.edges_between(node_4, node_1)[0] \
+#                    if self.branching.has_edge(node_4, node_1) else None
+# 
+#         if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
+#         if edge_4_1 is not None:
+#             edges_to_remove.append(edge_4_1)
+#         else: raise Exception('!')
+#         edges_to_add.append(edge_3_1)
+#         prop_prob_ratio = (1/len(self.full_graph.edges_between(node_3, node_1))) /\
+#                           (1/len(self.full_graph.edges_between(node_3, node_2)))
+# 
+#         return edges_to_add, edges_to_remove, prop_prob_ratio
+# 
+#     def propose_flip_2(self, edge :GraphEdge) \
+#             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         edges_to_add, edges_to_remove = [edge], []
+#         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
+# 
+#         if not self.full_graph.has_edge(node_3, node_5):
+#             raise ImpossibleMoveException()
+# 
+#         edge_2_5 = self.branching.edges_between(node_2, node_5)[0] \
+#                    if self.branching.has_edge(node_2, node_5) else None
+#         edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
+#                    if self.branching.has_edge(node_3, node_2) else None
+#         edge_3_5 = random.choice(self.full_graph.edges_between(node_3, node_5))
+# 
+#         if edge_2_5 is not None:
+#             edges_to_remove.append(edge_2_5)
+#         elif node_2 != node_5: raise Exception('!')     # TODO ???
+#         if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
+#         edges_to_add.append(edge_3_5)
+#         prop_prob_ratio = (1/len(self.full_graph.edges_between(node_3, node_5))) /\
+#                           (1/len(self.full_graph.edges_between(node_3, node_2)))
+# 
+#         return edges_to_add, edges_to_remove, prop_prob_ratio
 
-    def propose_flip(self, edge :GraphEdge) \
-            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        if random.random() < 0.5:
-            return self.propose_flip_1(edge)
-        else:
-            return self.propose_flip_2(edge)
+#     def nodes_for_flip(self, edge :GraphEdge) -> List[LexiconEntry]:
+#         node_1, node_2 = edge.source, edge.target
+#         node_3 = self.branching.parent(node_2)
+#         node_4 = self.branching.parent(node_1)
+#         node_5 = node_1
+# #         if node_5 != node_2:
+#         while self.branching.parent(node_5) != node_2: 
+#             node_5 = self.branching.parent(node_5)
+#         return [node_1, node_2, node_3, node_4, node_5]
 
-    def propose_flip_1(self, edge :GraphEdge) \
-            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        edges_to_add, edges_to_remove = [edge], []
-        node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
-
-        if not self.full_graph.has_edge(node_3, node_1):
-            raise ImpossibleMoveException()
-
-        edge_3_1 = random.choice(self.full_graph.edges_between(node_3, node_1))
-        edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
-                   if self.branching.has_edge(node_3, node_2) else None
-        edge_4_1 = self.branching.edges_between(node_4, node_1)[0] \
-                   if self.branching.has_edge(node_4, node_1) else None
-
-        if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
-        if edge_4_1 is not None:
-            edges_to_remove.append(edge_4_1)
-        else: raise Exception('!')
-        edges_to_add.append(edge_3_1)
-        prop_prob_ratio = (1/len(self.full_graph.edges_between(node_3, node_1))) /\
-                          (1/len(self.full_graph.edges_between(node_3, node_2)))
-
-        return edges_to_add, edges_to_remove, prop_prob_ratio
-
-    def propose_flip_2(self, edge :GraphEdge) \
-            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        edges_to_add, edges_to_remove = [edge], []
-        node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
-
-        if not self.full_graph.has_edge(node_3, node_5):
-            raise ImpossibleMoveException()
-
-        edge_2_5 = self.branching.edges_between(node_2, node_5)[0] \
-                   if self.branching.has_edge(node_2, node_5) else None
-        edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
-                   if self.branching.has_edge(node_3, node_2) else None
-        edge_3_5 = random.choice(self.full_graph.edges_between(node_3, node_5))
-
-        if edge_2_5 is not None:
-            edges_to_remove.append(edge_2_5)
-        elif node_2 != node_5: raise Exception('!')     # TODO ???
-        if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
-        edges_to_add.append(edge_3_5)
-        prop_prob_ratio = (1/len(self.full_graph.edges_between(node_3, node_5))) /\
-                          (1/len(self.full_graph.edges_between(node_3, node_2)))
-
-        return edges_to_add, edges_to_remove, prop_prob_ratio
-
-    def nodes_for_flip(self, edge :GraphEdge) -> List[LexiconEntry]:
-        node_1, node_2 = edge.source, edge.target
-        node_3 = self.branching.parent(node_2)
-        node_4 = self.branching.parent(node_1)
-        node_5 = node_1
-#         if node_5 != node_2:
-        while self.branching.parent(node_5) != node_2: 
-            node_5 = self.branching.parent(node_5)
-        return [node_1, node_2, node_3, node_4, node_5]
-
-    def propose_swapping_parent(self, edge :GraphEdge) \
-                             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        edges_to_remove = self.branching.edges_between(
-                              self.branching.parent(edge.target),
-                              edge.target)
-        return [edge], edges_to_remove, 1
+#     def propose_swapping_parent(self, edge :GraphEdge) \
+#                              -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+#         edges_to_remove = self.branching.edges_between(
+#                               self.branching.parent(edge.target),
+#                               edge.target)
+#         return [edge], edges_to_remove, 1
 
 
-    def compute_acc_prob(self, edges_to_add, edges_to_remove):
+    def compute_acc_prob(self, edges_to_add, edges_to_remove, prop_prob_ratio):
         if len(edges_to_add) == 1 and len(edges_to_remove) == 0:
             tgt_id = self.lexicon.get_id(edges_to_add[0].target)
             prob = np.sum(self.root_prob[tgt_id,:]*self.backward_prob[tgt_id,:])
             if prob == 0:
                 return 0
             return self.compute_acc_prob_for_subtree(\
-                       edges_to_add, edges_to_remove) / prob
+                       edges_to_add, edges_to_remove) / prob * prop_prob_ratio
         elif len(edges_to_add) == 0 and len(edges_to_remove) == 1:
             tgt_id = self.lexicon.get_id(edges_to_remove[0].target)
             prob = np.sum(self.root_prob[tgt_id,:]*self.backward_prob[tgt_id,:])
             return self.compute_acc_prob_for_subtree(\
-                       edges_to_add, edges_to_remove) * prob
+                       edges_to_add, edges_to_remove) * prob * prop_prob_ratio
         else:
             edges_to_change_by_root = {}
             for edge in edges_to_add:
@@ -719,7 +720,7 @@ class MCMCTagSampler:
                             '; '.join(str(edge) for edge in edges_to_remove)))
                 prob *= self.compute_acc_prob_for_subtree(\
                             edges_to_add, edges_to_remove)
-            return prob
+            return prob * prop_prob_ratio
 
     def compute_acc_prob_for_subtree(self, edges_to_add, edges_to_remove):
 
@@ -959,34 +960,34 @@ class MCMCTagSampler:
 #         self.write_leaf_prob('sampler-leaf-prob.txt')
         self.write_edge_tr_mat('sampler-edge-tr-mat.txt')
 
-    def save_edge_stats(self, filename):
-        stats, stat_names = [], []
-        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
-            if isinstance(stat, EdgeStatistic):
-                stat_names.append(stat_name)
-                stats.append(stat)
-        with open_to_write(filename) as fp:
-            write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
-            for idx, edge in enumerate(self.edge_set):
-                write_line(fp, 
-                           (str(edge.source), str(edge.target), 
-                            str(edge.rule)) + tuple([stat.val[idx]\
-                                                     for stat in stats]))
+#     def save_edge_stats(self, filename):
+#         stats, stat_names = [], []
+#         for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+#             if isinstance(stat, EdgeStatistic):
+#                 stat_names.append(stat_name)
+#                 stats.append(stat)
+#         with open_to_write(filename) as fp:
+#             write_line(fp, ('word_1', 'word_2', 'rule') + tuple(stat_names))
+#             for idx, edge in enumerate(self.edge_set):
+#                 write_line(fp, 
+#                            (str(edge.source), str(edge.target), 
+#                             str(edge.rule)) + tuple([stat.val[idx]\
+#                                                      for stat in stats]))
 
-    def print_scalar_stats(self):
-        stats, stat_names = [], []
-        print()
-        print()
-        print('SIMULATION STATISTICS')
-        print()
-        spacing = max([len(stat_name)\
-                       for stat_name, stat in self.stats.items() 
-                           if isinstance(stat, ScalarStatistic)]) + 2
-        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
-            if isinstance(stat, ScalarStatistic):
-                print((' ' * (spacing-len(stat_name)))+stat_name, ':', stat.value())
-        print('Impossible moves: {} ({} %)'.format(
-                  self.impossible_moves, self.impossible_moves/self.sampling_iter * 100))
-        print()
-        print()
+#     def print_scalar_stats(self):
+#         stats, stat_names = [], []
+#         print()
+#         print()
+#         print('SIMULATION STATISTICS')
+#         print()
+#         spacing = max([len(stat_name)\
+#                        for stat_name, stat in self.stats.items() 
+#                            if isinstance(stat, ScalarStatistic)]) + 2
+#         for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+#             if isinstance(stat, ScalarStatistic):
+#                 print((' ' * (spacing-len(stat_name)))+stat_name, ':', stat.value())
+#         print('Impossible moves: {} ({} %)'.format(
+#                   self.impossible_moves, self.impossible_moves/self.sampling_iter * 100))
+#         print()
+#         print()
 
