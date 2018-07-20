@@ -50,7 +50,6 @@ class MCMCGraphSampler:
         self.iter_stat_interval = iter_stat_interval
         self.stats = {}               # type: Dict[str, MCMCStatistic]
         self.iter_num = 0
-#         self.reset()
 
         self.unordered_word_pair_index = {}
         next_id = 0
@@ -154,47 +153,34 @@ class MCMCGraphSampler:
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
         edges_to_add, edges_to_remove = [edge], []
         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
-
-        if not self.full_graph.has_edge(node_3, node_1):
-            raise ImpossibleMoveException()
-
-        edge_3_1 = random.choice(self.full_graph.edges_between(node_3, node_1))
-        edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
-                   if self.branching.has_edge(node_3, node_2) else None
-        edge_4_1 = self.branching.edges_between(node_4, node_1)[0] \
-                   if self.branching.has_edge(node_4, node_1) else None
-
-        if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
-        if edge_4_1 is not None:
-            edges_to_remove.append(edge_4_1)
-        else: raise Exception('!')
-        edges_to_add.append(edge_3_1)
-        prop_prob_ratio = (1/len(self.full_graph.edges_between(node_3, node_1))) /\
-                          (1/len(self.full_graph.edges_between(node_3, node_2)))
-
+        prop_prob_ratio = 1.0
+        if node_3 is not None:
+            if not self.full_graph.edges_between(node_3, node_1):
+                raise ImpossibleMoveException()
+            edges_to_add.append(
+                random.choice(self.full_graph.edges_between(node_3, node_1)))
+            prop_prob_ratio = \
+                len(self.full_graph.edges_between(node_3, node_2)) / \
+                len(self.full_graph.edges_between(node_3, node_1))
+        edges_to_remove.extend(self.branching.edges_between(node_3, node_2))
+        edges_to_remove.extend(self.branching.edges_between(node_4, node_1))
         return edges_to_add, edges_to_remove, prop_prob_ratio
 
     def propose_flip_2(self, edge :GraphEdge) \
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
         edges_to_add, edges_to_remove = [edge], []
         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
-
-        if not self.full_graph.has_edge(node_3, node_5):
-            raise ImpossibleMoveException()
-
-        edge_2_5 = self.branching.edges_between(node_2, node_5)[0] \
-                   if self.branching.has_edge(node_2, node_5) else None
-        edge_3_2 = self.branching.edges_between(node_3, node_2)[0] \
-                   if self.branching.has_edge(node_3, node_2) else None
-        edge_3_5 = random.choice(self.full_graph.edges_between(node_3, node_5))
-
-        if edge_2_5 is not None:
-            edges_to_remove.append(edge_2_5)
-        elif node_2 != node_5: raise Exception('!')     # TODO ???
-        if edge_3_2 is not None: edges_to_remove.append(edge_3_2)
-        edges_to_add.append(edge_3_5)
-        prop_prob_ratio = (1/len(self.full_graph.edges_between(node_3, node_5))) /\
-                          (1/len(self.full_graph.edges_between(node_3, node_2)))
+        prop_prob_ratio = 1.0
+        if node_3 is not None:
+            if not self.full_graph.edges_between(node_3, node_5):
+                raise ImpossibleMoveException()
+            edges_to_add.append(\
+                random.choice(self.full_graph.edges_between(node_3, node_5)))
+            prop_prob_ratio = \
+                len(self.full_graph.edges_between(node_3, node_2)) / \
+                len(self.full_graph.edges_between(node_3, node_5))
+        edges_to_remove.extend(self.branching.edges_between(node_2, node_5))
+        edges_to_remove.extend(self.branching.edges_between(node_3, node_2))
 
         return edges_to_add, edges_to_remove, prop_prob_ratio
 
@@ -202,10 +188,9 @@ class MCMCGraphSampler:
         node_1, node_2 = edge.source, edge.target
         node_3 = self.branching.parent(node_2)
         node_4 = self.branching.parent(node_1)
-        node_5 = node_4
-        if node_5 != node_2:
-            while self.branching.parent(node_5) != node_2: 
-                node_5 = self.branching.parent(node_5)
+        node_5 = node_1
+        while self.branching.parent(node_5) != node_2: 
+            node_5 = self.branching.parent(node_5)
         return [node_1, node_2, node_3, node_4, node_5]
 
     def propose_swapping_parent(self, edge :GraphEdge) \
@@ -223,27 +208,6 @@ class MCMCGraphSampler:
             return 1.0
         else: 
             return math.exp(-cost) * prop_prob_ratio
-#         try:
-#             return math.exp(\
-#                     -self.cost_of_change(edges_to_add, edges_to_remove)) *\
-#                    prop_prob_ratio
-#         except OverflowError as e:
-#             logging.getLogger('main').debug('OverflowError')
-#             cost = -self.cost_of_change(edges_to_add, edges_to_remove)
-#             if edges_to_add:
-#                 logging.getLogger('main').debug('adding:')
-#                 for edge in edges_to_add:
-#                     logging.getLogger('main').debug(
-#                         '{} {} {} {}'.format(edge.source, edge.target,
-#                                              edge.rule, self.model.edge_cost(edge)))
-#             if edges_to_remove:
-#                 logging.getLogger('main').debug('deleting:')
-#                 for edge in edges_to_remove:
-#                     logging.getLogger('main').debug(
-#                         '{} {} {} {}'.format(edge.source, edge.target,
-#                                              edge.rule, -self.model.edge_cost(edge)))
-#             logging.getLogger('main').debug('total cost: {}'.format(cost))
-#             return 1.0
 
     def cache_costs(self) -> None:
         logging.getLogger('main').info('Computing root costs...')
@@ -283,13 +247,11 @@ class MCMCGraphSampler:
         # remove edges and update stats
         for e in edges_to_remove:
             self.branching.remove_edge(e)
-#             self.model.apply_change([], [e])
             for stat in self.stats.values():
                 stat.edge_removed(e)
         # add edges and update stats
         for e in edges_to_add:
             self.branching.add_edge(e)
-#             self.model.apply_change([e], [])
             for stat in self.stats.values():
                 stat.edge_added(e)
     

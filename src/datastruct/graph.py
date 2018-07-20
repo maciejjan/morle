@@ -163,6 +163,8 @@ class Branching(Graph):
 
     def parent(self, node :LexiconEntry) -> LexiconEntry:
         predecessors = self.predecessors(node)
+        if len(predecessors) > 1:
+            raise Exception('More than one predecessor: {}'.format(node))
         return predecessors[0] if predecessors else None
 
     def root(self, node :LexiconEntry) -> LexiconEntry:
