@@ -46,7 +46,7 @@ def run() -> None:
 
     # prepare the sampler + run sampling
     sampler = \
-        algorithms.mcmc.samplers.MCMCImprovedTagSampler(\
+        algorithms.mcmc.samplers.MCMCTagSampler(\
             full_graph, model, tagset,
             warmup_iter=shared.config['sample-tags']\
                               .getint('warmup_iterations'),
