@@ -107,7 +107,7 @@ class MCMCGraphSampler:
         try:
             edges_to_add, edges_to_remove, prop_prob_ratio =\
                 self.determine_move_proposal(edge)
-            print(len(edges_to_add), len(edges_to_remove))
+#             print(len(edges_to_add), len(edges_to_remove))
             acc_prob = self.compute_acc_prob(\
                 edges_to_add, edges_to_remove, prop_prob_ratio)
             if acc_prob >= 1 or acc_prob >= random.random():
@@ -723,100 +723,241 @@ class MCMCTagSampler(MCMCGraphSampler):
             return prob * prop_prob_ratio
 
     def compute_acc_prob_for_subtree(self, edges_to_add, edges_to_remove):
+    # TODO refactoring:
+    # - needed: a clean representation of the new subtree
+    #   (for computing new depths and then new backward probs)
+    # - code duplication: the formula for backward probability
 
-        def _common_ancestor(node_1, node_2, depth_1=None, depth_2=None):
-            if node_1 == node_2:
-                return node_1
-            if depth_1 is None:
-                depth_1 = self.branching.depth(node_1)
-            if depth_2 is None:
-                depth_2 = self.branching.depth(node_2)
-            if max(depth_1, depth_2) <= 0:
-                return None
-            if depth_1 < depth_2:
-                return _common_ancestor(node_1, self.branching.parent(node_2),\
-                                        depth_1, depth_2-1)
-            elif depth_1 > depth_2:
-                return _common_ancestor(self.branching.parent(node_1), node_2,\
-                                        depth_1-1, depth_2)
-            else:
-                return _common_ancestor(self.branching.parent(node_1), \
-                                        self.branching.parent(node_2), \
-                                        depth_1-1, depth_2-1)
+        def _build_modified_subtree(edges_to_add, edges_to_remove):
+            # return the subtree with edges_to_add added and edges_to_remove removed
 
-        # TODO very ugly -- refactor!!!
-        def _compute_new_node_depth(result, relevant_nodes, node, edges_to_add, edges_to_remove):
-            for edge in self.branching.outgoing_edges(node):
-                if edge.target in relevant_nodes:
-                    if edge not in edges_to_remove:
-                        result[edge.target] = result[node] + 1
-                        _compute_new_node_depth(result, relevant_nodes,
-                            edge.target, edges_to_add, edges_to_remove)
+            def _common_ancestor(node_1, node_2, depth_1=None, depth_2=None):
+                if node_1 == node_2:
+                    return node_1
+                if depth_1 is None:
+                    depth_1 = self.branching.depth(node_1)
+                if depth_2 is None:
+                    depth_2 = self.branching.depth(node_2)
+                if max(depth_1, depth_2) <= 0:
+                    return None
+                if depth_1 < depth_2:
+                    return _common_ancestor(node_1, self.branching.parent(node_2),\
+                                            depth_1, depth_2-1)
+                elif depth_1 > depth_2:
+                    return _common_ancestor(self.branching.parent(node_1), node_2,\
+                                            depth_1-1, depth_2)
+                else:
+                    return _common_ancestor(self.branching.parent(node_1), \
+                                            self.branching.parent(node_2), \
+                                            depth_1-1, depth_2-1)
+
+            def _add_outgoing_edges(branching, node):
+                for oe in self.branching.outgoing_edges(node):
+                    if not branching.has_edge(oe.source, oe.target, oe.rule):
+                        branching.add_edge(oe)
+
+            edges_to_change = edges_to_add + edges_to_remove
+            subtree_root = edges_to_change[0].source
+            for edge in edges_to_change[1:]:
+                subtree_root = _common_ancestor(subtree_root, edge.source)
+#             # take the parent of the actual common ancestor in order to
+#             # recompute the forward probability correctly
+#             if self.branching.parent(subtree_root) is not None:
+#                 subtree_root = self.branching.parent(subtree_root)
+            modified_subtree = Branching()
+            modified_nodes = set()
+            # create a copy of a fragment of the branching
+            # containing paths from subtree_root to each source of a changed
+            # edge
+            for src in [edge.source for edge in edges_to_change]:
+                node = src
+                modified_nodes.add(node)
+                _add_outgoing_edges(modified_subtree, node)
+                while node != subtree_root:
+                    ie = self.branching.ingoing_edges(node)[0]
+                    modified_subtree.add_edge(ie)
+                    if ie.source not in modified_nodes:
+                        _add_outgoing_edges(modified_subtree, ie.source)
+                        modified_nodes.add(ie.source)
+                    node = ie.source
+            # perform the changes on our copy
             for edge in edges_to_add:
-                if edge.source == node and edge.target in relevant_nodes:
-                    result[edge.target] = result[node] + 1
-                    _compute_new_node_depth(result, relevant_nodes,
-                        edge.target, edges_to_add, edges_to_remove)
+                modified_subtree.add_edge(edge)
+            for edge in edges_to_remove:
+                modified_subtree.remove_edge(edge)
+            return modified_subtree, modified_nodes
 
-        # subtree_root is the common ancestor of all edge sources
-        #   from edges_to_add + edges_to_remove
-        edges_to_change = edges_to_add + edges_to_remove
-        subtree_root = edges_to_change[0].source
-        for edge in edges_to_change[1:]:
-            subtree_root = _common_ancestor(subtree_root, edge.source)
-        r_id = self.lexicon.get_id(subtree_root)
-        nodes_to_recompute_backward_prob = set()
-        for edge in edges_to_change:
-            path = self.branching.path(subtree_root, edge.source)
-            for node in path:
-                nodes_to_recompute_backward_prob.add(node)
-        new_node_depth = { subtree_root : 0 }
-        _compute_new_node_depth(new_node_depth, nodes_to_recompute_backward_prob,
-            subtree_root, edges_to_add, edges_to_remove)
-        nodes_to_recompute_backward_prob = \
-             sorted(list(nodes_to_recompute_backward_prob), \
-                    reverse=True, key=lambda n: new_node_depth[n])
-        new_backward_prob = np.empty((len(nodes_to_recompute_backward_prob), \
-                                      len(self.tagset)), dtype=np.float64)
-        # TODO refactor
-        edges_to_add_by_source = {}
-        for edge in edges_to_add:
-            if edge.source not in edges_to_add_by_source:
-                edges_to_add_by_source[edge.source] = set()
-            edges_to_add_by_source[edge.source].add(edge)
-        edges_to_remove_by_source = {} 
-        for edge in edges_to_remove:
-            if edge.source not in edges_to_remove_by_source:
-                edges_to_remove_by_source[edge.source] = set()
-            edges_to_remove_by_source[edge.source].add(edge)
-        for i, node in enumerate(nodes_to_recompute_backward_prob):
-#             logging.getLogger('main').debug('+ {}'.format(i))
-            w_id = self.lexicon.get_id(node)
-            new_backward_prob[i,:] = self.leaf_prob[w_id,:]
-            edges_to_add_for_node = edges_to_add_by_source[node] \
-                                    if node in edges_to_add_by_source \
-                                    else set()
-            edges_to_remove_for_node = edges_to_remove_by_source[node] \
-                                       if node in edges_to_remove_by_source \
-                                       else set()
-            edges = (set(self.branching.outgoing_edges(node)) | \
-                     edges_to_add_for_node) - \
-                    edges_to_remove_for_node
-            for edge in edges:
-                e_id = self.full_graph.edge_set.get_id(edge)
-                b = new_backward_prob[nodes_to_recompute_backward_prob\
-                                      .index(edge.target),:] \
-                    if edge.target in nodes_to_recompute_backward_prob \
-                    else self.backward_prob[self.lexicon.get_id(edge.target),:]
-                new_backward_prob[i,:] *= self.edge_tr_mat[e_id].dot(b)
+        def _list_nodes_breadth_first(branching, nodes):
+            # list nodes in the order of increasing depth
+            queue = [branching.root(list(nodes)[0])]
+            result = []
+            print([str(n) for n in queue])
+            while queue:
+                node = queue.pop(0)
+                result.append(node)
+                for successor in branching.successors(node):
+                    if successor in nodes:
+                        queue.append(successor)
+                print([str(n) for n in queue])
+            return result
+
+        def _recompute_backward_prob(branching, nodes):
+            # recompute the backward probabilities for the given nodes
+            # (in reverse order) according to the given branching
+            new_backward_prob = np.empty((len(nodes), len(self.tagset)),
+                                         dtype=np.float64)
+            for i in range(len(nodes)-1, -1, -1):
+                node = nodes[i]
+                w_id = self.lexicon.get_id(node)
+                new_backward_prob[i,:] = self.leaf_prob[w_id,:]
+                for edge in branching.outgoing_edges(node):
+                    e_id = self.full_graph.edge_set.get_id(edge)
+                    b = new_backward_prob[nodes.index(edge.target),:] \
+                        if edge.target in nodes \
+                        else self.backward_prob[self.lexicon.get_id(edge.target),:]
+                    new_backward_prob[i,:] *= self.edge_tr_mat[e_id].dot(b)
+            return new_backward_prob
+
+        def _recompute_root_forward_prob(branching, root, edges_to_remove):
+            r_id = self.lexicon.get_id(root)
+            if self.branching.parent(root) is not None and \
+                   self.branching.ingoing_edges(root)[0] not in edges_to_remove:
+                # the parent of our subtree root is outside of the changed
+                # subtree -> forward probability did not change
+                return np.copy(self.forward_prob[r_id,:])
+            else:
+                # the former parent of our root was inside the changed subtree
+                # and its deriving edge was removed, so it is now a true root
+                return np.copy(self.root_prob[r_id,:])
+
+        modified_subtree, modified_nodes = \
+            _build_modified_subtree(edges_to_add, edges_to_remove)
+        print()
+        print(';'.join(str(e) for e in edges_to_add), ';;;',
+              ';'.join(str(e) for e in edges_to_remove))
+        print([str(n) for n in modified_nodes])
+        print()
+        modified_nodes = \
+            _list_nodes_breadth_first(modified_subtree, modified_nodes)
+        print([str(n) for n in modified_nodes])
+        print()
+        for node in modified_nodes:
+            print(' -> '.join(str(n) for n in modified_subtree.path(modified_nodes[0], node)))
+        new_backward_prob = \
+            _recompute_backward_prob(modified_subtree, modified_nodes)
+        new_root_forward_prob = \
+           _recompute_root_forward_prob(modified_subtree, modified_nodes[0],
+                                        edges_to_remove)
+        r_id = self.lexicon.get_id(modified_nodes[0])
+
         old_prob = np.sum(self.forward_prob[r_id,:] * \
                           self.backward_prob[r_id,:])
-        new_prob = np.sum(self.forward_prob[r_id,:] * \
-                          new_backward_prob[-1,:])
+        new_prob = np.sum(new_root_forward_prob * new_backward_prob[0,:])
         acc_prob = 0 \
                    if new_prob < self.min_subtree_prob \
                    else new_prob / old_prob
         return acc_prob
+
+#     def __OLD_compute_acc_prob_for_subtree_(self, edges_to_add, edges_to_remove):
+#         def _common_ancestor(node_1, node_2, depth_1=None, depth_2=None):
+#             if node_1 == node_2:
+#                 return node_1
+#             if depth_1 is None:
+#                 depth_1 = self.branching.depth(node_1)
+#             if depth_2 is None:
+#                 depth_2 = self.branching.depth(node_2)
+#             if max(depth_1, depth_2) <= 0:
+#                 return None
+#             if depth_1 < depth_2:
+#                 return _common_ancestor(node_1, self.branching.parent(node_2),\
+#                                         depth_1, depth_2-1)
+#             elif depth_1 > depth_2:
+#                 return _common_ancestor(self.branching.parent(node_1), node_2,\
+#                                         depth_1-1, depth_2)
+#             else:
+#                 return _common_ancestor(self.branching.parent(node_1), \
+#                                         self.branching.parent(node_2), \
+#                                         depth_1-1, depth_2-1)
+# 
+#         # TODO very ugly -- refactor!!!
+#         def _compute_new_node_depth(result, relevant_nodes, node, edges_to_add, edges_to_remove):
+#             print(node, result[node])
+#             for edge in self.branching.outgoing_edges(node):
+#                 if edge.target in relevant_nodes:
+#                     if edge not in edges_to_remove:
+#                         result[edge.target] = result[node] + 1
+#                         _compute_new_node_depth(result, relevant_nodes,
+#                             edge.target, edges_to_add, edges_to_remove)
+#             for edge in edges_to_add:
+#                 if edge.source == node and edge.target in relevant_nodes:
+#                     result[edge.target] = result[node] + 1
+#                     _compute_new_node_depth(result, relevant_nodes,
+#                         edge.target, edges_to_add, edges_to_remove)
+# 
+#         # subtree_root is the common ancestor of all edge sources
+#         #   from edges_to_add + edges_to_remove
+#         edges_to_change = edges_to_add + edges_to_remove
+#         subtree_root = edges_to_change[0].source
+#         for edge in edges_to_change[1:]:
+#             subtree_root = _common_ancestor(subtree_root, edge.source)
+#         r_id = self.lexicon.get_id(subtree_root)
+#         nodes_to_recompute_backward_prob = set()
+#         for edge in edges_to_add:
+#             print('+', str(edge))
+#         for edge in edges_to_remove:
+#             print('-', str(edge))
+#         for edge in edges_to_change:
+#             path = self.branching.path(subtree_root, edge.source)
+#             for node in path:
+#                 nodes_to_recompute_backward_prob.add(node)
+#         print([str(node) for node in nodes_to_recompute_backward_prob])
+#         new_node_depth = { subtree_root : 0 }
+#         _compute_new_node_depth(new_node_depth, nodes_to_recompute_backward_prob,
+#             subtree_root, edges_to_add, edges_to_remove)
+#         nodes_to_recompute_backward_prob = \
+#              sorted(list(nodes_to_recompute_backward_prob), \
+#                     reverse=True, key=lambda n: new_node_depth[n])
+#         new_backward_prob = np.empty((len(nodes_to_recompute_backward_prob), \
+#                                       len(self.tagset)), dtype=np.float64)
+#         # TODO refactor
+#         edges_to_add_by_source = {}
+#         for edge in edges_to_add:
+#             if edge.source not in edges_to_add_by_source:
+#                 edges_to_add_by_source[edge.source] = set()
+#             edges_to_add_by_source[edge.source].add(edge)
+#         edges_to_remove_by_source = {} 
+#         for edge in edges_to_remove:
+#             if edge.source not in edges_to_remove_by_source:
+#                 edges_to_remove_by_source[edge.source] = set()
+#             edges_to_remove_by_source[edge.source].add(edge)
+#         for i, node in enumerate(nodes_to_recompute_backward_prob):
+# #             logging.getLogger('main').debug('+ {}'.format(i))
+#             w_id = self.lexicon.get_id(node)
+#             new_backward_prob[i,:] = self.leaf_prob[w_id,:]
+#             edges_to_add_for_node = edges_to_add_by_source[node] \
+#                                     if node in edges_to_add_by_source \
+#                                     else set()
+#             edges_to_remove_for_node = edges_to_remove_by_source[node] \
+#                                        if node in edges_to_remove_by_source \
+#                                        else set()
+#             edges = (set(self.branching.outgoing_edges(node)) | \
+#                      edges_to_add_for_node) - \
+#                     edges_to_remove_for_node
+#             for edge in edges:
+#                 e_id = self.full_graph.edge_set.get_id(edge)
+#                 b = new_backward_prob[nodes_to_recompute_backward_prob\
+#                                       .index(edge.target),:] \
+#                     if edge.target in nodes_to_recompute_backward_prob \
+#                     else self.backward_prob[self.lexicon.get_id(edge.target),:]
+#                 new_backward_prob[i,:] *= self.edge_tr_mat[e_id].dot(b)
+#         old_prob = np.sum(self.forward_prob[r_id,:] * \
+#                           self.backward_prob[r_id,:])
+#         new_prob = np.sum(self.forward_prob[r_id,:] * \
+#                           new_backward_prob[-1,:])
+#         acc_prob = 0 \
+#                    if new_prob < self.min_subtree_prob \
+#                    else new_prob / old_prob
+#         return acc_prob
 
     def recompute_forward_prob_for_node(self, node):
         w_id = self.lexicon.get_id(node)
