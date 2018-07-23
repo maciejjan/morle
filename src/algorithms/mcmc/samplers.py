@@ -760,6 +760,10 @@ class MCMCTagSampler(MCMCGraphSampler):
             subtree_root = edges_to_change[0].source
             for edge in edges_to_change[1:]:
                 subtree_root = _common_ancestor(subtree_root, edge.source)
+            root_of_subtree_root = self.branching.root(subtree_root)
+            for edge in edges_to_change:
+                if self.branching.root(edge.target) == root_of_subtree_root:
+                    subtree_root = _common_ancestor(subtree_root, edge.target)
 #             # take the parent of the actual common ancestor in order to
 #             # recompute the forward probability correctly
 #             if self.branching.parent(subtree_root) is not None:
@@ -783,6 +787,9 @@ class MCMCTagSampler(MCMCGraphSampler):
             # perform the changes on our copy
             for edge in edges_to_add:
                 modified_subtree.add_edge(edge)
+                if edge.target not in modified_nodes:
+                    _add_outgoing_edges(modified_subtree, edge.target)
+                    modified_nodes.add(edge.target)
             for edge in edges_to_remove:
                 modified_subtree.remove_edge(edge)
             return modified_subtree, modified_nodes
@@ -791,14 +798,14 @@ class MCMCTagSampler(MCMCGraphSampler):
             # list nodes in the order of increasing depth
             queue = [branching.root(list(nodes)[0])]
             result = []
-            print([str(n) for n in queue])
+#             print([str(n) for n in queue])
             while queue:
                 node = queue.pop(0)
                 result.append(node)
                 for successor in branching.successors(node):
                     if successor in nodes:
                         queue.append(successor)
-                print([str(n) for n in queue])
+#                 print([str(n) for n in queue])
             return result
 
         def _recompute_backward_prob(branching, nodes):
@@ -832,17 +839,17 @@ class MCMCTagSampler(MCMCGraphSampler):
 
         modified_subtree, modified_nodes = \
             _build_modified_subtree(edges_to_add, edges_to_remove)
-        print()
-        print(';'.join(str(e) for e in edges_to_add), ';;;',
-              ';'.join(str(e) for e in edges_to_remove))
-        print([str(n) for n in modified_nodes])
-        print()
+#         print()
+#         print(';'.join(str(e) for e in edges_to_add), ';;;',
+#               ';'.join(str(e) for e in edges_to_remove))
+#         print([str(n) for n in modified_nodes])
+#         print()
         modified_nodes = \
             _list_nodes_breadth_first(modified_subtree, modified_nodes)
-        print([str(n) for n in modified_nodes])
-        print()
-        for node in modified_nodes:
-            print(' -> '.join(str(n) for n in modified_subtree.path(modified_nodes[0], node)))
+#         print([str(n) for n in modified_nodes])
+#         print()
+#         for node in modified_nodes:
+#             print(' -> '.join(str(n) for n in modified_subtree.path(modified_nodes[0], node)))
         new_backward_prob = \
             _recompute_backward_prob(modified_subtree, modified_nodes)
         new_root_forward_prob = \
