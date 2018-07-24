@@ -409,22 +409,25 @@ class MCMCTagSampler(MCMCGraphSampler):
                        sampling_iter :int = 100000,
                        iter_stat_interval :int = 1,
                        min_subtree_prob = 1e-100):
-        self.lexicon = full_graph.lexicon
-        self.model = model
+#         self.lexicon = full_graph.lexicon
+#         self.model = model
         self.tagset = tagset
         logging.getLogger('main').debug('tagset = {}'.format(str(tagset)))
         self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
-        self.warmup_iter = warmup_iter
-        self.sampling_iter = sampling_iter
-        self.iter_stat_interval = iter_stat_interval
+#         self.warmup_iter = warmup_iter
+#         self.sampling_iter = sampling_iter
+#         self.iter_stat_interval = iter_stat_interval
         self.min_subtree_prob = min_subtree_prob
-        self.stats = {}
+#         self.stats = {}
+        untagged_edge_set, self.edge_tr_mat = \
+            self._compute_untagged_edges_and_transition_mat(full_graph, model)
+        untagged_full_graph = FullGraph(full_graph.lexicon, untagged_edge_set)
+        super().__init__(untagged_full_graph, model, warmup_iter=warmup_iter,
+                         sampling_iter=sampling_iter,
+                         iter_stat_interval=iter_stat_interval)
+#         self.edge_set = untagged_edge_set
         self._compute_root_prob()
         self._fast_compute_leaf_prob()
-        untagged_edge_set, self.edge_tr_mat = \
-            self._compute_untagged_edges_and_transition_mat(full_graph)
-        self.full_graph = FullGraph(self.lexicon, untagged_edge_set)
-        self.edge_set = untagged_edge_set
         self.init_forward_prob()
         self.init_backward_prob()
         self.write_debug_info()
@@ -492,7 +495,7 @@ class MCMCTagSampler(MCMCGraphSampler):
                 edge_set = _empty_edge_set(edge_set)
         edge_set = _empty_edge_set(edge_set)
 
-    def _compute_untagged_edges_and_transition_mat(self, full_graph):
+    def _compute_untagged_edges_and_transition_mat(self, full_graph, model):
         logging.getLogger('main').info('Computing transition matrices...')
 
         def _untag_edge(lexicon, edge):
@@ -501,13 +504,13 @@ class MCMCTagSampler(MCMCGraphSampler):
             rule = Rule(edge.rule.subst)
             return GraphEdge(source, target, rule)
 
-        edge_prob = self.model.edges_prob(full_graph.edge_set)
+        edge_prob = model.edges_prob(full_graph.edge_set)
         edge_prob_ratios = edge_prob / (1-edge_prob)
         untagged_edge_set = EdgeSet(full_graph.lexicon)
         T = len(self.tagset)
         edge_ids_by_untagged_edge = []
         for e_id, edge in enumerate(full_graph.edge_set):
-            untagged_edge = _untag_edge(self.lexicon, edge)
+            untagged_edge = _untag_edge(full_graph.lexicon, edge)
             if untagged_edge not in untagged_edge_set:
                 untagged_edge_set.add(untagged_edge)
                 edge_ids_by_untagged_edge.append(list())
