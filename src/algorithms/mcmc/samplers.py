@@ -723,13 +723,15 @@ class MCMCTagSampler(MCMCGraphSampler):
             return prob * prop_prob_ratio
 
     def compute_acc_prob_for_subtree(self, edges_to_add, edges_to_remove):
-    # TODO refactoring:
-    # - needed: a clean representation of the new subtree
-    #   (for computing new depths and then new backward probs)
-    # - code duplication: the formula for backward probability
 
         def _build_modified_subtree(edges_to_add, edges_to_remove):
-            # return the subtree with edges_to_add added and edges_to_remove removed
+            '''Return a subset of self.branching with `edges_to_add` added 
+               and `edges_to_remove` removed. The returned subset contains
+               all nodes, for which the backward probability changes,
+               together with their children. It is a tree rooted in the common
+               ancestor of source nodes of changed edges, plus target nodes
+               of edges that would introduce a cycle (in case of the "flip"
+               move.'''
 
             def _common_ancestor(node_1, node_2, depth_1=None, depth_2=None):
                 if node_1 == node_2:
@@ -764,10 +766,6 @@ class MCMCTagSampler(MCMCGraphSampler):
             for edge in edges_to_change:
                 if self.branching.root(edge.target) == root_of_subtree_root:
                     subtree_root = _common_ancestor(subtree_root, edge.target)
-#             # take the parent of the actual common ancestor in order to
-#             # recompute the forward probability correctly
-#             if self.branching.parent(subtree_root) is not None:
-#                 subtree_root = self.branching.parent(subtree_root)
             modified_subtree = Branching()
             modified_nodes = set()
             # create a copy of a fragment of the branching
@@ -795,7 +793,7 @@ class MCMCTagSampler(MCMCGraphSampler):
             return modified_subtree, modified_nodes
 
         def _list_nodes_breadth_first(branching, nodes):
-            # list nodes in the order of increasing depth
+            # list tree nodes in the order of increasing depth
             queue = [branching.root(list(nodes)[0])]
             result = []
 #             print([str(n) for n in queue])
@@ -811,6 +809,8 @@ class MCMCTagSampler(MCMCGraphSampler):
         def _recompute_backward_prob(branching, nodes):
             # recompute the backward probabilities for the given nodes
             # (in reverse order) according to the given branching
+            # TODO refactor -- code duplication with
+            #      MCMCTagSampler.recompute_backward_prob_for_node()
             new_backward_prob = np.empty((len(nodes), len(self.tagset)),
                                          dtype=np.float64)
             for i in range(len(nodes)-1, -1, -1):
@@ -828,13 +828,16 @@ class MCMCTagSampler(MCMCGraphSampler):
         def _recompute_root_forward_prob(branching, root, edges_to_remove):
             r_id = self.lexicon.get_id(root)
             if self.branching.parent(root) is not None and \
-                   self.branching.ingoing_edges(root)[0] not in edges_to_remove:
+                   self.branching.ingoing_edges(root)[0] \
+                        not in edges_to_remove:
                 # the parent of our subtree root is outside of the changed
                 # subtree -> forward probability did not change
                 return np.copy(self.forward_prob[r_id,:])
             else:
-                # the former parent of our root was inside the changed subtree
-                # and its deriving edge was removed, so it is now a true root
+                # the former parent of our root is inside the changed subtree
+                # and its deriving edge was removed, or our subtree root
+                # was previously a true tree root; either way, now it is
+                # a true root
                 return np.copy(self.root_prob[r_id,:])
 
         modified_subtree, modified_nodes = \
