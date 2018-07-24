@@ -409,23 +409,16 @@ class MCMCTagSampler(MCMCGraphSampler):
                        sampling_iter :int = 100000,
                        iter_stat_interval :int = 1,
                        min_subtree_prob = 1e-100):
-#         self.lexicon = full_graph.lexicon
-#         self.model = model
         self.tagset = tagset
         logging.getLogger('main').debug('tagset = {}'.format(str(tagset)))
         self.tag_idx = { tag : i for i, tag in enumerate(tagset) }
-#         self.warmup_iter = warmup_iter
-#         self.sampling_iter = sampling_iter
-#         self.iter_stat_interval = iter_stat_interval
         self.min_subtree_prob = min_subtree_prob
-#         self.stats = {}
         untagged_edge_set, self.edge_tr_mat = \
             self._compute_untagged_edges_and_transition_mat(full_graph, model)
         untagged_full_graph = FullGraph(full_graph.lexicon, untagged_edge_set)
         super().__init__(untagged_full_graph, model, warmup_iter=warmup_iter,
                          sampling_iter=sampling_iter,
                          iter_stat_interval=iter_stat_interval)
-#         self.edge_set = untagged_edge_set
         self._compute_root_prob()
         self._fast_compute_leaf_prob()
         self.init_forward_prob()
@@ -673,14 +666,12 @@ class MCMCTagSampler(MCMCGraphSampler):
             # list tree nodes in the order of increasing depth
             queue = [branching.root(list(nodes)[0])]
             result = []
-#             print([str(n) for n in queue])
             while queue:
                 node = queue.pop(0)
                 result.append(node)
                 for successor in branching.successors(node):
                     if successor in nodes:
                         queue.append(successor)
-#                 print([str(n) for n in queue])
             return result
 
         def _recompute_backward_prob(branching, nodes):
