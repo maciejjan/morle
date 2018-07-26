@@ -5,7 +5,7 @@ from datastruct.rules import RuleSet, Rule
 from models.generic import Model, ModelFactory, UnknownModelTypeException
 import shared
 
-from keras.models import Model, Sequential
+import keras.models
 from keras.layers import concatenate, Dense, Embedding, Flatten, Input, \
                          SimpleRNN
 import keras
@@ -116,7 +116,7 @@ class RNNRootFeatureModel(RootFeatureModel):
         return result
 
     def _compile_network(self) -> None:
-        self.nn = Sequential()
+        self.nn = keras.models.Sequential()
         self.nn.add(Embedding(input_dim=len(self.alphabet)+1,
                               output_dim=self.dim, mask_zero=True,
                               input_length=self.maxlen))
@@ -145,7 +145,7 @@ class RootFeatureModelFactory(ModelFactory):
             result['alphabet'] = lexicon.get_alphabet()
             logging.getLogger('main').debug(\
                 'Detected alphabet: {}'.format(', '.join(result['alphabet'])))
-            result['maxlen'] = lexicon.get_max_word_length()
+            result['maxlen'] = lexicon.get_max_symstr_length()
             logging.getLogger('main').debug(\
                 'Detected max. word length: {}'.format(result['maxlen']))
         else:
@@ -253,7 +253,7 @@ class NeuralEdgeFeatureModel(EdgeFeatureModel):
         concat = concatenate([input_attr, rule_emb_fl])
         output = Dense(dim, activation='linear', name='dense')(concat)
 
-        self.nn = Model(inputs=[input_attr, input_rule], outputs=[output])
+        self.nn = keras.models.Model(inputs=[input_attr, input_rule], outputs=[output])
         self.nn.compile(optimizer='adam', loss='mse')
 
     def _prepare_data(self, edge_set :EdgeSet) -> \

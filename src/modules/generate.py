@@ -61,10 +61,11 @@ def sort_and_deduplicate_results(results):
 
 def run() -> None:
     lexicon_tr = algorithms.fst.load_transducer(shared.filenames['lexicon-tr'])
-    logging.getLogger('main').info('Building rule transducer...')
-    rules_tr = algorithms.fst.binary_disjunct(
-                   build_rule_transducers(load_rules()),
-                   print_progress=True)
+    rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+#     logging.getLogger('main').info('Building rule transducer...')
+#     rules_tr = algorithms.fst.binary_disjunct(
+#                    build_rule_transducers(load_rules()),
+#                    print_progress=True)
     logging.getLogger('main').info('Generating words...')
     with open_to_write(shared.filenames['wordgen']) as outfp:
         for output_word, input_word, weight in \

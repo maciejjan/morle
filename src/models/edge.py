@@ -8,7 +8,7 @@ import shared
 
 from collections import defaultdict
 from itertools import chain
-from keras.models import Model
+import keras.models
 from keras.layers import concatenate, Dense, Embedding, Flatten, Input
 import logging
 import numpy as np
@@ -56,6 +56,12 @@ class SimpleEdgeModel(EdgeModel):
             self.rule_domsize[i] = rule_set.get_domsize(rule_set[i])
         self.alpha = alpha
         self.beta = beta
+
+    def edges_prob(self, edges :EdgeSet) -> np.ndarray:
+        result = np.zeros(len(edges))
+        for rule, edge_ids in edges.get_edge_ids_by_rule().items():
+            result[edge_ids] = self.rule_prob[self.rule_set.get_id(rule)]
+        return result
 
     def edge_cost(self, edge :GraphEdge) -> float:
         return self._rule_appl_cost[self.rule_set.get_id(edge.rule)]
@@ -168,9 +174,15 @@ class NeuralEdgeModel(EdgeModel):
         self.ngram_extractor = ngram_extractor
         self._compile_network()
 
-    def edges_cost(self, edges :EdgeSet) -> np.ndarray:
+    def edges_prob(self, edges :EdgeSet) -> np.ndarray:
         X_attr, X_rule = self._prepare_data(edges)
         probs = self.nn.predict([X_attr, X_rule]).reshape((len(edges),))
+        return probs
+
+    def edges_cost(self, edges :EdgeSet) -> np.ndarray:
+#         X_attr, X_rule = self._prepare_data(edges)
+#         probs = self.nn.predict([X_attr, X_rule]).reshape((len(edges),))
+        probs = self.edges_prob(edges)
         return np.log(probs / (1-probs))
 
     def null_cost(self) -> float:
@@ -262,7 +274,7 @@ class NeuralEdgeModel(EdgeModel):
         concat = concatenate([attr_dr, rule_emb_fl])
         internal = Dense(5, activation='relu', name='internal')(concat)
         output = Dense(1, activation='sigmoid', name='dense')(internal)
-        self.nn = Model(inputs=[input_attr, input_rule], outputs=[output])
+        self.nn = keras.models.Model(inputs=[input_attr, input_rule], outputs=[output])
         self.nn.compile(optimizer='adam', loss='binary_crossentropy')
 
     def _prepare_data(self, edge_set :EdgeSet) -> \

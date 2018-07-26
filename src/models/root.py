@@ -31,10 +31,11 @@ class AlergiaRootModel(RootModel):
 
     # TODO weights are presently ignored, should it be so?!
     def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
-        word_seqs, tag_seqs = [], []
+#         word_seqs, tag_seqs = [], []
+        word_seqs = []
         for entry in lexicon:
             word_seqs.append(entry.word)
-            tag_seqs.append(entry.tag)
+#             tag_seqs.append(entry.tag)
 
         alpha = shared.config['compile'].getfloat('alergia_alpha')
         freq_threshold = \
@@ -42,16 +43,17 @@ class AlergiaRootModel(RootModel):
         self.automaton = \
             algorithms.alergia.alergia(word_seqs, alpha=alpha, 
                                        freq_threshold=freq_threshold).to_hfst()
-        tag_automaton = \
-            algorithms.alergia.prefix_tree_acceptor(tag_seqs).to_hfst()
-        tag_automaton.minimize()
+#         tag_automaton = \
+#             algorithms.alergia.prefix_tree_acceptor(tag_seqs).to_hfst()
+#         tag_automaton.minimize()
 
-        self.automaton.concatenate(tag_automaton)
+#         self.automaton.concatenate(tag_automaton)
         self.automaton.remove_epsilons()
         self.automaton.convert(hfst.ImplementationType.HFST_OLW_TYPE)
 
     def root_cost(self, entry :LexiconEntry) -> float:
-        lookup_results = self.automaton.lookup(entry.symstr)
+#         lookup_results = self.automaton.lookup(entry.symstr)
+        lookup_results = self.automaton.lookup(''.join(entry.word))
         if not lookup_results:
             return np.inf
         return lookup_results[0][1]

@@ -267,6 +267,18 @@ def tag_acceptor(tag, alphabet):
     tr_c.concatenate(seq_to_transducer(tuple(zip(tag, tag))))
     return tr_c
 
+def generator(seqs):
+    
+    def _generator_for_seq(seq):
+        tr = hfst.HfstBasicTransducer()
+        for i, c in enumerate(seq):
+            tr.add_transition(i, hfst.HfstBasicTransition(i+1, c, c, 0.0))
+        tr.set_final_weight(len(seq), 0.0)
+        return hfst.HfstTransducer(tr)
+
+    transducers = [_generator_for_seq(seq) for seq in seqs]
+    return binary_disjunct(transducers)
+
 def load_transducer(filename):
     path = os.path.join(shared.options['working_dir'], filename)
     istr = hfst.HfstInputStream(path)

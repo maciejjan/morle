@@ -90,7 +90,7 @@ class EdgeSet:
     def save(self, filename :str) -> None:
         with open_to_write(filename) as fp:
             for edge in self.__iter__():
-                write_line(fp, edge.to_tuple())
+                write_line(fp, edge.to_tuple()[:3])
 
     @staticmethod
     def load(filename :str, lexicon :Lexicon, rule_set :RuleSet) -> 'EdgeSet':
@@ -103,26 +103,39 @@ class EdgeSet:
 
 
 class Graph(nx.MultiDiGraph):
+    def __init__(self) -> None:
+        super().__init__()
+        self.edges_by_source = defaultdict(lambda: set())
+        self.edges_by_target = defaultdict(lambda: set())
 
     def add_edge(self, edge :GraphEdge) -> None:
         super().add_edge(*edge.to_tuple())
+        self.edges_by_source[edge.source].add(edge)
+        self.edges_by_target[edge.target].add(edge)
 
     def remove_edge(self, edge :GraphEdge) -> None:
         super().remove_edge(edge.source, edge.target, edge.rule)
-        if self.find_edges(edge.source, edge.target):
-            raise Exception('remove_edge apparently didn\'t work')
+        self.edges_by_source[edge.source].remove(edge)
+        self.edges_by_target[edge.target].remove(edge)
 
     def edges_iter(self) -> Iterable[GraphEdge]:
         return (attr['object'] for source, target, rule, attr in \
                                    super().edges_iter(keys=True, data=True))
 
-    def find_edges(self, source :LexiconEntry, target :LexiconEntry) \
-                  -> List[GraphEdge]:
-        result = []
-        if source in self and target in self[source]:
-            for rule, attr in self[source][target].items():
-                result.append(GraphEdge(source, target, rule, **attr))
-        return result
+    def edges_between(self, source :LexiconEntry, target :LexiconEntry) \
+                     -> Set[GraphEdge]:
+        return list(self.edges_by_source[source] & self.edges_by_target[target])
+#         result = []
+#         if source in self and target in self[source]:
+#             for rule, attr in self[source][target].items():
+#                 result.append(GraphEdge(source, target, rule, **attr))
+#         return result
+
+    def ingoing_edges(self, target :LexiconEntry) -> List[GraphEdge]:
+        return list(self.edges_by_target[target])
+
+    def outgoing_edges(self, source :LexiconEntry) -> List[GraphEdge]:
+        return list(self.edges_by_source[source])
 
 
 class Branching(Graph):
@@ -150,15 +163,32 @@ class Branching(Graph):
 
     def parent(self, node :LexiconEntry) -> LexiconEntry:
         predecessors = self.predecessors(node)
+        if len(predecessors) > 1:
+            raise Exception('More than one predecessor: {}'.format(node))
         return predecessors[0] if predecessors else None
 
     def root(self, node :LexiconEntry) -> LexiconEntry:
-        if self.parent(node) is None:
-            return None
-        root = self.parent(node)
-        while root.parent() is not None:
+        root = node
+        while self.parent(root) is not None:
             root = self.parent(root)
         return root
+
+    def depth(self, node :LexiconEntry) -> int:
+        if self.parent(node) is None:
+            return 1
+        else:
+            return 1 + self.depth(self.parent(node))
+
+    def subtree_size(self, node :LexiconEntry) -> int:
+        return 1 + \
+               sum(self.subtree_size(child) for child in self.successors(node))
+
+    def height(self, node :LexiconEntry) -> int:
+        child_heights = [self.height(child) for child in self.successors(node)]
+        if not child_heights:
+            return 1
+        else:
+            return max(child_heights) + 1
 
     def has_path(self, source :LexiconEntry, target :LexiconEntry) -> bool:
         node = target
@@ -171,6 +201,13 @@ class Branching(Graph):
             if node in seen_nodes:
                 raise Exception('Cycle detected!')
         return False
+
+    def path(self, source :LexiconEntry, target :LexiconEntry) \
+            -> List[LexiconEntry]:
+        if source == target:
+            return [source]
+        else:
+            return self.path(source, self.parent(target)) + [target]
 
     def get_edges_for_rule(self, rule :Rule) -> List[GraphEdge]:
         return self.edges_by_rule[rule]
