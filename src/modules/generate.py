@@ -1,6 +1,7 @@
 from algorithms.analyzer import Analyzer
 import algorithms.fst
 from datastruct.lexicon import *
+from datastruct.graph import EdgeSet, FullGraph
 from datastruct.rules import *
 from models.suite import ModelSuite
 from utils.files import *
@@ -10,6 +11,7 @@ from operator import itemgetter
 import hfst
 import logging
 import math
+from scipy.stats import norm
 
 
 # TODO
@@ -22,72 +24,56 @@ import math
 #   (pairs: source_word, rule)
 # - result: pairs (word, cost)
 
-
-# def load_rules():
-#     return [(Rule.from_string(rule), domsize, prod)\
-#             for rule, domsize, prod in\
-#                 read_tsv_file(shared.filenames['rules-fit'], (str, int, float))]
-# 
-# 
-# def build_rule_transducers(rules):
-#     max_cost = shared.config['generate'].getfloat('max_cost')
-#     transducers = []
-#     for rule, domsize, prod in rules:
-#         cost = -math.log(prod)
-#         if cost < max_cost:
-#             transducers.append(rule.to_fst(weight=cost))
-#     return transducers
-# 
-# 
-# def word_generator(lexicon_tr, rules_tr):
-#     lexicon_words = set(input_word \
-#                         for input_word, outputs in \
-#                             lexicon_tr.extract_paths(output='dict').items())
-#     logging.getLogger('main').info('Composing...')
-#     tr = hfst.HfstTransducer(lexicon_tr)
-#     tr.compose(rules_tr)
-#     tr.minimize()
-# #     lexicon_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
-#     tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
-# 
-#     logging.getLogger('main').info('Extracting paths...')
-# #     for input_word, outputs in tr.extract_paths(output='dict').items():
-#     for input_word in lexicon_words:
-#         outputs = tr.lookup(input_word)
-#         input_word = input_word.replace(hfst.EPSILON, '')
-#         input_word_unnorm = unnormalize_word(input_word)
-#         for output_word, weight in outputs:
-#             output_word = output_word.replace(hfst.EPSILON, '')
-#             output_word_unnorm = unnormalize_word(output_word)
-#             if output_word_unnorm not in lexicon_words:
-#                 yield (output_word_unnorm, input_word_unnorm, weight)
-# 
-# 
-# def sort_and_deduplicate_results(results):
-#     results_list = sorted(list(results), key=itemgetter(2))
-#     known_output_words = set()
-#     for output_word, input_word, weight in results_list:
-#         if output_word not in known_output_words:
-#             known_output_words.add(output_word)
-#             yield (output_word, input_word, weight)
+def fit_frequency_model(sample_edge_stats_filename, lexicon, rule_set):
+    means, sdevs = np.zeros(len(rule_set)), np.zeros(len(rule_set))
+    values, weights = {}, {}
+    for w1, w2, rule, freq_str in read_tsv_file(sample_edge_stats_filename):
+        try:
+            freq = float(freq_str)
+            if freq <= 0:
+                continue
+            if rule not in values:
+                values[rule] = []
+                weights[rule] = []
+            values[rule].append(freq * (lexicon[w2].logfreq - lexicon[w1].logfreq))
+            weights[rule].append(freq)
+        except ValueError:
+            pass
+    for rule in values:
+        r_id = rule_set.get_id(Rule.from_string(rule))
+        a_values = np.array(values[rule])
+        a_weights = np.array(weights[rule])
+        means[r_id] = np.average(a_values, weights=a_weights)
+        sdevs[r_id] = np.sqrt(np.average((a_values-means[r_id])**2, weights=a_weights))
+    return means, sdevs
 
 
 def run() -> None:
     lexicon = Lexicon.load(shared.filenames['wordlist'])
     model = ModelSuite.load()
-    analyzer = Analyzer(lexicon, model)
-    new_words_acceptor = hfst.HfstTransducer(analyzer.fst)
-    new_words_acceptor.convert(hfst.ImplementationType.TROPICAL_OPENFST_TYPE)
-    new_words_acceptor.input_project()
-    new_words_acceptor.minimize()
-    new_words_acceptor.subtract(lexicon.to_fst())
-    new_words_acceptor.minimize()
-    tr_path = full_path('wordgen.fst')
-    algorithms.fst.save_transducer(new_words_acceptor, tr_path)
+    analyzer_file = 'analyzer.fsm'
+    analyzer = None
+    if file_exists(analyzer_file):
+        analyzer = Analyzer.load(analyzer_file, lexicon, model)
+    else:
+        analyzer = Analyzer(lexicon, model)
+        analyzer.save(analyzer_file)
+    tr_file = 'wordgen.fst'
+    if not file_exists(tr_file):
+        new_words_acceptor = hfst.HfstTransducer(analyzer.fst)
+        new_words_acceptor.convert(hfst.ImplementationType.TROPICAL_OPENFST_TYPE)
+        new_words_acceptor.input_project()
+        new_words_acceptor.minimize()
+        new_words_acceptor.subtract(lexicon.to_fst())
+        new_words_acceptor.minimize()
+        algorithms.fst.save_transducer(new_words_acceptor, tr_file)
 
-#     means, sdevs = fit_frequency_model(full_graph, model)
+    logging.getLogger('main').info('Fitting the frequency model...')
+    means, sdevs = fit_frequency_model('sample-edge-stats.txt',
+                                       lexicon, model.rule_set)
 
-    cmd = ['hfst-fst2strings', tr_path]
+    logging.getLogger('main').info('Generating...')
+    cmd = ['hfst-fst2strings', full_path(tr_file)]
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE,
                          stderr=subprocess.DEVNULL, 
@@ -100,10 +86,23 @@ def run() -> None:
                 analyses = analyzer.analyze(LexiconEntry(word))
                 if not analyses:
                     continue
-                total_cost = \
-                    -math.log(sum(math.exp(-e.attr['cost']) for e in analyses))
+                total_prob = 0
+                for e in analyses:
+                    edge_prob = math.exp(-e.attr['cost'])
+                    r_id = model.rule_set.get_id(e.rule)
+                    freq_prob = norm.cdf(-e.source.logfreq, loc=means[r_id],
+                                         scale=sdevs[r_id])
+                    freq_logprob = norm.logcdf(-e.source.logfreq, loc=means[r_id],
+                                               scale=sdevs[r_id])
+#                     write_line(fp, ('---', str(e), -math.log(edge_prob),
+#                                     freq_logprob))
+                    total_prob += edge_prob * freq_prob
+                if total_prob <= 0:
+                    continue
+                total_cost = -math.log(total_prob)
                 if total_cost < shared.config['generate'].getfloat('max_cost'):
                     write_line(fp, (word, total_cost))
+#                     print(word, total_cost)
             else:
                 break
 

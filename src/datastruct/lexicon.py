@@ -93,6 +93,9 @@ class LexiconEntry:
         self._is_possible_edge_target = \
             kwargs['is_possible_edge_target'] \
             if 'is_possible_edge_target' in kwargs else True
+        if 'freq' in kwargs:
+            self.freq = kwargs['freq']
+            self.logfreq = math.log(self.freq)
         if 'vec' in kwargs:
             self.vec = kwargs['vec']
 
@@ -252,7 +255,8 @@ class Lexicon:
     def load(filename :str) -> 'Lexicon':
 
         def _parse_entry_from_row(row :List[str], use_restr=False,
-                                  use_vec=False, vec_sep=' ', vec_dim=None)\
+                                  use_freq=False, use_vec=False, vec_sep=' ',
+                                  vec_dim=None)\
                                  -> LexiconEntry:
             my_row = list(row)      # copy because it will be destroyed
             word = my_row.pop(0)
@@ -261,6 +265,8 @@ class Lexicon:
                 restr = my_row.pop(0).strip()
                 kwargs['is_possible_edge_source'] = 'L' in restr
                 kwargs['is_possible_edge_target'] = 'R' in restr
+            if use_freq:
+                kwargs['freq'] = int(my_row.pop(0).strip())
             if use_vec:
                 vec_str = my_row.pop(0).strip()
                 kwargs['vec'] = \
@@ -276,19 +282,22 @@ class Lexicon:
         # determine the file format
         use_restr = \
             shared.config['General'].getboolean('use_edge_restrictions')
+        use_freq = \
+            shared.config['General'].getboolean('use_frequency')
         use_vec = \
             shared.config['Models'].get('root_feature_model') != 'none' or \
             shared.config['Models'].get('edge_feature_model') != 'none'
         supervised = shared.config['General'].getboolean('supervised')
         vec_sep = shared.format['vector_sep']
         vec_dim = shared.config['Features'].getint('word_vec_dim')
+        kwargs = { 'use_restr' : use_restr, 'use_freq' : use_freq, 
+                   'use_vec' : use_vec, 'vec_dim' : vec_dim }
         items_to_add = []
         for row in read_tsv_file(filename):
             try:
                 if supervised:
                     row.pop(0)    # the first item is the base/lemma -> ignore
-                entry = _parse_entry_from_row(row, use_restr=use_restr,
-                                              use_vec=use_vec, vec_dim=vec_dim)
+                entry = _parse_entry_from_row(row, **kwargs)
                 items_to_add.append(entry)
             except Exception as e:
 #                 raise e

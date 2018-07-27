@@ -27,7 +27,8 @@ class Analyzer:
         # TODO pass those things as parameters rather than loading them here!!!
         self.lexicon = lexicon
         self.model = model
-        self._compile_fst()
+        if 'compile' not in kwargs or kwargs['compile']:
+            self._compile_fst()
         self.predict_vec = 'predict_vec' in kwargs and \
                            kwargs['predict_vec'] == True
         self.enable_back_formation = 'enable_back_formation' in kwargs and \
@@ -102,9 +103,12 @@ class Analyzer:
         self.fst.convert(hfst.ImplementationType.HFST_OLW_TYPE)
 
     def save(self, filename :str) -> None:
-        raise NotImplementedError()
+        algorithms.fst.save_transducer(self.fst, filename)
 
     @staticmethod
-    def load(filename :str) -> None:
-        raise NotImplementedError()
+    def load(filename :str, lexicon, model, **kwargs) -> None:
+        kwargs['compile'] = False
+        analyzer = Analyzer(lexicon, model, **kwargs)
+        analyzer.fst = algorithms.fst.load_transducer(filename)
+        return analyzer
 
