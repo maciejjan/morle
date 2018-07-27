@@ -1,7 +1,7 @@
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.graph import FullGraph, EdgeSet, GraphEdge
 from datastruct.rules import Rule
-from utils.files import full_path, read_tsv_file
+from utils.files import full_path, read_tsv_file, open_to_write
 import shared
 
 import logging
@@ -12,12 +12,14 @@ import tqdm
 from typing import List
 
 
-def load_graph(filename, lexicon):
+def load_graph(filename, lexicon, threshold=0.0):
     edge_set = EdgeSet(lexicon)
     rules = {}
     for word_1, word_2, rule_str, edge_freq_str in read_tsv_file(filename):
         try:
             edge_freq = float(edge_freq_str)
+            if edge_freq < threshold:
+                continue
             if rule_str not in rules:
                 rules[rule_str] = Rule.from_string(rule_str)
             edge = GraphEdge(lexicon[word_1], lexicon[word_2], rules[rule_str],
@@ -72,9 +74,13 @@ def run() -> None:
     logging.getLogger('main').info('Loading lexicon...')
     lexicon = Lexicon.load(shared.filenames['wordlist'])
     logging.getLogger('main').info('Loading graph...')
-    graph = load_graph(full_path('sample-edge-stats.txt'), lexicon)
+    graph = \
+        load_graph(full_path('sample-edge-stats.txt'),
+                   lexicon,
+                   threshold=shared.config['cluster'].getfloat('threshold'))
     logging.getLogger('main').info('Clustering...')
     clusters = chinese_whispers(graph)
-    for cluster in clusters:
-        print(', '.join([str(node) for node in cluster]))
+    with open_to_write(full_path('clusters.txt')) as fp:
+        for cluster in clusters:
+            fp.write(', '.join([str(node) for node in cluster])+'\n')
 
