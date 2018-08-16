@@ -40,7 +40,10 @@ def extract_all_rules(node_1, node_2):
     while queue:
         seq, alignment, num_seg, len_seg, last_seg = queue.pop()
         if not alignment:
-            results.append(Rule.from_seq(seq, (node_1.tag, node_2.tag)))
+            try:
+                results.append(Rule.from_seq(seq, (node_1.tag, node_2.tag)))
+            except InvalidRuleException:
+                pass
             continue
         x, y = alignment[0]
         if x == y:

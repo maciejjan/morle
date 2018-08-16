@@ -5,6 +5,10 @@ import re
 from operator import itemgetter
 
 
+class InvalidRuleException(Exception):
+    pass
+
+
 class Rule:
     def __init__(self, subst, tag_subst=None, string=None):
         self.subst = subst
@@ -88,6 +92,13 @@ class Rule:
     
     @staticmethod
     def from_seq(seq, tag_subst):
+
+        def _nonempty_and_not_letter(string):
+            return \
+                string != hfst.EPSILON and \
+                (shared.compiled_patterns['nonletter'].match(string) or \
+                 len(string) > 1 and string not in ('{CAP}', '{ALLCAPS}'))
+
         subst = []
         x_seq, y_seq = (), ()
         for x, y in seq:
@@ -95,6 +106,8 @@ class Rule:
                 subst.append((x_seq, y_seq))
                 x_seq, y_seq = (), ()
             else:
+                if _nonempty_and_not_letter(x) or _nonempty_and_not_letter(y):
+                    raise InvalidRuleException()
                 x_seq += (x,) if x != hfst.EPSILON else ()
                 y_seq += (y,) if y != hfst.EPSILON else ()
         subst.append((x_seq, y_seq))
