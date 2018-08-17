@@ -238,11 +238,11 @@ class MCMCGraphSampler:
             logging.getLogger('main').info('adding:')
             for e in edges_to_add:
                 print(e.source, e.target, e.rule, \
-                      self.edge_cost_cache[self.edge_set.get_id(edge)])
+                      self.edge_cost_cache[self.edge_set.get_id(e)])
             logging.getLogger('main').info('deleting:')
             for e in edges_to_remove:
                 print(e.source, e.target, e.rule, \
-                      self.edge_cost_cache[self.edge_set.get_id(edge)])
+                      self.edge_cost_cache[self.edge_set.get_id(e)])
             raise RuntimeError('NaN log-likelihood at iteration {}'\
                                .format(self.iter_num))
         # remove edges and update stats
