@@ -27,7 +27,8 @@ def compute_possible_edges(lexicon :Lexicon, rule_set :RuleSet) -> EdgeSet:
     # build the transducer
     lexicon_tr = lexicon.to_fst()
     tag_seqs = extract_tag_symbols_from_rules(rule_set)
-    lexicon_tr.concatenate(algorithms.fst.generator(tag_seqs))
+    if tag_seqs:
+        lexicon_tr.concatenate(algorithms.fst.generator(tag_seqs))
     rules_tr = rule_set.to_fst()
     tr = hfst.HfstTransducer(lexicon_tr)
     tr.compose(rules_tr)
