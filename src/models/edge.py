@@ -85,6 +85,13 @@ class SimpleEdgeModel(EdgeModel):
         self._rule_appl_cost = -np.log(probs) + np.log(1-probs)
         self._rule_cost = -np.log(1-probs) * self.rule_domsize
         self._null_cost = np.sum(self._rule_cost)
+        # test the rule application costs for finiteness
+        if not np.all(np.isfinite(self._rule_appl_cost)):
+            for r_id in np.where(~np.isfinite(self._rule_appl_cost))[0]:
+                r_id = int(r_id)
+                logging.getLogger('main').warn(\
+                    'Infinite cost of rule application: {}, {}'\
+                    .format(self.rule_set[r_id], self._rule_appl_cost[r_id]))
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
         # compute rule frequencies
@@ -107,7 +114,8 @@ class SimpleEdgeModel(EdgeModel):
         result = SimpleEdgeModel(rule_set)
         probs = np.zeros(len(rule_set))
         for rule, prob in read_tsv_file(filename, (str, float)):
-            probs[rule_set.get_id(rule_set[rule])] = prob
+            r_id = rule_set.get_id(rule_set[rule])
+            probs[r_id] = prob
         result.set_probs(probs)
         return result
 

@@ -217,6 +217,8 @@ class MCMCGraphSampler:
         self.edge_cost_cache = self.model.edges_cost(self.edge_set)
         if (np.any(np.isnan(self.root_cost_cache))):
             logging.getLogger('main').warn('NaN in root costs!')
+        if (np.any(np.isinf(self.root_cost_cache))):
+            logging.getLogger('main').warn('Infinity in root costs!')
         if (np.any(np.isnan(self.edge_cost_cache))):
             logging.getLogger('main').warn('NaN in edge costs!')
        
