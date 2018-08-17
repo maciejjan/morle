@@ -71,6 +71,31 @@ class AlergiaRootModel(RootModel):
         return result
 
 
+class UnigramRootModel(RootModel):
+
+    def __init__(self) -> None:
+        raise NotImplementedError()
+
+    def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
+        # TODO determine the alphabet from the lexicon
+        # TODO count the occurrences of each symbol
+        # TODO normalize the symbol probabilities
+        raise NotImplementedError()
+
+    def root_cost(self, entry :LexiconEntry) -> float:
+        raise NotImplementedError()
+
+    def root_costs(self, lexicon :Lexicon) -> np.ndarray:
+        raise NotImplementedError()
+
+    def save(self, filename :str) -> None:
+        raise NotImplementedError()
+
+    @staticmethod
+    def load(filename :str) -> 'AlergiaRootModel':
+        raise NotImplementedError()
+
+
 class NGramRootModel(RootModel):
     pass    # TODO
 
@@ -84,6 +109,8 @@ class RootModelFactory(ModelFactory):
     def create(model_type :str) -> RootModel:
         if model_type == 'alergia':
             return AlergiaRootModel()
+        if model_type == 'unigram':
+            return UnigramRootModel()
         else:
             raise UnknownModelTypeException('root', model_type)
 
