@@ -1,3 +1,4 @@
+from algorithms.clustering import chinese_whispers
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.graph import FullGraph, EdgeSet, GraphEdge
 from datastruct.rules import Rule
@@ -14,6 +15,7 @@ from typing import List
 
 def load_graph(filename, lexicon, threshold=0.0):
     edge_set = EdgeSet(lexicon)
+    weights = []
     rules = {}
     for word_1, word_2, rule_str, edge_freq_str in read_tsv_file(filename):
         try:
@@ -25,23 +27,22 @@ def load_graph(filename, lexicon, threshold=0.0):
             edge = GraphEdge(lexicon[word_1], lexicon[word_2], rules[rule_str],
                              weight=edge_freq)
             edge_set.add(edge)
+            weights.append(edge_freq)
         except ValueError:
             pass
-    return FullGraph(lexicon, edge_set)
-
-
+    return FullGraph(lexicon, edge_set), np.array(weights)
 
 
 def run() -> None:
     logging.getLogger('main').info('Loading lexicon...')
     lexicon = Lexicon.load(shared.filenames['wordlist'])
     logging.getLogger('main').info('Loading graph...')
-    graph = \
+    graph, weights = \
         load_graph(full_path('sample-edge-stats.txt'),
                    lexicon,
                    threshold=shared.config['cluster'].getfloat('threshold'))
     logging.getLogger('main').info('Clustering...')
-    clusters = chinese_whispers(graph)
+    clusters = chinese_whispers(graph, weights)
     with open_to_write(full_path('clusters.txt')) as fp:
         for cluster in clusters:
             fp.write(', '.join([str(node) for node in cluster])+'\n')

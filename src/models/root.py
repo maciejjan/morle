@@ -2,8 +2,10 @@ import algorithms.alergia
 import algorithms.fst
 from datastruct.lexicon import LexiconEntry, Lexicon
 from models.generic import Model, ModelFactory, UnknownModelTypeException
+from utils.files import open_to_write, read_tsv_file, write_line
 import shared
 
+from collections import defaultdict
 import hfst
 import numpy as np
 from typing import Iterable
@@ -72,6 +74,54 @@ class AlergiaRootModel(RootModel):
 
 
 class UnigramRootModel(RootModel):
+    UNKNOWN = '<UNKN>'
+
+    def __init__(self) -> None:
+        self.probs = { UnigramRootModel.UNKNOWN : 1 }
+
+    def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
+        counts = defaultdict(lambda: 0)
+        for i, entry in enumerate(lexicon):
+            for sym in entry.word:
+                counts[sym] += weights[i]
+        counts[UnigramRootModel.UNKNOWN] += 1
+        total = sum(counts.values())
+        self.probs = {}
+        for sym, count in counts.items():
+            self.probs[sym] = count / total
+
+    def root_cost(self, entry :LexiconEntry) -> float:
+        result = 1.0
+        for sym in entry.word:
+            result *= self.probs[sym] \
+                      if sym in self.probs \
+                      else self.probs[UnigramRootModel.UNKNOWN]
+        return result
+
+    def root_costs(self, lexicon :Lexicon) -> np.ndarray:
+        result = np.ones(len(lexicon))
+        for i, entry in enumerate(lexicon):
+            result[i] = self.root_cost(entry)
+        return result
+
+    def save(self, filename :str) -> None:
+        with open_to_write(filename) as fp:
+            for sym, prob in self.probs.items():
+                write_line(fp, (sym, prob))
+
+    @staticmethod
+    def load(filename :str) -> 'UnigramRootModel':
+        result = UnigramRootModel()
+        for sym, prob in read_tsv_file(filename, types=(str, float)):
+            result.probs[sym] = prob
+        return result
+
+
+class NGramRootModel(RootModel):
+    pass    # TODO
+
+
+class RNNRootModel(RootModel):
 
     def __init__(self) -> None:
         raise NotImplementedError()
@@ -96,20 +146,14 @@ class UnigramRootModel(RootModel):
         raise NotImplementedError()
 
 
-class NGramRootModel(RootModel):
-    pass    # TODO
-
-
-class RNNRootModel(RootModel):
-    pass    # TODO
-
-
 class RootModelFactory(ModelFactory):
     @staticmethod
     def create(model_type :str) -> RootModel:
         if model_type == 'alergia':
             return AlergiaRootModel()
-        if model_type == 'unigram':
+        elif model_type == 'rnn':
+            return RNNRootModel()
+        elif model_type == 'unigram':
             return UnigramRootModel()
         else:
             raise UnknownModelTypeException('root', model_type)
@@ -118,6 +162,10 @@ class RootModelFactory(ModelFactory):
     def load(model_type :str, filename :str) -> RootModel:
         if model_type == 'alergia':
             return AlergiaRootModel.load(filename)
+        elif model_type == 'rnn':
+            return RNNRootModel.load(filename)
+        elif model_type == 'unigram':
+            return UnigramRootModel.load(filename)
         else:
             raise UnknownModelTypeException('root', model_type)
 

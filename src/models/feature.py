@@ -79,7 +79,7 @@ class RNNRootFeatureModel(RootFeatureModel):
         # prepare data
         X, y = self._prepare_data(lexicon)
         # fit the neural network
-        self.nn.fit(X, y, epochs=20, sample_weight=weights, batch_size=64,
+        self.nn.fit(X, y, epochs=5, sample_weight=weights, batch_size=64,
                     verbose=1)
         # fit error variance
         y_pred = self.nn.predict(X)
