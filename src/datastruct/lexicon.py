@@ -63,7 +63,7 @@ def unnormalize_seq(seq :List[str]) -> List[str]:
             else:
                 result.append(c)
             cap = False
-    return result
+    return tuple(result)
 
 
 def normalize_word(literal :str) -> str:
