@@ -5,6 +5,7 @@ from utils.files import read_tsv_file
 import shared
 
 import hfst
+from operator import itemgetter
 import tqdm
 
 
@@ -26,7 +27,8 @@ def run():
             tr.compose(algorithms.fst.tag_acceptor(tag_seq, alphabet))
             tr.minimize()
             tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
-            lookup_results = tr.lookup(normalize_word(lemma), max_number=1)
+            lookup_results = \
+                sorted(tr.lookup(normalize_word(lemma)), key=itemgetter(1))
             if lookup_results:
                 word_str = unnormalize_word(lookup_results[0][0])
                 print(lemma, word_str, sep='\t')
