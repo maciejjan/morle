@@ -19,7 +19,7 @@ def run():
         try:
             lemma_seq, lemma_tag_seq, lemma_disamb = tokenize_word(lemma)
             lt_seq = normalize_seq(lemma_seq) + lemma_tag_seq
-            tag_seq = tokenize_word('z'+tag)[1]
+            tag_seq = tokenize_word('z'+tag)[1] # TODO ugly
             tr = algorithms.fst.seq_to_transducer(list(zip(lt_seq, lt_seq)))
             tr.compose(rules_tr)
             tr.minimize()
