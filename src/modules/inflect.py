@@ -6,32 +6,36 @@ import shared
 
 import hfst
 from operator import itemgetter
+import sys
 import tqdm
+
+
+# TODO only works with SimpleEdgeModel! (no rescoring)
+# -> rescoring to make it work with other edge models
 
 
 def run():
     lexicon_tr = algorithms.fst.load_transducer(shared.filenames['lexicon-tr'])
     rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+    rules_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
     alphabet = lexicon_tr.get_alphabet()
     pairs = [(lemma, tag) \
                for lemma, tag in \
                    read_tsv_file(shared.filenames['analyze.wordlist'])]
     for lemma, tag in tqdm.tqdm(pairs):
         try:
-            lemma_seq, lemma_tag_seq, lemma_disamb = tokenize_word(lemma)
-            lt_seq = normalize_seq(lemma_seq) + lemma_tag_seq
-            tag_seq = tokenize_word('z'+tag)[1] # TODO ugly
-            tr = algorithms.fst.seq_to_transducer(list(zip(lt_seq, lt_seq)))
-            tr.compose(rules_tr)
-            tr.minimize()
-            tr.compose(algorithms.fst.tag_acceptor(tag_seq, alphabet))
-            tr.minimize()
-            tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
             lookup_results = \
-                sorted(tr.lookup(normalize_word(lemma)), key=itemgetter(1))
-            if lookup_results:
-                word_str = unnormalize_word(lookup_results[0][0])
-                print(lemma, word_str, sep='\t')
-        except Exception:
-            pass
+                sorted(rules_tr.lookup(normalize_word(lemma)), key=itemgetter(1))
+            found = False
+            for word, cost in lookup_results:
+                word_tag = ''.join(tokenize_word(word)[1])
+                if word_tag == tag:
+                    print(lemma, word, sep='\t')
+                    found = True
+                    break
+            if not found:
+                print(lemma, '---'+tag, sep='\t')
+        except Exception as e:
+            print(str(e), file=sys.stderr)
+            print(lemma, '---'+tag, sep='\t')
 
