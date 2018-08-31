@@ -42,7 +42,10 @@ def run() -> None:
                    lexicon,
                    threshold=shared.config['cluster'].getfloat('threshold'))
     logging.getLogger('main').info('Clustering...')
-    clusters = chinese_whispers(graph, weights)
+    clusters = \
+        chinese_whispers(graph, weights,
+                         root_weights=shared.config['cluster']\
+                                            .getboolean('root_weights'))
     with open_to_write('clusters.txt') as fp:
         for cluster in clusters:
             fp.write(', '.join([str(node) for node in cluster])+'\n')
