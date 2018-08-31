@@ -30,7 +30,7 @@ def run():
             for word, cost in lookup_results:
                 word_tag = ''.join(tokenize_word(word)[1])
                 if word_tag == tag:
-                    print(lemma, word, sep='\t')
+                    print(lemma, unnormalize_word(word), sep='\t')
                     found = True
                     break
             if not found:
