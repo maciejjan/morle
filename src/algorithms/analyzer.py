@@ -1,6 +1,6 @@
 from algorithms.align import extract_all_rules
 import algorithms.fst
-from datastruct.lexicon import Lexicon, LexiconEntry
+from datastruct.lexicon import Lexicon, LexiconEntry, unnormalize_word
 from datastruct.graph import GraphEdge, EdgeSet
 from datastruct.rules import RuleSet
 from models.suite import ModelSuite
@@ -66,7 +66,8 @@ class Analyzer:
                 (self.max_results is None or len(edge_set) < self.max_results):
             lookup_results = set()
             for w, c in self.inv_rules_tr.lookup(target.symstr):
-                lookup_results.add(re.sub(hfst.EPSILON, '', w))
+                lookup_results.add(unnormalize_word(\
+                    re.sub(hfst.EPSILON, '', w)))
             sources = [LexiconEntry(word) for word in lookup_results]
             for source in sources:
                 rules = extract_all_rules(source, target)
