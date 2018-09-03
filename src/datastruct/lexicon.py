@@ -73,7 +73,7 @@ def normalize_word(literal :str) -> str:
 
 def unnormalize_word(literal :str) -> str:
     word, tag, disamb = tokenize_word(literal)
-    return ''.join(unnormalize_seq(word) + tag)
+    return ''.join(unnormalize_seq(word) + list(tag))
 
 
 class LexiconEntry:
