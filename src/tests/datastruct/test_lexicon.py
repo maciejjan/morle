@@ -24,8 +24,8 @@ class LexiconEntryTest(unittest.TestCase):
     # literal, word, tag, disamb, symstr
     test_examples = [\
         ('EXAMPLE<NN><SG>', 
-         ['{ALLCAPS}', 'e', 'x', 'a', 'm', 'p', 'l', 'e'], 
-         ['<NN>', '<SG>'], None, '{ALLCAPS}example<NN><SG>')
+         ('{ALLCAPS}', 'e', 'x', 'a', 'm', 'p', 'l', 'e'), 
+         ('<NN>', '<SG>'), None, '{ALLCAPS}example<NN><SG>')
     ]
 
     def test_init(self) -> None:
