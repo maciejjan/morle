@@ -1,5 +1,5 @@
 from algorithms.analyzer import Analyzer
-from datastruct.lexicon import Lexicon, load_raw_vocabulary
+from datastruct.lexicon import Lexicon, load_raw_vocabulary, unnormalize_word
 from models.suite import ModelSuite
 import shared
 
@@ -23,7 +23,9 @@ def run():
             vec_str = ' '.join(map(str, map(float, list(a.target.vec.T)))) \
                       if kwargs['predict_vec'] \
                       else ''
-            print(a.source, a.target, a.rule, a.attr['cost'], vec_str,
+            src = unnormalize_word(a.source.literal)
+            tgt = unnormalize_word(a.target.literal)
+            print(src, tgt, a.rule, a.attr['cost'], vec_str,
                   sep='\t')
         # TODO
         # - including the analysis of a word as a root

@@ -63,7 +63,7 @@ def unnormalize_seq(seq :List[str]) -> List[str]:
             else:
                 result.append(c)
             cap = False
-    return result
+    return tuple(result)
 
 
 def normalize_word(literal :str) -> str:
@@ -73,7 +73,7 @@ def normalize_word(literal :str) -> str:
 
 def unnormalize_word(literal :str) -> str:
     word, tag, disamb = tokenize_word(literal)
-    return ''.join(unnormalize_seq(word) + list(tag))
+    return ''.join(list(unnormalize_seq(word)) + list(tag))
 
 
 class LexiconEntry:
