@@ -62,7 +62,7 @@ def run() -> None:
             algorithms.clustering.chinese_whispers(
                 full_graph, edge_weights,
                 threshold=shared.config['fit-cluster']\
-                                .getfloat('clustering_threshold'),
+                                .getfloat('threshold'),
                 root_weights=shared.config['fit-cluster']\
                                     .getboolean('root_weights'))
         clusters_idx = { word : i for i, words in enumerate(clusters) \
