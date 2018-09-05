@@ -52,7 +52,7 @@ class UnigramRootModel(RootModel):
                       else self.probs[UnigramRootModel.UNKNOWN]
         return result
 
-    def root_probs(self, entry :LexiconEntry) -> float:
+    def root_probs(self, lexicon :Lexicon) -> float:
         result = np.empty(len(lexicon))
         for i, entry in enumerate(lexicon):
             result[i] = self.root_prob(entry)
@@ -82,7 +82,9 @@ class AlergiaRootModel(RootModel):
     def __init__(self, smoothing=0.0, alpha=0.05, freq_threshold=1) -> None:
         self.automaton = hfst.empty_fst()
         self.smoothing = smoothing
-        if self.smoothing > 0
+        self.alpha = alpha
+        self.freq_threshold = freq_threshold
+        if self.smoothing > 0:
             self.smoothing_model = UnigramRootModel()
 
     # TODO weights are presently ignored, should it be so?!
