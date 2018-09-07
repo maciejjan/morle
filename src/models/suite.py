@@ -6,6 +6,8 @@ from models.root import RootModelFactory
 from models.tag import TagModelFactory
 from models.edge import EdgeModelFactory
 from models.feature import RootFeatureModelFactory, EdgeFeatureModelFactory
+from models.frequency import RootFrequencyModelFactory, \
+                             EdgeFrequencyModelFactory
 from utils.files import file_exists
 import shared
 
@@ -29,10 +31,16 @@ class ModelSuite:
             self.root_tag_model = \
                 TagModelFactory.create(
                     shared.config['Models'].get('root_tag_model'))
+            self.root_frequency_model = \
+                RootFrequencyModelFactory.create(
+                    shared.config['Models'].get('root_frequency_model'))
             self.root_feature_model = \
                 RootFeatureModelFactory.create(
                     shared.config['Models'].get('root_feature_model'),
                     lexicon)
+            self.edge_frequency_model = \
+                EdgeFrequencyModelFactory.create(
+                    shared.config['Models'].get('edge_frequency_model'))
             self.edge_feature_model = \
                 EdgeFeatureModelFactory.create(
                     shared.config['Models'].get('edge_feature_model'),

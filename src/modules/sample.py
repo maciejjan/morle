@@ -4,7 +4,7 @@ from datastruct.graph import EdgeSet, FullGraph
 from datastruct.lexicon import Lexicon
 from datastruct.rules import Rule, RuleSet
 from models.suite import ModelSuite
-from utils.files import file_exists, read_tsv_file
+from utils.files import file_exists, open_to_write, read_tsv_file
 import algorithms.mcmc
 import shared
 import logging
@@ -59,4 +59,15 @@ def run() -> None:
     sampler.run_sampling()
     sampler.summary()
 
+    # save paths to a file
+    pathlen = 0
+    with open_to_write('paths.txt') as fp:
+        for entry in lexicon:
+            path = sampler.branching.path(sampler.branching.root(entry), entry)
+            path.reverse()
+            fp.write(' <- '.join([str(e) for e in path]) + \
+                     ' ({})\n'.format(len(path)))
+            pathlen += len(path)
+    logging.getLogger('main').debug('Average path length: {}'\
+                                    .format(pathlen / len(lexicon)))
 
