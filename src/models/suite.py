@@ -1,6 +1,6 @@
 import algorithms.fst
 from datastruct.lexicon import LexiconEntry, Lexicon
-from datastruct.graph import EdgeSet, GraphEdge
+from datastruct.graph import EdgeSet, GraphEdge, FullGraph
 from datastruct.rules import Rule, RuleSet
 from models.root import RootModelFactory
 from models.tag import TagModelFactory
@@ -39,6 +39,13 @@ class ModelSuite:
                     self.rule_set)
             self.feature_weight = \
                 shared.config['Features'].getfloat('word_vec_weight')
+
+    def initialize(self, graph :FullGraph) -> None:
+        '''Fit the models assuming unit weights for all roots and edges'''
+        root_weights = np.ones(len(graph.lexicon))
+        edge_weights = np.ones(len(graph.edge_set))
+        self.root_model.fit(graph.lexicon, root_weights)
+        self.fit(graph.lexicon, graph.edge_set, root_weights, edge_weights)
 
     def root_cost(self, entry :LexiconEntry) -> float:
         result = self.root_model.root_cost(entry)
