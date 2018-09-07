@@ -43,10 +43,11 @@ import logging
 def softem(full_graph :FullGraph, model :ModelSuite) -> None:
     iter_num = 0
     # initialize the models
-    model.root_model.fit(full_graph.lexicon, np.ones(len(full_graph.lexicon)))
-    model.fit(full_graph.lexicon, full_graph.edge_set,
-              np.ones(len(full_graph.lexicon)),
-              np.ones(len(full_graph.edge_set)))
+    model.initialize(full_graph)
+#     model.root_model.fit(full_graph.lexicon, np.ones(len(full_graph.lexicon)))
+#     model.fit(full_graph.lexicon, full_graph.edge_set,
+#               np.ones(len(full_graph.lexicon)),
+#               np.ones(len(full_graph.edge_set)))
     # EM iteration
     while iter_num < shared.config['fit'].getint('iterations'):
         iter_num += 1
