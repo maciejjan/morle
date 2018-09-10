@@ -22,6 +22,10 @@ class ModelSuite:
                  lexicon :Lexicon = None,
                  initialize_models :bool = True) -> None:
         self.rule_set = rule_set
+        self.added_root_cost = shared.config['Models']\
+                                     .getfloat('added_root_cost')
+        self.added_rule_cost = shared.config['Models']\
+                                     .getfloat('added_rule_cost')
         if initialize_models:
             self.root_model = RootModelFactory.create(
                                   shared.config['Models'].get('root_model'))
@@ -68,6 +72,7 @@ class ModelSuite:
         if self.root_feature_model is not None:
             result += self.feature_weight * \
                       self.root_feature_model.root_cost(entry)
+        result += self.added_root_cost
         return result
 
     def roots_cost(self, entries :Union[LexiconEntry, Iterable[LexiconEntry]]) -> np.ndarray:
@@ -83,7 +88,9 @@ class ModelSuite:
         return result
 
     def rule_cost(self, rule :Rule) -> float:
-        return self.edge_model.rule_cost(rule)
+        result = self.edge_model.rule_cost(rule)
+        result += self.added_rule_cost
+        return result
 # 
 #     def edge_cost(self, edge :GraphEdge) -> float:
 #         result = self.edge_model.edge_cost(edge)

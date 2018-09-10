@@ -59,6 +59,9 @@ def run() -> None:
     sampler.run_sampling()
     sampler.summary()
 
+    sampler.save_root_costs('sample-root-costs.txt')
+    sampler.save_edge_costs('sample-edge-costs.txt')
+
     # save paths to a file
     pathlen = 0
     with open_to_write('paths.txt') as fp:

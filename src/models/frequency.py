@@ -4,6 +4,7 @@ from datastruct.rules import RuleSet
 from models.generic import Model, ModelFactory, UnknownModelTypeException
 from utils.files import full_path
 
+import logging
 import numpy as np
 from scipy.stats import norm
 
@@ -62,7 +63,7 @@ class LogNormalEdgeFrequencyModel(EdgeFrequencyModel):
     def __init__(self, rule_set :RuleSet) -> None:
         self.rule_set = rule_set
         self.means = None
-        self.vars = None
+        self.sdevs = None
 
     def fit_rule(self, rule_id :int, freq_vector :np.ndarray,
                  weights :np.ndarray) -> None:
@@ -73,13 +74,13 @@ class LogNormalEdgeFrequencyModel(EdgeFrequencyModel):
             return
         self.means[rule_id,] = np.average(freq_vector, weights=weights)
         err = freq_vector - self.means[rule_id,]
-        self.vars[rule_id,] = np.average(err**2, weights=weights) + 0.001 
+        self.sdevs[rule_id,] = np.sqrt(np.average(err**2, weights=weights)) + 0.001 
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
         if self.means is None:
             self.means = np.empty(len(self.rule_set))
-        if self.vars is None:
-            self.vars = np.empty(len(self.rule_set))
+        if self.sdevs is None:
+            self.sdevs = np.empty(len(self.rule_set))
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
             edge_ids = tuple(edge_ids)
             freq_vector = np.array([edge_set[i].target.logfreq - \
@@ -92,7 +93,7 @@ class LogNormalEdgeFrequencyModel(EdgeFrequencyModel):
         rule_id = self.rule_set.get_id(edge.rule)
         return -norm.logpdf(edge.target.logfreq-edge.source.logfreq,
                             self.means[rule_id,],
-                            self.vars[rule_id,])
+                            self.sdevs[rule_id,])
 
     def edges_cost(self, edge_set :EdgeSet) -> np.ndarray:
         result = np.zeros(len(edge_set))
@@ -102,19 +103,19 @@ class LogNormalEdgeFrequencyModel(EdgeFrequencyModel):
                                     edge_set[i].source.logfreq \
                                     for i in edge_ids])
             costs = -norm.logpdf(freq_vector, self.means[rule_id,],
-                                 self.vars[rule_id,])
+                                 self.sdevs[rule_id,])
             result[tuple(edge_ids),] = costs
         return result
 
     def save(self, filename :str) -> None:
-        np.savez(full_path(filename), means=self.means, vars=self.vars)
+        np.savez(full_path(filename), means=self.means, sdevs=self.sdevs)
 
     @staticmethod
     def load(filename :str, rule_set :RuleSet) -> 'LogNormalEdgeFrequencyModel':
         result = LogNormalEdgeFrequencyModel(rule_set)
         with np.load(full_path(filename)) as data:
             result.means = data['means']
-            result.vars = data['vars']
+            result.sdevs = data['sdevs']
         return result
 
 

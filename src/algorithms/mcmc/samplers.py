@@ -303,16 +303,20 @@ class MCMCGraphSampler:
                                                      for stat in stats]))
 
     def save_rule_stats(self, filename):
-        stats, stat_names = [], []
-        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
-            if isinstance(stat, RuleStatistic):
-                stat_names.append(stat_name)
-                stats.append(stat)
+        freq, contrib = self.compute_rule_stats()
         with open_to_write(filename) as fp:
-            write_line(fp, ('rule',) + tuple(stat_names))
-            for idx, rule in enumerate(self.rule_set):
-                write_line(fp, (str(rule),) +\
-                               tuple([stat.val[idx] for stat in stats]))
+            for r_id, rule in enumerate(self.model.rule_set):
+                write_line(fp, (rule, freq[r_id], contrib[r_id]))
+#         stats, stat_names = [], []
+#         for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+#             if isinstance(stat, RuleStatistic):
+#                 stat_names.append(stat_name)
+#                 stats.append(stat)
+#         with open_to_write(filename) as fp:
+#             write_line(fp, ('rule',) + tuple(stat_names))
+#             for idx, rule in enumerate(self.rule_set):
+#                 write_line(fp, (str(rule),) +\
+#                                tuple([stat.val[idx] for stat in stats]))
 
     def save_wordpair_stats(self, filename):
         stats, stat_names = [], []
@@ -346,6 +350,31 @@ class MCMCGraphSampler:
         self.save_edge_stats(shared.filenames['sample-edge-stats'])
         self.save_rule_stats(shared.filenames['sample-rule-stats'])
         self.save_wordpair_stats(shared.filenames['sample-wordpair-stats'])
+
+    def save_root_costs(self, filename):
+        with open_to_write(filename) as fp:
+            for i, entry in enumerate(self.lexicon):
+                write_line(fp, (entry, self.root_cost_cache[i]))
+
+    def save_edge_costs(self, filename):
+        with open_to_write(filename) as fp:
+            for i, edge in enumerate(self.edge_set):
+                write_line(fp, (edge, self.edge_cost_cache[i]))
+
+    def compute_rule_stats(self):
+        # compute the rule statistics (frequency and contribution)
+        # from the expected edge frequencies
+        freq = np.zeros(len(self.model.rule_set))
+        contrib = np.zeros(len(self.model.rule_set))
+        for e_id, edge in enumerate(self.edge_set):
+            e_freq = self.stats['edge_freq'].val[e_id]
+            r_id = self.model.rule_set.get_id(edge.rule)
+            tgt_id = self.lexicon.get_id(edge.target)
+            freq[r_id] += e_freq
+            contrib[r_id] += e_freq * (self.root_cost_cache[tgt_id] - \
+                                       self.edge_cost_cache[e_id])
+        return freq, contrib
+
 
 # TODO constructor arguments should be the same for every type
 #      (pass ensured edges through the lexicon parameter?)
