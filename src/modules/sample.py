@@ -4,7 +4,7 @@ from datastruct.graph import EdgeSet, FullGraph
 from datastruct.lexicon import Lexicon
 from datastruct.rules import Rule, RuleSet
 from models.suite import ModelSuite
-from utils.files import file_exists, open_to_write, read_tsv_file
+from utils.files import file_exists, open_to_write, read_tsv_file, write_line
 import algorithms.mcmc
 import shared
 import logging
@@ -73,4 +73,10 @@ def run() -> None:
             pathlen += len(path)
     logging.getLogger('main').debug('Average path length: {}'\
                                     .format(pathlen / len(lexicon)))
+
+    # TODO save rule frequency model fits to a file
+    with open_to_write('freqmodel.txt') as fp:
+        for r_id, rule in enumerate(model.rule_set):
+            write_line(fp, (rule, model.edge_frequency_model.means[r_id],
+                            model.edge_frequency_model.sdevs[r_id]))
 

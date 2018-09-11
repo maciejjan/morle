@@ -85,6 +85,7 @@ class ModelSuite:
         if self.root_feature_model is not None:
             result += self.feature_weight * \
                       self.root_feature_model.root_costs(entries)
+        result += self.added_root_cost
         return result
 
     def rule_cost(self, rule :Rule) -> float:
