@@ -72,9 +72,10 @@ class LogNormalEdgeFrequencyModel(EdgeFrequencyModel):
                 'LogNormalEdgeFrequencyModel: rule {} cannot be fitted:'
                 ' not enough edges.'.format(self.rule_set[rule_id]))
             return
-        self.means[rule_id,] = np.average(freq_vector, weights=weights)
+        # TODO naive truncation -- apply a prior instead!
+        self.means[rule_id,] = max(1, np.average(freq_vector, weights=weights))
         err = freq_vector - self.means[rule_id,]
-        self.sdevs[rule_id,] = np.sqrt(np.average(err**2, weights=weights)) + 0.001 
+        self.sdevs[rule_id,] = max(0.1, np.sqrt(np.average(err**2, weights=weights)))
 
     def fit(self, edge_set :EdgeSet, weights :np.ndarray) -> None:
         if self.means is None:
