@@ -7,6 +7,8 @@ from models.suite import ModelSuite
 from utils.files import file_exists, open_to_write, read_tsv_file, write_line
 import algorithms.mcmc
 import shared
+
+from collections import defaultdict
 import logging
 
 
@@ -66,17 +68,32 @@ def run() -> None:
     pathlen = 0
     with open_to_write('paths.txt') as fp:
         for entry in lexicon:
-            path = sampler.branching.path(sampler.branching.root(entry), entry)
+            root = sampler.branching.root(entry)
+            path = sampler.branching.path(root, entry)
             path.reverse()
+            size = sampler.branching.subtree_size(root)
             fp.write(' <- '.join([str(e) for e in path]) + \
-                     ' ({})\n'.format(len(path)))
+                     ' ({}, {})\n'.format(len(path), size))
             pathlen += len(path)
     logging.getLogger('main').debug('Average path length: {}'\
                                     .format(pathlen / len(lexicon)))
 
-    # TODO save rule frequency model fits to a file
+    # save rule frequency model fits to a file
     with open_to_write('freqmodel.txt') as fp:
         for r_id, rule in enumerate(model.rule_set):
             write_line(fp, (rule, model.edge_frequency_model.means[r_id],
                             model.edge_frequency_model.sdevs[r_id]))
+
+    # count words at each depth in the graph
+    counts_per_depth = defaultdict(lambda: 0)
+    queue = [(word, 0) for word in lexicon \
+                       if sampler.branching.parent(word) is None]
+    while queue:
+        (word, d) = queue.pop()
+        counts_per_depth[d] += 1
+        queue.extend([(word, d+1) \
+                      for word in sampler.branching.successors(word)])
+    logging.getLogger('main').debug('Number of nodes per depth:')
+    for d, c in counts_per_depth.items():
+        logging.getLogger('main').debug('{} {}'.format(d, c))
 
