@@ -183,6 +183,13 @@ class Branching(Graph):
         return 1 + \
                sum(self.subtree_size(child) for child in self.successors(node))
 
+    def count_nonleaves(self, node :LexiconEntry) -> int:
+        if not self.successors(node):
+            return 0
+        else:
+            return 1 + sum(self.count_nonleaves(child) \
+                           for child in self.successors(node))
+
     def height(self, node :LexiconEntry) -> int:
         child_heights = [self.height(child) for child in self.successors(node)]
         if not child_heights:
