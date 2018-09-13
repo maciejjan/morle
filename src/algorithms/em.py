@@ -58,12 +58,12 @@ def softem(full_graph :FullGraph, model :ModelSuite) -> None:
                 shared.config['fit'].getint('warmup_iterations'),
                 shared.config['fit'].getint('sampling_iterations'))
         sampler.add_stat('acc_rate', AcceptanceRateStatistic(sampler))
-        sampler.add_stat('exp_edge_freq', EdgeFrequencyStatistic(sampler))
+        sampler.add_stat('edge_freq', EdgeFrequencyStatistic(sampler))
         sampler.add_stat('exp_cost', ExpectedCostStatistic(sampler))
         sampler.run_sampling()
 
         # maximization step
-        edge_weights = sampler.stats['exp_edge_freq'].value()
+        edge_weights = sampler.stats['edge_freq'].value()
         root_weights = np.ones(len(full_graph.lexicon))
         for idx in range(edge_weights.shape[0]):
             root_id = \

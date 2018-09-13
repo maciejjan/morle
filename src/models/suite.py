@@ -6,6 +6,8 @@ from models.root import RootModelFactory
 from models.tag import TagModelFactory
 from models.edge import EdgeModelFactory
 from models.feature import RootFeatureModelFactory, EdgeFeatureModelFactory
+from models.frequency import RootFrequencyModelFactory, \
+                             EdgeFrequencyModelFactory
 from utils.files import file_exists
 import shared
 
@@ -20,6 +22,10 @@ class ModelSuite:
                  lexicon :Lexicon = None,
                  initialize_models :bool = True) -> None:
         self.rule_set = rule_set
+        self.added_root_cost = shared.config['Models']\
+                                     .getfloat('added_root_cost')
+        self.added_rule_cost = shared.config['Models']\
+                                     .getfloat('added_rule_cost')
         if initialize_models:
             self.root_model = RootModelFactory.create(
                                   shared.config['Models'].get('root_model'))
@@ -29,14 +35,23 @@ class ModelSuite:
             self.root_tag_model = \
                 TagModelFactory.create(
                     shared.config['Models'].get('root_tag_model'))
+            self.root_frequency_model = \
+                RootFrequencyModelFactory.create(
+                    shared.config['Models'].get('root_frequency_model'))
             self.root_feature_model = \
                 RootFeatureModelFactory.create(
                     shared.config['Models'].get('root_feature_model'),
                     lexicon)
+            self.edge_frequency_model = \
+                EdgeFrequencyModelFactory.create(
+                    shared.config['Models'].get('edge_frequency_model'),
+                    self.rule_set)
             self.edge_feature_model = \
                 EdgeFeatureModelFactory.create(
                     shared.config['Models'].get('edge_feature_model'),
                     self.rule_set)
+            self.frequency_weight = \
+                shared.config['Features'].getfloat('word_freq_weight')
             self.feature_weight = \
                 shared.config['Features'].getfloat('word_vec_weight')
 
@@ -51,22 +66,32 @@ class ModelSuite:
         result = self.root_model.root_cost(entry)
         if self.root_tag_model is not None:
             result += self.root_tag_model.root_cost(entry)
+        if self.root_frequency_model is not None:
+            result += self.frequency_weight * \
+                      self.root_frequency_model.root_cost(entry)
         if self.root_feature_model is not None:
             result += self.feature_weight * \
                       self.root_feature_model.root_cost(entry)
+        result += self.added_root_cost
         return result
 
     def roots_cost(self, entries :Union[LexiconEntry, Iterable[LexiconEntry]]) -> np.ndarray:
         result = self.root_model.root_costs(entries)
         if self.root_tag_model is not None:
             result += self.root_tag_model.root_costs(entries)
+        if self.root_frequency_model is not None:
+            result += self.frequency_weight * \
+                      self.root_frequency_model.root_costs(entries)
         if self.root_feature_model is not None:
             result += self.feature_weight * \
                       self.root_feature_model.root_costs(entries)
+        result += self.added_root_cost
         return result
 
     def rule_cost(self, rule :Rule) -> float:
-        return self.edge_model.rule_cost(rule)
+        result = self.edge_model.rule_cost(rule)
+        result += self.added_rule_cost
+        return result
 # 
 #     def edge_cost(self, edge :GraphEdge) -> float:
 #         result = self.edge_model.edge_cost(edge)
@@ -81,6 +106,9 @@ class ModelSuite:
     
     def edges_cost(self, edges :EdgeSet) -> np.ndarray:
         result = self.edge_model.edges_cost(edges)
+        if self.edge_frequency_model is not None:
+            result += self.frequency_weight * \
+                      self.edge_frequency_model.edges_cost(edges)
         if self.edge_feature_model is not None:
             result += self.feature_weight * \
                       self.edge_feature_model.edges_cost(edges)
@@ -107,8 +135,12 @@ class ModelSuite:
         self.edge_model.fit(edge_set, edge_weights)
         if self.root_tag_model is not None:
             self.root_tag_model.fit(lexicon, root_weights)
+        if self.root_frequency_model is not None:
+            self.root_frequency_model.fit(lexicon, root_weights)
         if self.root_feature_model is not None:
             self.root_feature_model.fit(lexicon, root_weights)
+        if self.edge_frequency_model is not None:
+            self.edge_frequency_model.fit(edge_set, edge_weights)
         if self.edge_feature_model is not None:
             self.edge_feature_model.fit(edge_set, edge_weights)
 
@@ -118,8 +150,12 @@ class ModelSuite:
         self.edge_model.save(shared.filenames['edge-model'])
         if self.root_tag_model is not None:
             self.root_tag_model.save(shared.filenames['root-tag-model'])
+        if self.root_frequency_model is not None:
+            self.root_frequency_model.save(shared.filenames['root-frequency-model'])
         if self.root_feature_model is not None:
             self.root_feature_model.save(shared.filenames['root-feature-model'])
+        if self.edge_frequency_model is not None:
+            self.edge_frequency_model.save(shared.filenames['edge-frequency-model'])
         if self.edge_feature_model is not None:
             self.edge_feature_model.save(shared.filenames['edge-feature-model'])
 
@@ -129,8 +165,12 @@ class ModelSuite:
                file_exists(shared.filenames['edge-model']) and \
                (shared.config['Models'].get('root_tag_model') == 'none' or \
                 file_exists(shared.filenames['root-tag-model'])) and \
+               (shared.config['Models'].get('root_frequency_model') == 'none' or \
+                file_exists(shared.filenames['root-frequency-model'])) and \
                (shared.config['Models'].get('root_feature_model') == 'none' or \
                 file_exists(shared.filenames['root-feature-model'])) and \
+               (shared.config['Models'].get('edge_frequency_model') == 'none' or \
+                file_exists(shared.filenames['edge-frequency-model'])) and \
                (shared.config['Models'].get('edge_feature_model') == 'none' or \
                 file_exists(shared.filenames['edge-feature-model']))
 
@@ -150,11 +190,20 @@ class ModelSuite:
             TagModelFactory.load(
                 shared.config['Models'].get('root_tag_model'),
                 shared.filenames['root-tag-model'])
+        result.root_frequency_model = \
+            RootFrequencyModelFactory.load(
+                shared.config['Models'].get('root_frequency_model'),
+                shared.filenames['root-frequency-model'])
         result.root_feature_model = \
             RootFeatureModelFactory.load(
                 shared.config['Models'].get('root_feature_model'),
                 shared.filenames['root-feature-model'],
                 lexicon)
+        result.edge_frequency_model = \
+            EdgeFrequencyModelFactory.load(
+                shared.config['Models'].get('edge_frequency_model'),
+                shared.filenames['edge-frequency-model'],
+                rule_set)
         result.edge_feature_model = \
             EdgeFeatureModelFactory.load(
                 shared.config['Models'].get('edge_feature_model'),

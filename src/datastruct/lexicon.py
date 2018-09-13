@@ -283,7 +283,8 @@ class Lexicon:
         use_restr = \
             shared.config['General'].getboolean('use_edge_restrictions')
         use_freq = \
-            shared.config['General'].getboolean('use_frequency')
+            shared.config['Models'].get('root_frequency_model') != 'none' or \
+            shared.config['Models'].get('edge_frequency_model') != 'none'
         use_vec = \
             shared.config['Models'].get('root_feature_model') != 'none' or \
             shared.config['Models'].get('edge_feature_model') != 'none'
