@@ -37,7 +37,8 @@ class MCMCGraphSampler:
                        model :ModelSuite,
                        warmup_iter :int = 1000,
                        sampling_iter :int = 100000,
-                       iter_stat_interval :int = 1) -> None:
+                       iter_stat_interval :int = 1,
+                       depth_cost :float = 0) -> None:
         self.full_graph = full_graph
         self.lexicon = full_graph.lexicon
         self.edge_set = full_graph.edge_set
@@ -50,7 +51,7 @@ class MCMCGraphSampler:
         self.iter_stat_interval = iter_stat_interval
         self.stats = {}               # type: Dict[str, MCMCStatistic]
         self.iter_num = 0
-        self.depth_cost = 2.0
+        self.depth_cost = depth_cost
 
         self.unordered_word_pair_index = {}
         next_id = 0

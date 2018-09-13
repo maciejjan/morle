@@ -55,8 +55,9 @@ def softem(full_graph :FullGraph, model :ModelSuite) -> None:
 
         # expectation step
         sampler = MCMCGraphSampler(full_graph, model,
-                shared.config['fit'].getint('warmup_iterations'),
-                shared.config['fit'].getint('sampling_iterations'))
+                warmup_iter=shared.config['fit'].getint('warmup_iterations'),
+                sampling_iter=shared.config['fit'].getint('sampling_iterations'),
+                depth_cost=shared.config['Models'].getfloat('depth_cost'))
         sampler.add_stat('acc_rate', AcceptanceRateStatistic(sampler))
         sampler.add_stat('edge_freq', EdgeFrequencyStatistic(sampler))
         sampler.add_stat('exp_cost', ExpectedCostStatistic(sampler))
