@@ -3,6 +3,7 @@ from datastruct.graph import EdgeSet, FullGraph, GraphEdge
 from datastruct.lexicon import Lexicon, LexiconEntry
 from datastruct.rules import RuleSet, Rule
 from models.generic import Model, ModelFactory, UnknownModelTypeException
+from utils.files import full_path
 import shared
 
 import keras.models
@@ -329,8 +330,7 @@ class GaussianEdgeFeatureModel(EdgeFeatureModel):
         return edge.source.vec + self.means[rule_id,]
 
     def save(self, filename) -> None:
-        file_full_path = os.path.join(shared.options['working_dir'], filename)
-        np.savez(file_full_path, means=self.means, vars=self.vars)
+        np.savez(full_path(filename), means=self.means, vars=self.vars)
 
     @staticmethod
     def load(filename, rule_set :RuleSet) -> 'GaussianEdgeFeatureModel':

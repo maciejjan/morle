@@ -37,7 +37,8 @@ class MCMCGraphSampler:
                        model :ModelSuite,
                        warmup_iter :int = 1000,
                        sampling_iter :int = 100000,
-                       iter_stat_interval :int = 1) -> None:
+                       iter_stat_interval :int = 1,
+                       depth_cost :float = 0) -> None:
         self.full_graph = full_graph
         self.lexicon = full_graph.lexicon
         self.edge_set = full_graph.edge_set
@@ -50,6 +51,7 @@ class MCMCGraphSampler:
         self.iter_stat_interval = iter_stat_interval
         self.stats = {}               # type: Dict[str, MCMCStatistic]
         self.iter_num = 0
+        self.depth_cost = depth_cost
 
         self.unordered_word_pair_index = {}
         next_id = 0
@@ -105,11 +107,11 @@ class MCMCGraphSampler:
 
         # try the move determined by the selected edge
         try:
-            edges_to_add, edges_to_remove, prop_prob_ratio =\
+            edges_to_add, edges_to_remove, prop_prob_ratio, depth_change =\
                 self.determine_move_proposal(edge)
 #             print(len(edges_to_add), len(edges_to_remove))
             acc_prob = self.compute_acc_prob(\
-                edges_to_add, edges_to_remove, prop_prob_ratio)
+                edges_to_add, edges_to_remove, prop_prob_ratio, depth_change)
             if acc_prob >= 1 or acc_prob >= random.random():
                 self.accept_move(edges_to_add, edges_to_remove)
         # if move impossible -- propose staying in the current graph
@@ -136,12 +138,16 @@ class MCMCGraphSampler:
             return self.propose_adding_edge(edge)
 
     def propose_adding_edge(self, edge :GraphEdge) \
-            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        return [edge], [], 1
+            -> Tuple[List[GraphEdge], List[GraphEdge], float, int]:
+        d = self.branching.depth(edge.source) * \
+            self.branching.count_nonleaves(edge.target)
+        return [edge], [], 1, d
 
     def propose_deleting_edge(self, edge :GraphEdge) \
-            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
-        return [], [edge], 1
+            -> Tuple[List[GraphEdge], List[GraphEdge], float, int]:
+        d = -self.branching.depth(edge.source) * \
+            self.branching.count_nonleaves(edge.target)
+        return [], [edge], 1, d
 
     def propose_flip(self, edge :GraphEdge) \
             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
@@ -151,7 +157,7 @@ class MCMCGraphSampler:
             return self.propose_flip_2(edge)
 
     def propose_flip_1(self, edge :GraphEdge) \
-            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+            -> Tuple[List[GraphEdge], List[GraphEdge], float, int]:
         edges_to_add, edges_to_remove = [edge], []
         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
         prop_prob_ratio = 1.0
@@ -165,10 +171,15 @@ class MCMCGraphSampler:
                 len(self.full_graph.edges_between(node_3, node_1))
         edges_to_remove.extend(self.branching.edges_between(node_3, node_2))
         edges_to_remove.extend(self.branching.edges_between(node_4, node_1))
-        return edges_to_add, edges_to_remove, prop_prob_ratio
+        n_1 = self.branching.count_nonleaves(node_1)
+        n_2 = self.branching.count_nonleaves(node_2)
+        d_1 = self.branching.depth(node_1)
+        d_3 = self.branching.depth(node_3) if node_3 is not None else 0
+        d = n_2 - n_1 - n_1 * (d_1-d_3-1)
+        return edges_to_add, edges_to_remove, prop_prob_ratio, d
 
     def propose_flip_2(self, edge :GraphEdge) \
-            -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+            -> Tuple[List[GraphEdge], List[GraphEdge], float, int]:
         edges_to_add, edges_to_remove = [edge], []
         node_1, node_2, node_3, node_4, node_5 = self.nodes_for_flip(edge)
         prop_prob_ratio = 1.0
@@ -182,8 +193,12 @@ class MCMCGraphSampler:
                 len(self.full_graph.edges_between(node_3, node_5))
         edges_to_remove.extend(self.branching.edges_between(node_2, node_5))
         edges_to_remove.extend(self.branching.edges_between(node_3, node_2))
-
-        return edges_to_add, edges_to_remove, prop_prob_ratio
+        n_2 = self.branching.count_nonleaves(node_2)
+        n_5 = self.branching.count_nonleaves(node_5)
+        d_1 = self.branching.depth(node_1)
+        d_3 = self.branching.depth(node_3) if node_3 is not None else 0
+        d = (n_2-n_5) * (d_1-d_3) - n_5
+        return edges_to_add, edges_to_remove, prop_prob_ratio, d
 
     def nodes_for_flip(self, edge :GraphEdge) -> List[LexiconEntry]:
         node_1, node_2 = edge.source, edge.target
@@ -195,16 +210,21 @@ class MCMCGraphSampler:
         return [node_1, node_2, node_3, node_4, node_5]
 
     def propose_swapping_parent(self, edge :GraphEdge) \
-                             -> Tuple[List[GraphEdge], List[GraphEdge], float]:
+                             -> Tuple[List[GraphEdge], List[GraphEdge],
+                                      float, int]:
         edges_to_remove = self.branching.edges_between(
                               self.branching.parent(edge.target),
                               edge.target)
-        return [edge], edges_to_remove, 1
+        d = self.branching.count_nonleaves(edge.target) * \
+            (self.branching.depth(edge.source) -
+             self.branching.depth(edges_to_remove[0].source))
+        return [edge], edges_to_remove, 1, d
 
     def compute_acc_prob(self, edges_to_add :List[GraphEdge], 
                          edges_to_remove :List[GraphEdge], 
-                         prop_prob_ratio :float) -> float:
-        cost = self.cost_of_change(edges_to_add, edges_to_remove)
+                         prop_prob_ratio :float, depth_change :int) -> float:
+        cost = self.cost_of_change(edges_to_add, edges_to_remove) +\
+               depth_change * self.depth_cost
         if cost < math.log(prop_prob_ratio):
             return 1.0
         else: 
@@ -303,16 +323,20 @@ class MCMCGraphSampler:
                                                      for stat in stats]))
 
     def save_rule_stats(self, filename):
-        stats, stat_names = [], []
-        for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
-            if isinstance(stat, RuleStatistic):
-                stat_names.append(stat_name)
-                stats.append(stat)
+        freq, contrib = self.compute_rule_stats()
         with open_to_write(filename) as fp:
-            write_line(fp, ('rule',) + tuple(stat_names))
-            for idx, rule in enumerate(self.rule_set):
-                write_line(fp, (str(rule),) +\
-                               tuple([stat.val[idx] for stat in stats]))
+            for r_id, rule in enumerate(self.model.rule_set):
+                write_line(fp, (rule, freq[r_id], contrib[r_id]))
+#         stats, stat_names = [], []
+#         for stat_name, stat in sorted(self.stats.items(), key = itemgetter(0)):
+#             if isinstance(stat, RuleStatistic):
+#                 stat_names.append(stat_name)
+#                 stats.append(stat)
+#         with open_to_write(filename) as fp:
+#             write_line(fp, ('rule',) + tuple(stat_names))
+#             for idx, rule in enumerate(self.rule_set):
+#                 write_line(fp, (str(rule),) +\
+#                                tuple([stat.val[idx] for stat in stats]))
 
     def save_wordpair_stats(self, filename):
         stats, stat_names = [], []
@@ -346,6 +370,31 @@ class MCMCGraphSampler:
         self.save_edge_stats(shared.filenames['sample-edge-stats'])
         self.save_rule_stats(shared.filenames['sample-rule-stats'])
         self.save_wordpair_stats(shared.filenames['sample-wordpair-stats'])
+
+    def save_root_costs(self, filename):
+        with open_to_write(filename) as fp:
+            for i, entry in enumerate(self.lexicon):
+                write_line(fp, (entry, self.root_cost_cache[i]))
+
+    def save_edge_costs(self, filename):
+        with open_to_write(filename) as fp:
+            for i, edge in enumerate(self.edge_set):
+                write_line(fp, (edge, self.edge_cost_cache[i]))
+
+    def compute_rule_stats(self):
+        # compute the rule statistics (frequency and contribution)
+        # from the expected edge frequencies
+        freq = np.zeros(len(self.model.rule_set))
+        contrib = np.zeros(len(self.model.rule_set))
+        for e_id, edge in enumerate(self.edge_set):
+            e_freq = self.stats['edge_freq'].val[e_id]
+            r_id = self.model.rule_set.get_id(edge.rule)
+            tgt_id = self.lexicon.get_id(edge.target)
+            freq[r_id] += e_freq
+            contrib[r_id] += e_freq * (self.root_cost_cache[tgt_id] - \
+                                       self.edge_cost_cache[e_id])
+        return freq, contrib
+
 
 # TODO constructor arguments should be the same for every type
 #      (pass ensured edges through the lexicon parameter?)
