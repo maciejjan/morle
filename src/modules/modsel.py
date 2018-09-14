@@ -1,37 +1,69 @@
-import algorithms.mcmc.inference
-from datastruct.graph import FullGraph
+from datastruct.graph import FullGraph, EdgeSet
 from datastruct.lexicon import Lexicon
-from datastruct.rules import Rule
-from models.marginal import MarginalModel
-from utils.files import read_tsv_file
+from datastruct.rules import RuleSet
+from models.suite import ModelSuite
+from utils.files import file_exists
 import shared
+
 import logging
 
 
 def run() -> None:
-    # load the lexicon
     logging.getLogger('main').info('Loading lexicon...')
-    lexicon = Lexicon(shared.filenames['wordlist'])
+    lexicon = Lexicon.load(shared.filenames['wordlist'])
 
     logging.getLogger('main').info('Loading rules...')
-    rules = [(Rule.from_string(rule_str), domsize) \
-             for rule_str, domsize in \
-                 read_tsv_file(shared.filenames['rules'], (str, int))]
+    rule_set = RuleSet.load(shared.filenames['rules'])
 
-    # load the full graph
     logging.getLogger('main').info('Loading the graph...')
-    full_graph = FullGraph(lexicon)
-    full_graph.load_edges_from_file(shared.filenames['graph'])
+    edge_set = EdgeSet.load(shared.filenames['graph'], lexicon, rule_set)
+    full_graph = FullGraph(lexicon, edge_set)
 
-    # initialize a MarginalModel
     logging.getLogger('main').info('Initializing the model...')
-    model = MarginalModel()
-    model.fit_rootdist(lexicon.entries())
-    model.fit_ruledist(rule for (rule, domsize) in rules)
-    for rule, domsize in rules:
-        model.add_rule(rule, domsize)
+    model = ModelSuite(rule_set, lexicon = lexicon)
+    model.initialize(full_graph)
 
-    # inference
-    logging.getLogger('main').info('Starting MCMC inference.')
-    algorithms.mcmc.inference.optimize_rule_set(full_graph, model)
+    for iter_num in range(shared.config['modsel'].getint('iterations'):
+        sampler = MCMCGraphSampler(full_graph, model,
+                shared.config['modsel'].getint('warmup_iterations'),
+                shared.config['modsel'].getint('sampling_iterations'))
+        sampler.add_stat('acc_rate', AcceptanceRateStatistic(sampler))
+        sampler.add_stat('exp_edge_freq', EdgeFrequencyStatistic(sampler))
+        sampler.add_stat('exp_cost', ExpectedCostStatistic(sampler))
+        sampler.run_sampling()
 
+        # compute the rule statistics
+
+        # determine the rules to delete
+
+        # delete the selected rules
+    
+    logging.getLogger('main').info('Saving the model...')
+    model.save()
+
+#     # load the lexicon
+#     logging.getLogger('main').info('Loading lexicon...')
+#     lexicon = Lexicon(shared.filenames['wordlist'])
+# 
+#     logging.getLogger('main').info('Loading rules...')
+#     rule_set = RuleSet.load(shared.filenames['rules'])
+# 
+#     # load the full graph
+#     logging.getLogger('main').info('Loading the graph...')
+#     full_graph = FullGraph(lexicon)
+#     full_graph.load_edges_from_file(shared.filenames['graph'])
+# 
+#     # initialize a MarginalModel
+#     logging.getLogger('main').info('Initializing the model...')
+#     model = ModelSuite(rule_set, lexicon=lexicon)
+#     model.initialize(full_graph)
+#     model.save()
+# #     model.fit_rootdist(lexicon.entries())
+# #     model.fit_ruledist(rule for (rule, domsize) in rules)
+# #     for rule, domsize in rules:
+# #         model.add_rule(rule, domsize)
+# 
+#     # inference
+# #     logging.getLogger('main').info('Starting MCMC inference.')
+# #     algorithms.mcmc.inference.optimize_rule_set(full_graph, model)
+# 
