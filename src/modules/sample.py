@@ -80,10 +80,11 @@ def run() -> None:
                                     .format(pathlen / len(lexicon)))
 
     # save rule frequency model fits to a file
-    with open_to_write('freqmodel.txt') as fp:
-        for r_id, rule in enumerate(model.rule_set):
-            write_line(fp, (rule, model.edge_frequency_model.means[r_id],
-                            model.edge_frequency_model.sdevs[r_id]))
+    if model.edge_frequency_model == 'lognormal':
+        with open_to_write('freqmodel.txt') as fp:
+            for r_id, rule in enumerate(model.rule_set):
+                write_line(fp, (rule, model.edge_frequency_model.means[r_id],
+                                model.edge_frequency_model.sdevs[r_id]))
 
     # count words at each depth in the graph
     counts_per_depth = defaultdict(lambda: 0)
