@@ -13,7 +13,7 @@ import shared
 
 import logging
 import numpy as np
-from typing import Iterable, Union
+from typing import Iterable, List, Union
 
 
 class ModelSuite:
@@ -129,6 +129,9 @@ class ModelSuite:
 
     def iter_rules(self) -> Iterable[Rule]:
         return iter(self.rule_set)
+
+    def delete_rules(self, rules_to_delete :List[Rule]) -> None:
+        raise NotImplementedError()
         
     def fit(self, lexicon :Lexicon, edge_set :EdgeSet, 
             root_weights :np.ndarray, edge_weights :np.ndarray) -> None:
