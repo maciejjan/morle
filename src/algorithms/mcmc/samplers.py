@@ -385,7 +385,8 @@ class MCMCGraphSampler:
         # compute the rule statistics (frequency and contribution)
         # from the expected edge frequencies
         freq = np.zeros(len(self.model.rule_set))
-        contrib = np.zeros(len(self.model.rule_set))
+        contrib = np.array([self.model.rule_cost(rule) \
+                           for rule in self.model.rule_set])
         for e_id, edge in enumerate(self.edge_set):
             e_freq = self.stats['edge_freq'].val[e_id]
             r_id = self.model.rule_set.get_id(edge.rule)

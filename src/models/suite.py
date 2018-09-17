@@ -27,6 +27,7 @@ class ModelSuite:
         self.added_rule_cost = shared.config['Models']\
                                      .getfloat('added_rule_cost')
         if initialize_models:
+            self.rule_model = None
             self.root_model = RootModelFactory.create(
                                   shared.config['Models'].get('root_model'))
             self.edge_model = EdgeModelFactory.create(
@@ -89,7 +90,10 @@ class ModelSuite:
         return result
 
     def rule_cost(self, rule :Rule) -> float:
-        result = self.edge_model.rule_cost(rule)
+        result = 0.0
+        if self.rule_model is not None:
+            result += self.rule_model.rule_cost(rule)
+        result += self.edge_model.rule_cost(rule)
         result += self.added_rule_cost
         return result
 # 
@@ -182,6 +186,7 @@ class ModelSuite:
         rule_set = RuleSet.load(shared.filenames['rules'])
         lexicon = Lexicon.load(shared.filenames['wordlist'])
         result = ModelSuite(rule_set)
+        result.rule_model = None
         result.root_model = RootModelFactory.load(
                                 shared.config['Models'].get('root_model'),
                                 shared.filenames['root-model'])

@@ -41,12 +41,21 @@ def run() -> None:
 
         # determine the rules to delete 
         # TODO include rule costs
-        rules_to_delete = list(np.where(contrib < 0)[0])
+        rules_to_delete = set(np.where(contrib < 0)[0])
         logging.getLogger('main').info(\
             'Deleting {} rules.'.format(len(rules_to_delete)))
 
+        # delete the edges with selected rules from the graph
+        edges_to_delete = []
+        for edge in full_graph.edges_iter():
+            if model.rule_set.get_id(edge.rule) in rules_to_delete:
+                edges_to_delete.append(edge)
+        for edge in edges_to_delete:
+            full_graph.remove_edge(edge)
+
         # delete the selected rules -- TODO implementation
-        model.delete_rules(rules_to_delete)
+#         model.delete_rules(rules_to_delete)
+
     
     logging.getLogger('main').info('Saving the model...')
     model.save()
