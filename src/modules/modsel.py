@@ -26,6 +26,7 @@ def run() -> None:
     logging.getLogger('main').info('Initializing the model...')
     model = ModelSuite(rule_set, lexicon = lexicon)
     model.initialize(full_graph)
+    deleted_rules = set()
 
     for iter_num in range(shared.config['modsel'].getint('iterations')):
         sampler = MCMCGraphSampler(full_graph, model,
@@ -40,23 +41,28 @@ def run() -> None:
         freq, contrib = sampler.compute_rule_stats()
 
         # determine the rules to delete 
-        # TODO include rule costs
-        rules_to_delete = set(np.where(contrib < 0)[0])
+        deleted_rules |= set(np.where(contrib < 0)[0])
         logging.getLogger('main').info(\
-            'Deleting {} rules.'.format(len(rules_to_delete)))
+            '{} rules deleted.'.format(len(deleted_rules)))
 
         # delete the edges with selected rules from the graph
         edges_to_delete = []
         for edge in full_graph.edges_iter():
-            if model.rule_set.get_id(edge.rule) in rules_to_delete:
+            if model.rule_set.get_id(edge.rule) in deleted_rules:
                 edges_to_delete.append(edge)
-        for edge in edges_to_delete:
-            full_graph.remove_edge(edge)
+        full_graph.remove_edges(edges_to_delete)
 
         # delete the selected rules -- TODO implementation
 #         model.delete_rules(rules_to_delete)
 
-    
-    logging.getLogger('main').info('Saving the model...')
-    model.save()
+    logging.getLogger('main').info('Saving the graph...')
+    full_graph.edge_set.save(shared.filenames['graph-modsel'])
+
+    # remove the deleted rules from the rule set and save it
+    logging.getLogger('main').info('Saving the rule set...')
+    new_rule_set = RuleSet()
+    for i, rule in enumerate(rule_set):
+        if i not in deleted_rules:
+            new_rule_set.add(rule, rule_set.get_domsize(rule))
+    new_rule_set.save(shared.filenames['rules-modsel'])
 

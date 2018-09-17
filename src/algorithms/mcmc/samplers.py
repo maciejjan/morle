@@ -169,6 +169,10 @@ class MCMCGraphSampler:
             prop_prob_ratio = \
                 len(self.full_graph.edges_between(node_3, node_2)) / \
                 len(self.full_graph.edges_between(node_3, node_1))
+            if prop_prob_ratio == 0:
+                logging.getLogger('main').warn(\
+                    'prop_prob_ratio = 0 (no edge between {} and {}?)'\
+                    .format(node_3, node_2))
         edges_to_remove.extend(self.branching.edges_between(node_3, node_2))
         edges_to_remove.extend(self.branching.edges_between(node_4, node_1))
         n_1 = self.branching.count_nonleaves(node_1)
@@ -191,6 +195,10 @@ class MCMCGraphSampler:
             prop_prob_ratio = \
                 len(self.full_graph.edges_between(node_3, node_2)) / \
                 len(self.full_graph.edges_between(node_3, node_5))
+            if prop_prob_ratio == 0:
+                logging.getLogger('main').warn(\
+                    'prop_prob_ratio = 0 (no edge between {} and {}?)'\
+                    .format(node_3, node_2))
         edges_to_remove.extend(self.branching.edges_between(node_2, node_5))
         edges_to_remove.extend(self.branching.edges_between(node_3, node_2))
         n_2 = self.branching.count_nonleaves(node_2)
@@ -385,8 +393,8 @@ class MCMCGraphSampler:
         # compute the rule statistics (frequency and contribution)
         # from the expected edge frequencies
         freq = np.zeros(len(self.model.rule_set))
-        contrib = np.array([self.model.rule_cost(rule) \
-                           for rule in self.model.rule_set])
+        contrib = np.array([-self.model.rule_cost(rule) \
+                            for rule in self.model.rule_set])
         for e_id, edge in enumerate(self.edge_set):
             e_freq = self.stats['edge_freq'].val[e_id]
             r_id = self.model.rule_set.get_id(edge.rule)
