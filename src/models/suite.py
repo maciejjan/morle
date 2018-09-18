@@ -3,6 +3,7 @@ from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import EdgeSet, GraphEdge, FullGraph
 from datastruct.rules import Rule, RuleSet
 from models.root import RootModelFactory
+from models.rule import RuleModelFactory
 from models.tag import TagModelFactory
 from models.edge import EdgeModelFactory
 from models.feature import RootFeatureModelFactory, EdgeFeatureModelFactory
@@ -27,7 +28,8 @@ class ModelSuite:
         self.added_rule_cost = shared.config['Models']\
                                      .getfloat('added_rule_cost')
         if initialize_models:
-            self.rule_model = None
+            self.rule_model = RuleModelFactory.create(
+                                  shared.config['Models'].get('rule_model'))
             self.root_model = RootModelFactory.create(
                                   shared.config['Models'].get('root_model'))
             self.edge_model = EdgeModelFactory.create(
@@ -186,7 +188,9 @@ class ModelSuite:
         rule_set = RuleSet.load(shared.filenames['rules'])
         lexicon = Lexicon.load(shared.filenames['wordlist'])
         result = ModelSuite(rule_set)
-        result.rule_model = None
+        result.rule_model = RuleModelFactory.load(
+                                shared.config['Models'].get('rule_model'),
+                                shared.filenames['rule-model'])
         result.root_model = RootModelFactory.load(
                                 shared.config['Models'].get('root_model'),
                                 shared.filenames['root-model'])

@@ -37,6 +37,16 @@ def run() -> None:
         sampler.add_stat('exp_cost', ExpectedCostStatistic(sampler))
         sampler.run_sampling()
 
+        # fit the model
+        edge_weights = sampler.stats['edge_freq'].value()
+        root_weights = np.ones(len(full_graph.lexicon))
+        for idx in range(edge_weights.shape[0]):
+            root_id = \
+                full_graph.lexicon.get_id(full_graph.edge_set[idx].target)
+            root_weights[root_id] -= edge_weights[idx]
+        model.fit(sampler.lexicon, sampler.edge_set, 
+                  root_weights, edge_weights)
+
         # compute the rule statistics
         freq, contrib = sampler.compute_rule_stats()
 
