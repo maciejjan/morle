@@ -83,6 +83,8 @@ class Analyzer:
         results = [edge for edge in edge_set]
         for i, edge in enumerate(results):
             edge.attr['cost'] = edge_costs[i]
+        results.append(GraphEdge(None, target, None, \
+                                 cost=self.model.root_cost(target)))
         # 4. sort the analyses according to the cost
         results.sort(key=lambda r: r.attr['cost'])
         if self.max_results is not None:

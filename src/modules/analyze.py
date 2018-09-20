@@ -23,10 +23,11 @@ def run():
             vec_str = ' '.join(map(str, map(float, list(a.target.vec.T)))) \
                       if kwargs['predict_vec'] \
                       else ''
-            src = unnormalize_word(a.source.literal)
+            src = unnormalize_word(a.source.literal) \
+                  if a.source is not None else ''
             tgt = unnormalize_word(a.target.literal)
-            print(src, tgt, a.rule, a.attr['cost'], vec_str,
-                  sep='\t')
+            rule = str(a.rule) if a.rule is not None else ''
+            print(src, tgt, rule, a.attr['cost'], vec_str, sep='\t')
         # TODO
         # - including the analysis of a word as a root
 
