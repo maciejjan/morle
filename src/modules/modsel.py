@@ -62,8 +62,8 @@ def run() -> None:
                 edges_to_delete.append(edge)
         full_graph.remove_edges(edges_to_delete)
 
-        # delete the selected rules -- TODO implementation
-#         model.delete_rules(rules_to_delete)
+        # deleting the rules is not necessary -- instead, save the reduced
+        # rule set at the end; fitting will be performed separately
 
     logging.getLogger('main').info('Saving the graph...')
     full_graph.edge_set.save(shared.filenames['graph-modsel'])
