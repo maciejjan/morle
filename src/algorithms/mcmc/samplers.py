@@ -109,14 +109,13 @@ class MCMCGraphSampler:
         try:
             edges_to_add, edges_to_remove, prop_prob_ratio, depth_change =\
                 self.determine_move_proposal(edge)
-#             print(len(edges_to_add), len(edges_to_remove))
             acc_prob = self.compute_acc_prob(\
                 edges_to_add, edges_to_remove, prop_prob_ratio, depth_change)
             if acc_prob >= 1 or acc_prob >= random.random():
                 self.accept_move(edges_to_add, edges_to_remove)
         # if move impossible -- propose staying in the current graph
         # (the acceptance probability for that is 1, so this move
-        # is automatically accepted and nothing needs to be done
+        # is automatically accepted and nothing needs to be done)
         except ImpossibleMoveException:
             pass
 

@@ -208,7 +208,6 @@ def run() -> None:
                                         shared.filenames['graph'])
     else:
         logging.getLogger('main').info('Building graph...')
-#         build_graph_allrules(lexicon, shared.filenames['graph'])
         write_tsv_file(shared.filenames['graph'],
                        build_graph_fstfastss(lexicon, 
                                              shared.filenames['lexicon-tr']))
@@ -217,17 +216,11 @@ def run() -> None:
     update_file_size(shared.filenames['graph'])
     run_filters(shared.filenames['graph'])
     update_file_size(shared.filenames['graph'])
-#     aggregate_file(shared.filenames['graph'],\
-#                    shared.filenames['rules'], 3)
-#     update_file_size(shared.filenames['rules'])
 
     # write rules file
-#     logging.getLogger('main').info('Computing rule frequencies...')
     rules = []
-#     rule_freq = {}
     for rule_str, edges in read_tsv_file_by_key(shared.filenames['graph'], 
                                                 key=3, show_progressbar=False):
-#         rule_freq[rule_str] = len(edges)
         rules.append(Rule.from_string(rule_str))
     lexicon_tr = lexicon.to_fst()
     algorithms.fst.save_transducer(lexicon_tr, shared.filenames['lexicon-tr'])
