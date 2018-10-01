@@ -158,6 +158,8 @@ class ModelSuite:
     def save(self) -> None:
         self.root_model.save(shared.filenames['root-model'])
         self.edge_model.save(shared.filenames['edge-model'])
+        if self.rule_model is not None:
+            self.rule_model.save(shared.filenames['rule-model'])
         if self.root_tag_model is not None:
             self.root_tag_model.save(shared.filenames['root-tag-model'])
         if self.root_frequency_model is not None:
