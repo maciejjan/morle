@@ -188,7 +188,10 @@ class ModelSuite:
 
     @staticmethod
     def load() -> 'ModelSuite':
-        rule_set = RuleSet.load(shared.filenames['rules'])
+        rules_file = shared.filenames['rules-modsel']
+        if not file_exists(rules_file):
+            rules_file = shared.filenames['rules']
+        rule_set = RuleSet.load(rules_file)
         lexicon = Lexicon.load(shared.filenames['wordlist'])
         result = ModelSuite(rule_set)
         result.rule_model = RuleModelFactory.load(
