@@ -58,6 +58,7 @@ filenames = {\
     'root-model' : 'root.model',
     'root-tag-model' : 'root-tag.model.npz',
     'edge-model' : 'edge.model',
+    'rule-model' : 'rule.model',
     'root-feature-model' : 'root-feature.model.npz',
     'edge-feature-model' : 'edge-feature.model.npz',
     'root-frequency-model' : 'root-frequency.model.npz',

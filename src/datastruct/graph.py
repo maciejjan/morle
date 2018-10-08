@@ -4,6 +4,7 @@ from utils.files import open_to_write, read_tsv_file, write_line
 import shared
 
 from collections import defaultdict
+import logging
 import networkx as nx
 import numpy as np
 import random
@@ -80,6 +81,25 @@ class EdgeSet:
                 self.edge_ids_by_rule[edge.rule] = []
             self.edge_ids_by_rule[edge.rule].append(self.next_id)
             self.next_id += 1
+
+    def remove(self, edges :Union[GraphEdge, Iterable[GraphEdge]]) -> None:
+        logging.getLogger('main').debug('Number of edges before deletion: {}'\
+                                        .format(len(self.items)))
+        if isinstance(edges, GraphEdge):
+            edges = [edges]
+        edges_to_remove_set = set(edges)
+        self.items = [edge for edge in self.items \
+                      if edge not in edges_to_remove_set]
+        self.index = {}
+        self.edge_ids_by_rule = {}
+        for i, edge in enumerate(self.items):
+            self.index[edge] = i
+            if edge.rule not in self.edge_ids_by_rule:
+                self.edge_ids_by_rule[edge.rule] = []
+            self.edge_ids_by_rule[edge.rule].append(i)
+        self.next_id = len(self.items)
+        logging.getLogger('main').debug('Number of edges after deletion: {}'\
+                                        .format(len(self.items)))
 
     def get_id(self, edge :GraphEdge) -> int:
         return self.index[edge]
@@ -221,7 +241,6 @@ class Branching(Graph):
 
 
 class FullGraph(Graph):
-    # TODO immutable, loaded from file
     def __init__(self, lexicon :Lexicon, edge_set :EdgeSet) -> None:
         super().__init__()
 #         self.edges_list = []
@@ -235,6 +254,11 @@ class FullGraph(Graph):
 
     def add_edge(self, edge :GraphEdge) -> None:
         super().add_edge(edge)
+
+    def remove_edges(self, edges :List[GraphEdge]) -> None:
+        self.edge_set.remove(edges)
+        for edge in edges:
+            super().remove_edge(edge)
 
 #     def load_edges_from_file(self, filename :str) -> None:
 #         starting_id = len(self.edges_list) + 1
@@ -263,6 +287,8 @@ class FullGraph(Graph):
     def random_branching(self) -> Branching:
         # choose some edges randomly and compose a branching out of them
         edges = list(iter(self.edge_set))
+        logging.getLogger('main').debug(\
+            'random_branching(): {} potential edges'.format(len(edges)))
         random.shuffle(edges)
         branching = self.empty_branching()
         for edge in edges:

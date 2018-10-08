@@ -3,6 +3,7 @@ from datastruct.lexicon import LexiconEntry, Lexicon
 from datastruct.graph import EdgeSet, GraphEdge, FullGraph
 from datastruct.rules import Rule, RuleSet
 from models.root import RootModelFactory
+from models.rule import RuleModelFactory
 from models.tag import TagModelFactory
 from models.edge import EdgeModelFactory
 from models.feature import RootFeatureModelFactory, EdgeFeatureModelFactory
@@ -13,7 +14,7 @@ import shared
 
 import logging
 import numpy as np
-from typing import Iterable, Union
+from typing import Iterable, List, Union
 
 
 class ModelSuite:
@@ -27,6 +28,8 @@ class ModelSuite:
         self.added_rule_cost = shared.config['Models']\
                                      .getfloat('added_rule_cost')
         if initialize_models:
+            self.rule_model = RuleModelFactory.create(
+                                  shared.config['Models'].get('rule_model'))
             self.root_model = RootModelFactory.create(
                                   shared.config['Models'].get('root_model'))
             self.edge_model = EdgeModelFactory.create(
@@ -60,6 +63,7 @@ class ModelSuite:
         root_weights = np.ones(len(graph.lexicon))
         edge_weights = np.ones(len(graph.edge_set))
         self.root_model.fit(graph.lexicon, root_weights)
+        self.rule_model.fit(self.rule_set)
         self.fit(graph.lexicon, graph.edge_set, root_weights, edge_weights)
 
     def root_cost(self, entry :LexiconEntry) -> float:
@@ -89,7 +93,10 @@ class ModelSuite:
         return result
 
     def rule_cost(self, rule :Rule) -> float:
-        result = self.edge_model.rule_cost(rule)
+        result = 0.0
+        if self.rule_model is not None:
+            result += self.rule_model.rule_cost(rule)
+        result += self.edge_model.rule_cost(rule)
         result += self.added_rule_cost
         return result
 # 
@@ -129,6 +136,9 @@ class ModelSuite:
 
     def iter_rules(self) -> Iterable[Rule]:
         return iter(self.rule_set)
+
+    def delete_rules(self, rules_to_delete :List[Rule]) -> None:
+        raise NotImplementedError()
         
     def fit(self, lexicon :Lexicon, edge_set :EdgeSet, 
             root_weights :np.ndarray, edge_weights :np.ndarray) -> None:
@@ -148,6 +158,8 @@ class ModelSuite:
     def save(self) -> None:
         self.root_model.save(shared.filenames['root-model'])
         self.edge_model.save(shared.filenames['edge-model'])
+        if self.rule_model is not None:
+            self.rule_model.save(shared.filenames['rule-model'])
         if self.root_tag_model is not None:
             self.root_tag_model.save(shared.filenames['root-tag-model'])
         if self.root_frequency_model is not None:
@@ -176,9 +188,15 @@ class ModelSuite:
 
     @staticmethod
     def load() -> 'ModelSuite':
-        rule_set = RuleSet.load(shared.filenames['rules'])
+        rules_file = shared.filenames['rules-modsel']
+        if not file_exists(rules_file):
+            rules_file = shared.filenames['rules']
+        rule_set = RuleSet.load(rules_file)
         lexicon = Lexicon.load(shared.filenames['wordlist'])
         result = ModelSuite(rule_set)
+        result.rule_model = RuleModelFactory.load(
+                                shared.config['Models'].get('rule_model'),
+                                shared.filenames['rule-model'])
         result.root_model = RootModelFactory.load(
                                 shared.config['Models'].get('root_model'),
                                 shared.filenames['root-model'])
