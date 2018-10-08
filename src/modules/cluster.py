@@ -38,14 +38,13 @@ def run() -> None:
     lexicon = Lexicon.load(shared.filenames['wordlist'])
     logging.getLogger('main').info('Loading graph...')
     graph, weights = \
-        load_graph('sample-edge-stats.txt',
-                   lexicon,
+        load_graph(shared.filenames['weighted-graph'], lexicon,
                    threshold=shared.config['cluster'].getfloat('threshold'))
     logging.getLogger('main').info('Clustering...')
-    clusters = \
-        chinese_whispers(graph, weights,
-                         root_weights=shared.config['cluster']\
-                                            .getboolean('root_weights'))
+    clusters = chinese_whispers(\
+        graph, weights,
+        root_weights=shared.config['cluster'].getboolean('root_weights'),
+        max_iterations=shared.config['cluster'].getint('max_iterations'))
     with open_to_write('clusters.txt') as fp:
         for cluster in clusters:
             fp.write(', '.join([str(node) for node in cluster])+'\n')

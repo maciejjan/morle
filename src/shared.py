@@ -62,8 +62,10 @@ filenames = {\
     'root-feature-model' : 'root-feature.model.npz',
     'edge-feature-model' : 'edge-feature.model.npz',
     'root-frequency-model' : 'root-frequency.model.npz',
-    'edge-frequency-model' : 'edge-frequency.model.npz'
+    'edge-frequency-model' : 'edge-frequency.model.npz',
+    'weighted-graph' : 'weighted-graph.txt'
 }
+
 
 format = {\
     'vector_sep' : ' ',

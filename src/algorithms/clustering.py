@@ -11,7 +11,8 @@ from typing import List
 
 def chinese_whispers(graph :FullGraph, weights :np.ndarray,
                      threshold :float = 0,
-                     root_weights :bool = False) -> List[List[LexiconEntry]]:
+                     root_weights :bool = False,
+                     max_iterations :int = None) -> List[List[LexiconEntry]]:
 
     def _weight(edge):
         return weights[graph.edge_set.get_id(edge)]
@@ -27,6 +28,9 @@ def chinese_whispers(graph :FullGraph, weights :np.ndarray,
     nodes_list = list(graph.nodes_iter())
     while True:
         iter_num += 1
+        if max_iterations is not None and max_iterations > 0 and \
+                iter_num > max_iterations:
+            break
         changed = 0
         logging.getLogger('main').info('Iteration {}'.format(iter_num))
         random.shuffle(nodes_list)
