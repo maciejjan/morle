@@ -63,7 +63,8 @@ class ModelSuite:
         root_weights = np.ones(len(graph.lexicon))
         edge_weights = np.ones(len(graph.edge_set))
         self.root_model.fit(graph.lexicon, root_weights)
-        self.rule_model.fit(self.rule_set)
+        if self.rule_model is not None:
+            self.rule_model.fit(self.rule_set)
         self.fit(graph.lexicon, graph.edge_set, root_weights, edge_weights)
 
     def root_cost(self, entry :LexiconEntry) -> float:

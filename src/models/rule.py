@@ -87,7 +87,7 @@ class RuleModelFactory(ModelFactory):
     def load(model_type :str, filename :str) -> RuleModel:
         if model_type == 'none':
             return None
-        if model_type == 'unigram':
+        elif model_type == 'unigram':
             return UnigramRuleModel.load(filename)
         else:
             raise UnknownModelTypeException('rule', model_type)
