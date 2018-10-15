@@ -614,7 +614,7 @@ class MCMCTagSampler(MCMCGraphSampler):
             self.next()
         self.finalize()
 
-    def compute_acc_prob(self, edges_to_add, edges_to_remove, prop_prob_ratio):
+    def compute_acc_prob(self, edges_to_add, edges_to_remove, prop_prob_ratio, depth_change):
         if len(edges_to_add) == 1 and len(edges_to_remove) == 0:
             tgt_id = self.lexicon.get_id(edges_to_add[0].target)
             prob = np.sum(self.root_prob[tgt_id,:]*self.backward_prob[tgt_id,:])
