@@ -24,28 +24,42 @@ from scipy.stats import norm
 #   (pairs: source_word, rule)
 # - result: pairs (word, cost)
 
-def fit_frequency_model(sample_edge_stats_filename, lexicon, rule_set):
-    means, sdevs = np.zeros(len(rule_set)), np.zeros(len(rule_set))
-    values, weights = {}, {}
-    for w1, w2, rule, freq_str in read_tsv_file(sample_edge_stats_filename):
-        try:
-            freq = float(freq_str)
-            if freq <= 0:
-                continue
-            if rule not in values:
-                values[rule] = []
-                weights[rule] = []
-            values[rule].append(freq * (lexicon[w2].logfreq - lexicon[w1].logfreq))
-            weights[rule].append(freq)
-        except ValueError:
-            pass
-    for rule in values:
-        r_id = rule_set.get_id(Rule.from_string(rule))
-        a_values = np.array(values[rule])
-        a_weights = np.array(weights[rule])
-        means[r_id] = np.average(a_values, weights=a_weights)
-        sdevs[r_id] = np.sqrt(np.average((a_values-means[r_id])**2, weights=a_weights))
-    return means, sdevs
+# parameters: min_freq, max_freq -- generate the words, for which the predicted
+# frequency falls into this interval
+# evaluate on a real corpus, e.g. with frequencies between 1 and 5
+
+# TODO 2018-10-15
+# - remove the ad-hoc frequency model implemented here and load the 'real'
+#   frequency model instead
+# - test running the module without the frequency test
+# - config parameters: min_freq, max_freq, max_cost
+# - evaluate the tagged and untagged variant
+# - additionally: test the generated words with a (separately trained?) root
+#     distribution (e.g. trigram or ALERGIA without smoothing)
+#     -- if root costs are very low, do not include
+
+# def fit_frequency_model(sample_edge_stats_filename, lexicon, rule_set):
+#     means, sdevs = np.zeros(len(rule_set)), np.zeros(len(rule_set))
+#     values, weights = {}, {}
+#     for w1, w2, rule, freq_str in read_tsv_file(sample_edge_stats_filename):
+#         try:
+#             freq = float(freq_str)
+#             if freq <= 0:
+#                 continue
+#             if rule not in values:
+#                 values[rule] = []
+#                 weights[rule] = []
+#             values[rule].append(freq * (lexicon[w2].logfreq - lexicon[w1].logfreq))
+#             weights[rule].append(freq)
+#         except ValueError:
+#             pass
+#     for rule in values:
+#         r_id = rule_set.get_id(Rule.from_string(rule))
+#         a_values = np.array(values[rule])
+#         a_weights = np.array(weights[rule])
+#         means[r_id] = np.average(a_values, weights=a_weights)
+#         sdevs[r_id] = np.sqrt(np.average((a_values-means[r_id])**2, weights=a_weights))
+#     return means, sdevs
 
 
 def run() -> None:
