@@ -15,10 +15,6 @@ import subprocess
 import tqdm
 
 
-MAX_COST = 5
-CHUNK_SIZE = 10000
-
-
 def get_analyzer(filename, lexicon, model):
     if file_exists(filename):
         analyzer = Analyzer.load(filename, lexicon, model)
@@ -43,6 +39,7 @@ def create_new_words_acceptor_if_not_exists(filename, analyzer, lexicon):
 def generate_words(tr_file, analyzer, model):
     logging.getLogger('main').info('Precomputing the Gaussian distribution table...')
     _normcdf_cache = norm.cdf(np.array(range(-10000, 10001)) / 1000)
+    max_cost = shared.config['generate'].getfloat('max_cost')
 
     def _normcdf(x):
         if x < -10:
@@ -84,7 +81,7 @@ def generate_words(tr_file, analyzer, model):
 #                     print(str(e), prob)
                 if word_prob_ratio > 0:
                     cost = -math.log(word_prob_ratio)
-                    if cost < MAX_COST:
+                    if cost < max_cost:
                         yield (word, cost)
             else:
                 break

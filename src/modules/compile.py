@@ -17,10 +17,13 @@ def load_rules() -> List[Tuple[Rule, float]]:
     if shared.config['compile'].getboolean('weighted'):
         if shared.config['Models'].get('edge_model') == 'simple':
             rules_filename = shared.filenames['edge-model']
-            return [(Rule.from_string(rule), -math.log(prod))\
-                    for rule, prod in\
-                        read_tsv_file(rules_filename, (str, float))] +\
-                   [(Rule.from_string(':/:___:'), 0.0)]
+            max_cost = shared.config['compile'].getfloat('max_cost')
+            rules = [(Rule.from_string(rule), -math.log(prod))\
+                     for rule, prod in\
+                         read_tsv_file(rules_filename, (str, float))\
+                     if -math.log(prod) < max_cost ] +\
+                    [(Rule.from_string(':/:___:'), 0.0)]
+            return rules
         else:
             raise Exception('Compiling a weighted analyzer is only possible'
                             ' for the Bernoulli edge model.')
