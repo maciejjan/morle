@@ -41,7 +41,8 @@ class Analyzer:
                 'simultaneously. Disabling vector prediction.')
             self.predict_vec = False
 
-    def analyze(self, target :LexiconEntry, **kwargs) -> List[GraphEdge]:
+    def analyze(self, target :LexiconEntry, compute_cost=True, **kwargs) \
+               -> List[GraphEdge]:
         # TODO 1a. if predict_tag: get possible tags from the tag predictor
         # 1. get possible sources for the given target
         sources = set(sum([self.lexicon.get_by_symstr(word) \
@@ -76,6 +77,8 @@ class Analyzer:
                         edge_set.add(GraphEdge(source, target, rule))
         if not edge_set:
             return list()
+        if not compute_cost:
+            return list(edge_set)
         edge_costs = self.model.edges_cost(edge_set)
         for i, edge in enumerate(edge_set):
             if edge.source not in self.lexicon:

@@ -57,6 +57,9 @@ class SimpleEdgeModel(EdgeModel):
         self.alpha = alpha
         self.beta = beta
 
+    def edge_prob(self, edge :GraphEdge) -> float:
+        return self.rule_prob[self.rule_set.get_id(edge.rule)]
+
     def edges_prob(self, edges :EdgeSet) -> np.ndarray:
         result = np.zeros(len(edges))
         for rule, edge_ids in edges.get_edge_ids_by_rule().items():

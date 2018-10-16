@@ -52,8 +52,12 @@ def unnormalize_seq(seq :List[str]) -> List[str]:
     cap = False
     for c in seq:
         if c == '{ALLCAPS}':
+            if allcaps:
+                raise Exception('{ALLCAPS} cannot occur more than once in a word!')
             allcaps = True
         elif c == '{CAP}':
+            if cap:
+                raise Exception('{CAP} cannot occur multiple times in a row!')
             cap = True
         else:
             if c in shared.unnormalization_substitutions:
