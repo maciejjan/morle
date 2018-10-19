@@ -1,6 +1,7 @@
 from algorithms.analyzer import Analyzer
 import algorithms.fst
 from datastruct.lexicon import Lexicon, LexiconEntry, unnormalize_word
+from datastruct.graph import GraphEdge
 from models.suite import ModelSuite
 from utils.files import file_exists, full_path, open_to_write
 import shared
@@ -13,6 +14,10 @@ import numpy as np
 from scipy.stats import norm
 import subprocess
 import tqdm
+
+
+# TODO
+# - write output to a file
 
 
 def get_analyzer(filename, lexicon, model):
@@ -36,7 +41,9 @@ def create_new_words_acceptor_if_not_exists(filename, analyzer, lexicon):
         algorithms.fst.save_transducer(new_words_acceptor, filename)
 
 
-def generate_words(tr_file, analyzer, model):
+def generate_words(tr_file :str, analyzer :Analyzer, model :ModelSuite,
+                   freq_model :bool = True, sum_analyses :bool = True,
+                   min_freq :float = 1, max_freq :float = 2):
     logging.getLogger('main').info('Precomputing the Gaussian distribution table...')
     _normcdf_cache = norm.cdf(np.array(range(-10000, 10001)) / 1000)
     max_cost = shared.config['generate'].getfloat('max_cost')
@@ -47,6 +54,20 @@ def generate_words(tr_file, analyzer, model):
         elif x > 10:
             x = 10
         return _normcdf_cache[int((x+10)*1000)]
+
+    def _edge_prob_ratio(edge :GraphEdge) -> float:
+        r_id = model.rule_set.get_id(edge.rule)
+        prob = model.edge_model.edge_prob(edge)
+        return prob / (1-prob)
+
+    def _edge_freq_prob(edge :GraphEdge) -> float:
+        r_id = model.rule_set.get_id(edge.rule)
+        mean = model.edge_frequency_model.means[r_id]
+        sdev = model.edge_frequency_model.sdevs[r_id]
+        norm_min_freq = (log_min_freq - edge.source.logfreq - mean) / sdev
+        norm_max_freq = (log_max_freq - edge.source.logfreq - mean) / sdev
+        freq_prob = (_normcdf(log_max_freq) - _normcdf(log_min_freq)) / sdev
+        return freq_prob
     
     logging.getLogger('main').info('Generating...')
     cmd = ['hfst-fst2strings', full_path(tr_file)]
@@ -54,31 +75,23 @@ def generate_words(tr_file, analyzer, model):
                          stdout=subprocess.PIPE,
                          stderr=subprocess.DEVNULL, 
                          universal_newlines=True, bufsize=1)
-    log_max_freq = math.log(5)
-    log_min_freq = 0
+    log_max_freq = math.log(max_freq)
+    log_min_freq = math.log(min_freq)
     while True:
         try: 
             line = p.stdout.readline().strip()
             if line:
                 word = unnormalize_word(line.rstrip())
                 analyses = analyzer.analyze(LexiconEntry(word), compute_cost=False)
-                if not analyses:
-                    continue
                 word_prob_ratio = 0
-                for e in analyses:
-                    r_id = model.rule_set.get_id(e.rule)
-                    prob = model.edge_model.edge_prob(e)
-                    mean = model.edge_frequency_model.means[r_id]
-                    sdev = model.edge_frequency_model.sdevs[r_id]
-                    norm_min_freq = \
-                        (log_min_freq - e.source.logfreq - mean) / sdev
-                    norm_max_freq = \
-                        (log_max_freq - e.source.logfreq - mean) / sdev
-                    freq_prob = \
-                        (_normcdf(log_max_freq) -\
-                         _normcdf(log_min_freq)) / sdev
-                    word_prob_ratio += prob / (1-prob) * freq_prob
-#                     print(str(e), prob)
+                for edge in analyses:
+                    prob_ratio = _edge_prob_ratio(edge)
+                    if freq_model:
+                        prob_ratio *= _edge_freq_prob(edge)
+                    if sum_analyses:
+                        word_prob_ratio += prob_ratio
+                    else:
+                        word_prob_ratio = max(word_prob_ratio, prob_ratio)
                 if word_prob_ratio > 0:
                     cost = -math.log(word_prob_ratio)
                     if cost < max_cost:
@@ -96,6 +109,13 @@ def run() -> None:
     tr_file = 'wordgen.fst'
     create_new_words_acceptor_if_not_exists(tr_file, analyzer, lexicon)
 
-    for word, cost in tqdm.tqdm(generate_words(tr_file, analyzer, model)):
+    generator = tqdm.tqdm(generate_words(
+        tr_file, analyzer, model,
+        freq_model = shared.config['generate'].getboolean('freq_model'),
+        sum_analyses = shared.config['generate'].getboolean('sum_analyses'),
+        min_freq = shared.config['generate'].getfloat('min_freq'),
+        max_freq = shared.config['generate'].getfloat('max_freq')))
+    # TODO write to a file
+    for word, cost in generator:
         print(word, cost, sep='\t')
 
