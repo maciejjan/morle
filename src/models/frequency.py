@@ -5,6 +5,7 @@ from models.generic import Model, ModelFactory, UnknownModelTypeException
 from utils.files import full_path
 
 import logging
+import math
 import numpy as np
 from scipy.stats import norm
 
@@ -73,7 +74,7 @@ class LogNormalEdgeFrequencyModel(EdgeFrequencyModel):
                 ' not enough edges.'.format(self.rule_set[rule_id]))
             return
         # TODO naive truncation -- apply a prior instead!
-        self.means[rule_id,] = max(1, np.average(freq_vector, weights=weights))
+        self.means[rule_id,] = max(0.5, np.average(freq_vector, weights=weights))
         err = freq_vector - self.means[rule_id,]
         self.sdevs[rule_id,] = max(0.1, np.sqrt(np.average(err**2, weights=weights)))
 
@@ -84,8 +85,8 @@ class LogNormalEdgeFrequencyModel(EdgeFrequencyModel):
             self.sdevs = np.empty(len(self.rule_set))
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
             edge_ids = tuple(edge_ids)
-            freq_vector = np.array([edge_set[i].target.logfreq - \
-                                    edge_set[i].source.logfreq \
+            freq_vector = np.array([edge_set[i].source.logfreq - \
+                                    edge_set[i].target.logfreq \
                                     for i in edge_ids])
             self.fit_rule(self.rule_set.get_id(rule), freq_vector,
                           weights[edge_ids,])
@@ -100,8 +101,8 @@ class LogNormalEdgeFrequencyModel(EdgeFrequencyModel):
         result = np.zeros(len(edge_set))
         for rule, edge_ids in edge_set.get_edge_ids_by_rule().items():
             rule_id = self.rule_set.get_id(rule)
-            freq_vector = np.array([edge_set[i].target.logfreq - \
-                                    edge_set[i].source.logfreq \
+            freq_vector = np.array([edge_set[i].source.logfreq - \
+                                    edge_set[i].target.logfreq \
                                     for i in edge_ids])
             costs = -norm.logpdf(freq_vector, self.means[rule_id,],
                                  self.sdevs[rule_id,])
