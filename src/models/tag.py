@@ -27,6 +27,12 @@ class TagModel(Model):
         raise NotImplementedError()
 
 
+class SimpleTagModel(TagModel):
+    # TODO -- a tag model independent of the word
+    #         - based on the frequency of tags
+    pass
+
+
 class NGramTagModel(TagModel):
     pass
 

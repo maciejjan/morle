@@ -116,5 +116,8 @@ class Analyzer:
         kwargs['compile'] = False
         analyzer = Analyzer(lexicon, model, **kwargs)
         analyzer.fst = algorithms.fst.load_transducer(filename)
+        rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+        analyzer.inv_rules_tr = hfst.HfstTransducer(rules_tr)
+        analyzer.inv_rules_tr.invert()
         return analyzer
 
