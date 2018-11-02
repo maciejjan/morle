@@ -93,7 +93,7 @@ class LogNormalEdgeFrequencyModel(EdgeFrequencyModel):
 
     def edge_cost(self, edge :GraphEdge) -> float:
         rule_id = self.rule_set.get_id(edge.rule)
-        return -norm.logpdf(edge.target.logfreq-edge.source.logfreq,
+        return -norm.logpdf(edge.source.logfreq-edge.target.logfreq,
                             self.means[rule_id,],
                             self.sdevs[rule_id,])
 
