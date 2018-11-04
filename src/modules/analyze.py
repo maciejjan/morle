@@ -12,6 +12,7 @@ def get_analyzer(filename, lexicon, model):
     kwargs['predict_vec'] = \
         shared.config['analyze'].getboolean('predict_vec')
     kwargs['max_results'] = shared.config['analyze'].getint('max_results')
+    kwargs['include_roots'] = True
     kwargs['enable_back_formation'] = \
         shared.config['analyze'].getboolean('enable_back_formation')
     if file_exists(filename):

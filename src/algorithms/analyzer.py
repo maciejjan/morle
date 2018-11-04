@@ -35,10 +35,18 @@ class Analyzer:
                                      kwargs['enable_back_formation'] == True
         self.max_results = kwargs['max_results'] if 'max_results' in kwargs \
                                                  else None
+        self.include_roots = kwargs['include_roots'] \
+                             if 'include_roots' in kwargs \
+                             else False
         if self.predict_vec and self.enable_back_formation:
             logging.getLogger('main').warning(\
                 'Vector prediction and back-formation cannot be done'
                 'simultaneously. Disabling vector prediction.')
+            self.predict_vec = False
+        if self.include_roots and self.enable_back_formation:
+            logging.getLogger('main').warning(\
+                'Vector prediction for roots is not supported. Disabling'
+                ' vector prediction.')
             self.predict_vec = False
 
     def analyze(self, target :LexiconEntry, compute_cost=True, **kwargs) \
@@ -75,19 +83,21 @@ class Analyzer:
                 for rule in rules:
                     if rule in self.model.rule_set:
                         edge_set.add(GraphEdge(source, target, rule))
-        if not edge_set:
-            return list()
-        if not compute_cost:
-            return list(edge_set)
-        edge_costs = self.model.edges_cost(edge_set)
-        for i, edge in enumerate(edge_set):
-            if edge.source not in self.lexicon:
-                edge_costs[i] += self.model.root_cost(edge.source)
+        # analysis as root
+        if self.include_roots:
+            edge_set.add(GraphEdge(None, target, None))
+        # scoring
+        # FIXME this is inefficient and may break on some model components
+        #   that don't have the method .edge_cost()
+        for edge in edge_set:
+            edge.attr['cost'] = 0
+            if edge.source is not None:
+                edge.attr['cost'] += self.model.edge_cost(edge)
+                if edge.source not in self.lexicon:
+                    edge.attr['cost'] += self.model.root_cost(edge.source)
+            else:
+                edge.attr['cost'] += self.model.root_cost(edge.target)
         results = [edge for edge in edge_set]
-        for i, edge in enumerate(results):
-            edge.attr['cost'] = edge_costs[i]
-        results.append(GraphEdge(None, target, None, \
-                                 cost=self.model.root_cost(target)))
         # 4. sort the analyses according to the cost
         results.sort(key=lambda r: r.attr['cost'])
         if self.max_results is not None:

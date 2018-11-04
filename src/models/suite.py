@@ -111,6 +111,16 @@ class ModelSuite:
 
     def edges_prob(self, edges :EdgeSet) -> np.ndarray:
         return self.edge_model.edges_prob(edges)
+
+    def edge_cost(self, edge :GraphEdge) -> float:
+        result = self.edge_model.edge_cost(edge)
+        if self.edge_frequency_model is not None:
+            result += self.frequency_weight * \
+                      self.edge_frequency_model.edge_cost(edge)
+        if self.edge_feature_model is not None:
+            result += self.feature_weight * \
+                      self.edge_feature_model.edge_cost(edge)
+        return result
     
     def edges_cost(self, edges :EdgeSet) -> np.ndarray:
         result = self.edge_model.edges_cost(edges)
