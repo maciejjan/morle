@@ -30,12 +30,12 @@ def run():
             for word, cost in lookup_results:
                 word_tag = ''.join(tokenize_word(word)[1])
                 if word_tag == tag:
-                    print(lemma, unnormalize_word(word), sep='\t')
+                    print(lemma, unnormalize_word(word), cost, sep='\t')
                     found = True
                     break
             if not found:
-                print(lemma, '---'+tag, sep='\t')
+                print(lemma, '---'+tag, '---', sep='\t')
         except Exception as e:
             print(str(e), file=sys.stderr)
-            print(lemma, '---'+tag, sep='\t')
+            print(lemma, '---'+tag, '---', sep='\t')
 
