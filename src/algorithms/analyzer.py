@@ -75,8 +75,11 @@ class Analyzer:
                 (self.max_results is None or len(edge_set) < self.max_results):
             lookup_results = set()
             for w, c in self.inv_rules_tr.lookup(target.symstr):
-                lookup_results.add(unnormalize_word(\
-                    re.sub(hfst.EPSILON, '', w)))
+                try:
+                    lookup_results.add(unnormalize_word(\
+                        re.sub(hfst.EPSILON, '', w)))
+                except Exception as e:
+                    logging.getLogger('main').warning(str(e))
             sources = [LexiconEntry(word) for word in lookup_results]
             for source in sources:
                 rules = extract_all_rules(source, target)
