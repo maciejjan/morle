@@ -145,7 +145,7 @@ class NGramFeatureExtractor:
     def extract(self, edges :Union[GraphEdge, EdgeSet]) -> np.ndarray:
         '''Extract n-gram features from edges and return a binary matrix.'''
         if isinstance(edges, GraphEdge):
-            return self._extract_from_edge(edges)
+            return np.array([self._extract_from_edge(edges)])
         else:
             return np.vstack([self._extract_from_edge(edge) for edge in edges])
 
@@ -189,6 +189,12 @@ class NeuralEdgeModel(EdgeModel):
         X_attr, X_rule = self._prepare_data(edges)
         probs = self.nn.predict([X_attr, X_rule]).reshape((len(edges),))
         return probs
+
+    def edge_cost(self, edge :GraphEdge) -> float:
+        X_attr = self.ngram_extractor.extract(edge)
+        X_rule = np.array([self.rule_set.get_id(edge.rule)])
+        prob = self.nn.predict([X_attr, X_rule])
+        return float(np.log(prob / (1-prob)))
 
     def edges_cost(self, edges :EdgeSet) -> np.ndarray:
 #         X_attr, X_rule = self._prepare_data(edges)
