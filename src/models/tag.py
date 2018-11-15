@@ -1,11 +1,13 @@
 from datastruct.lexicon import LexiconEntry, Lexicon
 from models.generic import Model, ModelFactory, UnknownModelTypeException
 import shared
-from utils.files import open_to_read, open_to_write, write_line
+from utils.files import open_to_read, open_to_write, read_tsv_file, write_line
 
+from collections import defaultdict
 from keras.models import Sequential
 from keras.layers import Dense, Embedding, SimpleRNN
 import keras
+import math
 import numpy as np
 import os.path
 from typing import Iterable, Tuple
@@ -28,9 +30,57 @@ class TagModel(Model):
 
 
 class SimpleTagModel(TagModel):
-    # TODO -- a tag model independent of the word
-    #         - based on the frequency of tags
-    pass
+    '''A tag model based on the frequency of tags, independent of the word.'''
+
+    def __init__(self) -> None:
+        self.probs = {}
+        self.smoothing_prob = 1e-10
+
+    def fit(self, lexicon :Lexicon, weights :np.ndarray) -> None:
+        counts = defaultdict(lambda: 0)
+        total = 0
+        for i, entry in enumerate(lexicon):
+            # the "if" prevents having hash entries with zero prob
+            if weights[i] > 0:     
+                counts[entry.tag] += weights[i]
+                total += weights[i]
+        for key, val in counts.items():
+            self.probs[key] = val / total
+        self.smoothing_prob = 1 / total
+
+    def predict_tags(self, entries :Iterable[LexiconEntry]) -> np.ndarray:
+        # FIXME doesn't make much sense here, would just return self.probs
+        #       as a vector stacked vertically len(entries) times
+        raise NotImplementedError()
+
+    def root_prob(self, entry: LexiconEntry) -> float:
+        return self.probs[entry.tag] \
+               if entry.tag in self.probs \
+               else self.smoothing_prob
+
+    def root_cost(self, entry :LexiconEntry) -> float:
+        return -math.log(self.root_prob(entry))
+
+    def root_costs(self, lexicon :Lexicon) -> np.ndarray:
+        probs = np.array([self.root_prob(entry) for entry in lexicon])
+        return -np.log(probs)
+
+    def save(self, filename :str) -> None:
+        with open_to_write(filename) as fp:
+            write_line(fp, ('', self.smoothing_prob))
+            for tag, prob in self.probs.items():
+                write_line(fp, (''.join(tag), prob))
+
+    @staticmethod
+    def load(filename :str) -> 'SimpleTagModel':
+        result = SimpleTagModel()
+        for tag_str, prob in read_tsv_file(filename, (str, float)):
+            if tag_str:
+                tag = tuple(shared.compiled_patterns['tag'].findall(tag_str))
+                result.probs[tag] = prob
+            else:
+                result.smoothing_prob = prob
+        return result
 
 
 class NGramTagModel(TagModel):
@@ -146,8 +196,8 @@ class TagModelFactory(ModelFactory):
     def create(model_type :str) -> TagModel:
         if model_type == 'none':
             return None
-        elif model_type == 'ngram':
-            return NGramTagModel()
+        elif model_type == 'simple':
+            return SimpleTagModel()
         elif model_type == 'rnn':
             return RNNTagModel()
         else:
@@ -157,8 +207,8 @@ class TagModelFactory(ModelFactory):
     def load(model_type :str, filename :str) -> TagModel:
         if model_type == 'none':
             return None
-        elif model_type == 'ngram':
-            return NGramTagModel.load(filename)
+        elif model_type == 'simple':
+            return SimpleTagModel.load(filename)
         elif model_type == 'rnn':
             return RNNTagModel.load(filename)
         else:
