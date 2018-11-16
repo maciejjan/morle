@@ -80,7 +80,12 @@ class Analyzer:
                         re.sub(hfst.EPSILON, '', w)))
                 except Exception as e:
                     logging.getLogger('main').warning(str(e))
-            sources = [LexiconEntry(word) for word in lookup_results]
+            sources = []
+            for word in lookup_results:
+                try:
+                    sources.append(LexiconEntry(word))
+                except Exception as e:
+                    logging.getLogger('main').warning(str(e))
             for source in sources:
                 rules = extract_all_rules(source, target)
                 for rule in rules:
