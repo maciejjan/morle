@@ -194,13 +194,13 @@ class NeuralEdgeModel(EdgeModel):
         X_attr = self.ngram_extractor.extract(edge)
         X_rule = np.array([self.rule_set.get_id(edge.rule)])
         prob = self.nn.predict([X_attr, X_rule])
-        return float(np.log(prob / (1-prob)))
+        return float(-np.log(prob / (1-prob)))
 
     def edges_cost(self, edges :EdgeSet) -> np.ndarray:
 #         X_attr, X_rule = self._prepare_data(edges)
 #         probs = self.nn.predict([X_attr, X_rule]).reshape((len(edges),))
         probs = self.edges_prob(edges)
-        return np.log(probs / (1-probs))
+        return -np.log(probs / (1-probs))
 
     def null_cost(self) -> float:
         'Cost of a graph without any edges.'
