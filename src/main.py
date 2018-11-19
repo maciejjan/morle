@@ -72,8 +72,9 @@ def setup():
     # optional arguments
     ap.add_argument('-d', action='store', dest='workdir',
                     help='working directory (default: current directory)')
-#     ap.add_argument('-s', action='store_true', dest='supervised', help='supervised learning')
-#     ap.add_argument('-t', action='store_true', dest='use_tags', help='use POS-tags')
+    ap.add_argument('-i', action='store_true', dest='interactive',
+                    help='use standard input/output instead of files where '
+                         'possible')
     ap.add_argument('-q', action='store_true', dest='quiet',
                           help='quiet mode: print less console output')
     ap.add_argument('-v', action='store_true', dest='verbose',
@@ -88,6 +89,7 @@ def setup():
     if not os.path.isdir(shared.options['working_dir']):
         raise RuntimeError('%s: the supplied working directory does not exist!' %\
                            shared.options['working_dir'])
+    shared.options['interactive'] = args.interactive
     shared.options['quiet'] = args.quiet
     shared.options['verbose'] = args.verbose
     process_config()
