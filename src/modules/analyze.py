@@ -1,26 +1,10 @@
-from algorithms.analyzer import Analyzer
+from algorithms.analyzer import get_analyzer
 from datastruct.lexicon import Lexicon, load_raw_vocabulary, unnormalize_word
 from models.suite import ModelSuite
 from utils.files import file_exists
 import shared
 
 import tqdm
-
-
-def get_analyzer(filename, lexicon, model):
-    kwargs = {}
-    kwargs['predict_vec'] = \
-        shared.config['analyze'].getboolean('predict_vec')
-    kwargs['max_results'] = shared.config['analyze'].getint('max_results')
-    kwargs['include_roots'] = True
-    kwargs['enable_back_formation'] = \
-        shared.config['analyze'].getboolean('enable_back_formation')
-    if file_exists(filename):
-        analyzer = Analyzer.load(filename, lexicon, model, **kwargs)
-    else:
-        analyzer = Analyzer(lexicon, model, **kwargs)
-        analyzer.save(filename)
-    return analyzer
 
 
 def run():
