@@ -44,14 +44,14 @@ def write_delenv_transducer(filename, max_affix_size, max_infix_size,\
 
 def write_delfilter_transducer(filename, length):
     with open_to_write(filename) as outfp:
-        print(0, 0, '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@', sep='\t',
+        print(0, 0, '@_DELSLOT_SYMBOL_@', hfst.EPSILON, sep='\t',
               file=outfp)
         for i in range(length):
             print(i, i+1, hfst.IDENTITY, hfst.IDENTITY,
                   sep='\t', file=outfp)
             print(i+1, i, '@_DELETION_SYMBOL_@', hfst.EPSILON,
                   sep='\t', file=outfp)
-            print(i+1, i+1, '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@',
+            print(i+1, i+1, '@_DELSLOT_SYMBOL_@', hfst.EPSILON,
                   sep='\t', file=outfp)
             print(i+1, file=outfp)
         first_negative_state = length+1
@@ -60,7 +60,7 @@ def write_delfilter_transducer(filename, length):
         print(first_negative_state, 0, hfst.IDENTITY,
               hfst.IDENTITY, sep='\t', file=outfp)
         print(first_negative_state, first_negative_state, '@_DELSLOT_SYMBOL_@', 
-              '@_DELSLOT_SYMBOL_@', sep='\t', file=outfp)
+              hfst.EPSILON, sep='\t', file=outfp)
         for i in range(length-1):
             print(first_negative_state+i, first_negative_state+i+1,
                   '@_DELETION_SYMBOL_@', hfst.EPSILON, sep='\t',
@@ -69,7 +69,7 @@ def write_delfilter_transducer(filename, length):
                   hfst.IDENTITY, hfst.IDENTITY, sep='\t',
                   file=outfp)
             print(first_negative_state+i+1, first_negative_state+i+1,
-                  '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@', sep='\t',
+                  '@_DELSLOT_SYMBOL_@', hfst.EPSILON, sep='\t',
                   file=outfp)
 
 def write_tag_absorber(filename, alphabet):
@@ -83,7 +83,8 @@ def write_tag_absorber(filename, alphabet):
         print(0, file=outfp)
         print(1, file=outfp)
 
-def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20):
+def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20,
+                         use_tag_absorber=True):
     delenv_file = 'delenv.att'
     delfilter_file = 'delfilter.att'
     tag_absorber_file = 'tag_absorber.att'
@@ -101,7 +102,8 @@ def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20):
                          stderr=None, universal_newlines=True)
     p.stdin.write('read att {}\n'.format(full_path(delfilter_file)))
     p.stdin.write('read att {}\n'.format(full_path(delenv_file)))
-    p.stdin.write('read att {}\n'.format(full_path(tag_absorber_file)))
+    if use_tag_absorber:
+        p.stdin.write('read att {}\n'.format(full_path(tag_absorber_file)))
     p.stdin.write('compose\n')
     p.stdin.write('minimize\n')
     p.stdin.write('define T\n')
