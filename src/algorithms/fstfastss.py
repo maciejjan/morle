@@ -160,6 +160,19 @@ def similar_words_with_lookup(words, transducer_path):
     p.stdin.close()
     p.wait()
 
+def similar_words_with_pylookup(words, transducer_path):
+    transducers = algorithms.fst.load_cascade(transducer_path)
+    for t in transducers:
+        t.convert(hfst.ImplementationType.HFST_OL_TYPE)
+    for word in words:
+        similar_words = set()
+#         print(transducers[0].lookup(word))
+        for (substr, cost) in transducers[0].lookup(word):
+#             print('>>>', substr, transducers[1].lookup(substr))
+            for (w, c) in transducers[1].lookup(substr):
+                similar_words.add(w)
+        yield (word, list(similar_words))
+
 def similar_words_with_block_composition(words, transducer_path):
     def _compose_block(block, delenv, right_tr, tokenizer):
         tr = hfst.empty_fst()
@@ -241,6 +254,8 @@ def similar_words(words, transducer_path):
         return similar_words_with_lookup(words, transducer_path)
     elif method == 'block_composition':
         return similar_words_with_block_composition(words, transducer_path)
+    elif method == 'pylookup':
+        return similar_words_with_pylookup(words, transducer_path)
     else:
         raise RuntimeError('Unknown preprocessing method: {}'.format(method))
 
