@@ -302,5 +302,10 @@ def save_transducer(transducer, filename):
     ostr.close()
 
 def save_cascade(transducers, filename, type=None):
-    raise NotImplementedError()
+    path = os.path.join(shared.options['working_dir'], filename)
+    ostr = hfst.HfstOutputStream(filename=path, type=transducers[0].get_type())
+    for t in transducers:
+        ostr.write(t)
+    ostr.flush()
+    ostr.close()
 
