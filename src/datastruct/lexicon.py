@@ -313,7 +313,7 @@ class Lexicon:
 
     def _lexc_escape(self, string :str) -> str:
         '''Escape a string for correct rendering in a LEXC file.'''
-        return re.sub('([0<>])', '%\\1', string)
+        return re.sub('([0<>;,"]|Lexicon|Multichar_Symbols)', '%\\1', string)
 
 
 def load_raw_vocabulary(filename :str) -> Lexicon:
