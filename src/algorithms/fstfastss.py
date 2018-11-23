@@ -173,6 +173,19 @@ def similar_words_with_pylookup(words, transducer_path):
                 similar_words.add(w)
         yield (word, list(similar_words))
 
+def similar_words_with_pylookup_static(words, transducer_path):
+    '''Not really feasible because of astronomical memory consumption.
+       Implemented only for comparison.'''
+    transducers = algorithms.fst.load_cascade(transducer_path)
+    for t in transducers:
+        t.convert(hfst.ImplementationType.TROPICAL_OPENFST_TYPE)
+    t = transducers[0]
+    t.compose(transducers[1])
+    t.convert(hfst.ImplementationType.HFST_OL_TYPE)
+    for word in words:
+        similar_words = set(w for w, c in t.lookup(word))
+        yield (word, list(similar_words))
+
 def similar_words_with_block_composition(words, transducer_path):
     def _compose_block(block, delenv, right_tr, tokenizer):
         tr = hfst.empty_fst()
@@ -256,6 +269,8 @@ def similar_words(words, transducer_path):
         return similar_words_with_block_composition(words, transducer_path)
     elif method == 'pylookup':
         return similar_words_with_pylookup(words, transducer_path)
+    elif method == 'pylookup_static':
+        return similar_words_with_pylookup_static(words, transducer_path)
     else:
         raise RuntimeError('Unknown preprocessing method: {}'.format(method))
 
