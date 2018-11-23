@@ -1,5 +1,5 @@
 BASEDIR := $(shell pwd)
-PREFIX := /usr
+PREFIX := /usr/local
 
 all: test
 
