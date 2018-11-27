@@ -84,7 +84,7 @@ def write_tag_absorber(filename, alphabet):
         print(1, file=outfp)
 
 def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20,
-                         use_tag_absorber=True):
+                         use_tag_absorber=True, static_compose=False):
     delenv_file = 'delenv.att'
     delfilter_file = 'delfilter.att'
     tag_absorber_file = 'tag_absorber.att'
@@ -97,7 +97,8 @@ def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20,
     write_delfilter_transducer(delfilter_file, max_word_len)
     write_tag_absorber(tag_absorber_file, alphabet)
 
-    cmd = ['hfst-xfst', '-f', 'sfst']
+#     cmd = ['hfst-xfst', '-f', 'sfst']
+    cmd = ['hfst-xfst']
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                          stderr=None, universal_newlines=True)
     p.stdin.write('read att {}\n'.format(full_path(delfilter_file)))
@@ -106,14 +107,25 @@ def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20,
         p.stdin.write('read att {}\n'.format(full_path(tag_absorber_file)))
     p.stdin.write('compose\n')
     p.stdin.write('minimize\n')
-    p.stdin.write('define T\n')
-    p.stdin.write('push T\n')
-    p.stdin.write('load stack {}\n'.format(full_path(lexicon_tr_file)))
-    p.stdin.write('compose\n')
-    p.stdin.write('minimize\n')
-    p.stdin.write('invert\n')
-    p.stdin.write('push T\n')
-    p.stdin.write('rotate stack\n')
+    if static_compose:
+        p.stdin.write('load stack {}\n'.format(full_path(lexicon_tr_file)))
+        p.stdin.write('compose\n')
+        p.stdin.write('minimize\n')
+        p.stdin.write('define T\n')
+        p.stdin.write('push T\n')
+        p.stdin.write('invert\n')
+        p.stdin.write('push T\n')
+        p.stdin.write('compose\n')
+        p.stdin.write('minimize\n')
+    else:
+        p.stdin.write('define T\n')
+        p.stdin.write('push T\n')
+        p.stdin.write('load stack {}\n'.format(full_path(lexicon_tr_file)))
+        p.stdin.write('compose\n')
+        p.stdin.write('minimize\n')
+        p.stdin.write('invert\n')
+        p.stdin.write('push T\n')
+        p.stdin.write('rotate stack\n')
     fastss_tr_path = full_path(shared.filenames['fastss-tr'])
     p.stdin.write('save stack {}\n'.format(fastss_tr_path))
     p.stdin.write('quit\n')
@@ -176,11 +188,8 @@ def similar_words_with_pylookup(words, transducer_path):
 def similar_words_with_pylookup_static(words, transducer_path):
     '''Not really feasible because of astronomical memory consumption.
        Implemented only for comparison.'''
-    transducers = algorithms.fst.load_cascade(transducer_path)
-    for t in transducers:
-        t.convert(hfst.ImplementationType.TROPICAL_OPENFST_TYPE)
-    t = transducers[0]
-    t.compose(transducers[1])
+    t = algorithms.fst.load_transducer(transducer_path)
+    t.minimize()
     t.convert(hfst.ImplementationType.HFST_OL_TYPE)
     for word in words:
         similar_words = set(w for w, c in t.lookup(word))
