@@ -170,6 +170,7 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False,
     sort_call.append(full_path(infile))
     sort_call += ['-T', shared.options['working_dir']]
     env = os.environ.copy()
+    env['LC_ALL'] = 'C'
     if key:
         if isinstance(key, tuple) and len(key) == 2:
             sort_call.append('-k%d,%d' % key)
@@ -181,7 +182,6 @@ def sort_file(infile, outfile=None, key=None, reverse=False, numeric=False,
         sort_call.append('-r')
     if numeric:
         sort_call.append('-g')
-        env['LC_NUMERIC'] = 'en_US.UTF-8'
     if stable:
         sort_call.append('-s')
     if unique:
