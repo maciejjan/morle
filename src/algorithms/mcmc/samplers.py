@@ -424,30 +424,56 @@ class MCMCSemiSupervisedGraphSampler(MCMCGraphSampler):
 
 
 class MCMCSupervisedGraphSampler(MCMCGraphSampler):
-    def __init__(self, model, lexicon, edges, warmup_iter, sampl_iter):
+    def __init__(self, full_graph, model, **kwargs):
         logging.getLogger('main').debug('Creating a supervised graph sampler.')
-        MCMCGraphSampler.__init__(self, model, lexicon, edges, warmup_iter, sampl_iter)
-        self.init_lexicon()
+        MCMCGraphSampler.__init__(self, full_graph, model, **kwargs)
 
-    def init_lexicon(self):
-        edges_to_add = []
-        for key, edges in self.edges_hash.items():
-            edges_to_add.append(random.choice(edges))
-        self.accept_move(edges_to_add, [])
+    # TODO update to match the current MCMCGraphSampler
+    # instead of edges_hash -- full_graph.edges_between()
+    # determine_move_proposal: depth changes
+    # etc.
+    def _create_initial_branching(self):
+        branching = self.full_graph.empty_branching()
+        for target in self.full_graph.lexicon:
+            edges = self.full_graph.ingoing_edges(target)
+            if edges:
+                branching.add_edge(random.choice(edges))
+        return branching
+
+    def run_sampling(self) -> None:
+        self.cache_costs()
+        self.branching = self._create_initial_branching()
+        self.set_initial_branching(self.branching)
+        logging.getLogger('main').debug(\
+            'initial log-likelihood: {}'.format(self._logl))
+        logging.getLogger('main').info('Warming up the sampler...')
+        self.reset()
+        for i in tqdm.tqdm(range(self.warmup_iter)):
+            self.next()
+        logging.getLogger('main').debug(\
+            'log-likelihood after warmup: {}'.format(self._logl))
+        self.reset()
+        logging.getLogger('main').info('Sampling...')
+        for i in tqdm.tqdm(range(self.sampling_iter)):
+            self.next()
+        self.update_stats()
 
     def determine_move_proposal(self, edge):
-        if edge in edge.source.edges:
-            edge_to_add = random.choice(self.edges_hash[(edge.source, edge.target)])
-            if edge_to_add == edge:
-                raise ImpossibleMoveException()
-            return [edge_to_add], [edge], 1
+        edge_to_add, edge_to_delete = None, None
+        if self.branching.has_edge(edge.source, edge.target, edge.rule):
+            alt_edges = self.full_graph.ingoing_edges(edge.target)
+            edge_to_add = random.choice(alt_edges)
+            edge_to_delete = edge
         else:
-            edge_to_remove = self.find_edge_in_lexicon(edge.source, edge.target)
-            return [edge], [edge_to_remove], 1
+            edge_to_add = edge
+            edge_to_delete = self.branching.ingoing_edges(edge.target)[0]
+        # depths in a supervised setting are already fixed in the training
+        # graph
+        return [edge_to_add], [edge_to_delete], 1, 0
 
-    def run_sampling(self):
-        self.reset()
-        MCMCGraphSampler.run_sampling(self)
+#     def run_sampling(self):
+#         self.reset()
+#         MCMCGraphSampler.run_sampling(self)
 
 
 # TODO semi-supervised
