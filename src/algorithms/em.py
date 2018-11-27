@@ -1,6 +1,6 @@
 from algorithms.mcmc.statistics import AcceptanceRateStatistic, \
     EdgeFrequencyStatistic, ExpectedCostStatistic
-from algorithms.mcmc.samplers import MCMCGraphSampler
+from algorithms.mcmc.samplers import MCMCGraphSamplerFactory
 from datastruct.graph import FullGraph
 # from models.point import PointModel
 from models.suite import ModelSuite
@@ -54,10 +54,10 @@ def softem(full_graph :FullGraph, model :ModelSuite) -> None:
         logging.getLogger('main').info('Iteration %d' % iter_num)
 
         # expectation step
-        sampler = MCMCGraphSampler(full_graph, model,
-                warmup_iter=shared.config['fit'].getint('warmup_iterations'),
-                sampling_iter=shared.config['fit'].getint('sampling_iterations'),
-                depth_cost=shared.config['Models'].getfloat('depth_cost'))
+        sampler = MCMCGraphSamplerFactory.new(full_graph, model,
+                    warmup_iter=shared.config['fit'].getint('warmup_iterations'),
+                    sampling_iter=shared.config['fit'].getint('sampling_iterations'),
+                    depth_cost=shared.config['Models'].getfloat('depth_cost'))
         sampler.add_stat('acc_rate', AcceptanceRateStatistic(sampler))
         sampler.add_stat('edge_freq', EdgeFrequencyStatistic(sampler))
         sampler.add_stat('exp_cost', ExpectedCostStatistic(sampler))
