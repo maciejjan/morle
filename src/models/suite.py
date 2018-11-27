@@ -60,7 +60,14 @@ class ModelSuite:
 
     def initialize(self, graph :FullGraph) -> None:
         '''Fit the models assuming unit weights for all roots and edges'''
-        root_weights = np.ones(len(graph.lexicon))
+        root_weights = None
+        if shared.config['General'].getboolean('supervised'):
+            # supervised learning -- take only nodes with no incoming edges
+            # as roots
+            root_weights = np.array([1 if not graph.predecessors(node) else 0 \
+                                     for node in graph.lexicon])
+        else:
+            root_weights = np.ones(len(graph.lexicon))
         edge_weights = np.ones(len(graph.edge_set))
         self.root_model.fit(graph.lexicon, root_weights)
         if self.rule_model is not None:
