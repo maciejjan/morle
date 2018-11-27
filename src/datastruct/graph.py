@@ -330,3 +330,12 @@ class FullGraph(Graph):
                 result.add_edge(edge)
         return result
 
+    def remove_isolated_nodes(self) -> None:
+        '''Remove nodes that are not part of any edge'''
+        # FIXME a very dirty implementation!
+        new_lexicon = Lexicon()
+        new_lexicon.add(entry for entry in self.lexicon \
+                        if self.ingoing_edges(entry) +\
+                           self.outgoing_edges(entry))
+        self.lexicon = new_lexicon
+
