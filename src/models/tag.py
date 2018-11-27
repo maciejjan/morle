@@ -46,7 +46,7 @@ class SimpleTagModel(TagModel):
                 total += weights[i]
         for key, val in counts.items():
             self.probs[key] = val / total
-        self.smoothing_prob = 1 / total
+        self.smoothing_prob = 1e-10 / total
 
     def predict_tags(self, entries :Iterable[LexiconEntry]) -> np.ndarray:
         # FIXME doesn't make much sense here, would just return self.probs
