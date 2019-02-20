@@ -44,14 +44,14 @@ def write_delenv_transducer(filename, max_affix_size, max_infix_size,\
 
 def write_delfilter_transducer(filename, length):
     with open_to_write(filename) as outfp:
-        print(0, 0, '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@', sep='\t',
+        print(0, 0, '@_DELSLOT_SYMBOL_@', hfst.EPSILON, sep='\t',
               file=outfp)
         for i in range(length):
             print(i, i+1, hfst.IDENTITY, hfst.IDENTITY,
                   sep='\t', file=outfp)
             print(i+1, i, '@_DELETION_SYMBOL_@', hfst.EPSILON,
                   sep='\t', file=outfp)
-            print(i+1, i+1, '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@',
+            print(i+1, i+1, '@_DELSLOT_SYMBOL_@', hfst.EPSILON,
                   sep='\t', file=outfp)
             print(i+1, file=outfp)
         first_negative_state = length+1
@@ -60,7 +60,7 @@ def write_delfilter_transducer(filename, length):
         print(first_negative_state, 0, hfst.IDENTITY,
               hfst.IDENTITY, sep='\t', file=outfp)
         print(first_negative_state, first_negative_state, '@_DELSLOT_SYMBOL_@', 
-              '@_DELSLOT_SYMBOL_@', sep='\t', file=outfp)
+              hfst.EPSILON, sep='\t', file=outfp)
         for i in range(length-1):
             print(first_negative_state+i, first_negative_state+i+1,
                   '@_DELETION_SYMBOL_@', hfst.EPSILON, sep='\t',
@@ -69,7 +69,7 @@ def write_delfilter_transducer(filename, length):
                   hfst.IDENTITY, hfst.IDENTITY, sep='\t',
                   file=outfp)
             print(first_negative_state+i+1, first_negative_state+i+1,
-                  '@_DELSLOT_SYMBOL_@', '@_DELSLOT_SYMBOL_@', sep='\t',
+                  '@_DELSLOT_SYMBOL_@', hfst.EPSILON, sep='\t',
                   file=outfp)
 
 def write_tag_absorber(filename, alphabet):
@@ -83,7 +83,8 @@ def write_tag_absorber(filename, alphabet):
         print(0, file=outfp)
         print(1, file=outfp)
 
-def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20):
+def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20,
+                         use_tag_absorber=True, static_compose=False):
     delenv_file = 'delenv.att'
     delfilter_file = 'delfilter.att'
     tag_absorber_file = 'tag_absorber.att'
@@ -96,22 +97,35 @@ def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20):
     write_delfilter_transducer(delfilter_file, max_word_len)
     write_tag_absorber(tag_absorber_file, alphabet)
 
-    cmd = ['hfst-xfst', '-f', 'sfst']
+#     cmd = ['hfst-xfst', '-f', 'sfst']
+    cmd = ['hfst-xfst']
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                          stderr=None, universal_newlines=True)
     p.stdin.write('read att {}\n'.format(full_path(delfilter_file)))
     p.stdin.write('read att {}\n'.format(full_path(delenv_file)))
-    p.stdin.write('read att {}\n'.format(full_path(tag_absorber_file)))
+    if use_tag_absorber:
+        p.stdin.write('read att {}\n'.format(full_path(tag_absorber_file)))
     p.stdin.write('compose\n')
     p.stdin.write('minimize\n')
-    p.stdin.write('define T\n')
-    p.stdin.write('push T\n')
-    p.stdin.write('load stack {}\n'.format(full_path(lexicon_tr_file)))
-    p.stdin.write('compose\n')
-    p.stdin.write('minimize\n')
-    p.stdin.write('invert\n')
-    p.stdin.write('push T\n')
-    p.stdin.write('rotate stack\n')
+    if static_compose:
+        p.stdin.write('load stack {}\n'.format(full_path(lexicon_tr_file)))
+        p.stdin.write('compose\n')
+        p.stdin.write('minimize\n')
+        p.stdin.write('define T\n')
+        p.stdin.write('push T\n')
+        p.stdin.write('invert\n')
+        p.stdin.write('push T\n')
+        p.stdin.write('compose\n')
+        p.stdin.write('minimize\n')
+    else:
+        p.stdin.write('define T\n')
+        p.stdin.write('push T\n')
+        p.stdin.write('load stack {}\n'.format(full_path(lexicon_tr_file)))
+        p.stdin.write('compose\n')
+        p.stdin.write('minimize\n')
+        p.stdin.write('invert\n')
+        p.stdin.write('push T\n')
+        p.stdin.write('rotate stack\n')
     fastss_tr_path = full_path(shared.filenames['fastss-tr'])
     p.stdin.write('save stack {}\n'.format(fastss_tr_path))
     p.stdin.write('quit\n')
@@ -157,6 +171,29 @@ def similar_words_with_lookup(words, transducer_path):
                                  universal_newlines=True, bufsize=1)
     p.stdin.close()
     p.wait()
+
+def similar_words_with_pylookup(words, transducer_path):
+    transducers = algorithms.fst.load_cascade(transducer_path)
+    for t in transducers:
+        t.convert(hfst.ImplementationType.HFST_OL_TYPE)
+    for word in words:
+        similar_words = set()
+#         print(transducers[0].lookup(word))
+        for (substr, cost) in transducers[0].lookup(word):
+#             print('>>>', substr, transducers[1].lookup(substr))
+            for (w, c) in transducers[1].lookup(substr):
+                similar_words.add(w)
+        yield (word, list(similar_words))
+
+def similar_words_with_pylookup_static(words, transducer_path):
+    '''Not really feasible because of astronomical memory consumption.
+       Implemented only for comparison.'''
+    t = algorithms.fst.load_transducer(transducer_path)
+    t.minimize()
+    t.convert(hfst.ImplementationType.HFST_OL_TYPE)
+    for word in words:
+        similar_words = set(w for w, c in t.lookup(word))
+        yield (word, list(similar_words))
 
 def similar_words_with_block_composition(words, transducer_path):
     def _compose_block(block, delenv, right_tr, tokenizer):
@@ -239,6 +276,10 @@ def similar_words(words, transducer_path):
         return similar_words_with_lookup(words, transducer_path)
     elif method == 'block_composition':
         return similar_words_with_block_composition(words, transducer_path)
+    elif method == 'pylookup':
+        return similar_words_with_pylookup(words, transducer_path)
+    elif method == 'pylookup_static':
+        return similar_words_with_pylookup_static(words, transducer_path)
     else:
         raise RuntimeError('Unknown preprocessing method: {}'.format(method))
 

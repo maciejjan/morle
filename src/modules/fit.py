@@ -27,6 +27,8 @@ def run() -> None:
     logging.getLogger('main').info('Loading the graph...')
     edge_set = EdgeSet.load(edges_file, lexicon, rule_set)
     full_graph = FullGraph(lexicon, edge_set)
+    if shared.config['General'].getboolean('supervised'):
+        full_graph.remove_isolated_nodes()
 #     full_graph.load_edges_from_file(graph_file)
 
     # count rule frequencies in the full graph

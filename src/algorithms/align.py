@@ -74,3 +74,47 @@ def extract_all_rules(node_1, node_2):
                           num_seg, len_seg+1, last_seg))
     return list(set(results))
 
+def extract_all_masks(node_1, node_2):
+    '''Extract all masks fitting the pair of words.'''
+    # queue: rule seq, remaining alignment, num_segments, length of the last segment, is_last_segment
+    alignment = align_words(node_1.word, node_2.word)
+    max_affix_length = shared.config['preprocess'].getint('max_affix_length')
+    max_infix_length = shared.config['preprocess'].getint('max_infix_length')
+    max_infix_slots = shared.config['preprocess'].getint('max_infix_slots')
+    print(alignment)
+    queue = [('', 0, 1, 0, 0, False)]
+    results = []
+    while queue:
+        s, i, k, lx, ly, z = queue.pop()
+        print(s, i, k, lx, ly, z)
+        if i >= len(alignment):
+            results.append(s)
+        else:
+            if alignment[i][0] == alignment[i][1]:
+                # prolong the prefix
+                if k == 1 and max(lx, ly) < max_affix_length:
+                    queue.append((s+'-', i+1, k, lx+1, ly+1, z))
+                # prolong the suffix
+                if k > 1 and max(lx, ly) < max_affix_length:
+                    queue.append((s+'-', i+1, k, lx+1, ly+1, True))
+                if not z:
+                    # prolong the current alternation
+                    if k > 1 and max(lx, ly) < max_infix_length:
+                        queue.append((s+'-', i+1, k, lx+1, ly+1, z))
+                    # insert or continue an identity symbol
+                    if not s or s[-1] != '*':
+                        if k < max_infix_slots+2:
+                            queue.append((s+'*', i+1, k+1, 0, 0, z))
+                    else:
+                        queue.append((s+'*', i+1, k, 0, 0, z))
+            else:
+                dx = 0 if alignment[i][0] == hfst.EPSILON else 1
+                dy = 0 if alignment[i][1] == hfst.EPSILON else 1
+                if (k == 1 and max(lx, ly) < max_affix_length) or \
+                        max(lx, ly) < max_infix_length:
+                    queue.append((s+'-', i+1, k, lx+dx, ly+dy, z))
+                elif max(lx, ly) < max_affix_length:
+                    queue.append((s+'-', i+1, k, lx+dx, ly+dy, True))
+#             queue.append((seq + ((x, y),), alignment[1:],\
+#                           num_seg, len_seg+1, last_seg))
+    return list(set(results))
