@@ -17,7 +17,8 @@ setup(
     long_description_content_type='text/markdown',
     url='https://gitlab.com/mmj/morle',
     license='Apache License 2.0',
-    packages=find_packages(exclude=['tests', 'tests.*']),
+    packages=find_packages('src', exclude=['tests', 'tests.*']),
+    package_dir={'' : 'src'},
     install_requires=[
         'hfst >= 3.14.0',
         'keras >= 2.2.0',
