@@ -4,10 +4,6 @@ The snapshot on the branch 'ranlp-2017' was used for evaluation experiments in t
 
 Maciej Sumalvico, *Unsupervised Learning of Morphology with Graph Sampling*, RANLP 2017, Varna, Bulgaria, 2017.
 
-# License
-
-GPLv3
-
 # Author
 
 Maciej Sumalvico, University of Leipzig
