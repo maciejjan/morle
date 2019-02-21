@@ -19,6 +19,7 @@ setup(
     license='MIT',
     packages=find_packages('src', exclude=['tests', 'tests.*']),
     package_dir={'' : 'src'},
+    test_suite='tests',
     install_requires=[
         'hfst >= 3.14.0',
         'keras >= 2.2.0',

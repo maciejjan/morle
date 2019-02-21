@@ -1,7 +1,4 @@
-all: test
-
-test:
-	python3 -m unittest discover -t ./src -s ./src/tests
+all: typecheck
 
 typecheck:
 	find src/ -name *.py -exec mypy {} \;
