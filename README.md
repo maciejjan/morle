@@ -20,7 +20,7 @@ dependencies. Be aware of the following:
 * Python 3 is required (tested on version 3.5.3),
 * in addition to HFST Python bindings (which are pulled automatically), Morle
   currently also uses the HFST command-line tools, which have to be installed
-  manually following the instructions given [here](hfst.github.io),
+  manually following the instructions given [here](http://hfst.github.io),
 * a back-end library for `keras` (either Theano or Tensorflow) has to be
   installed manually (preferably via `pip`); all tests were done on Theano,
 * the command `sort` from GNU coreutils is required.
