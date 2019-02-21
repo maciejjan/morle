@@ -66,7 +66,7 @@ memory consumption and long training times.
 
 ## Author
 
-Maciej Sumalvico <macjan@o2.pl>, NLP Group @ University of Leipzig
+Maciej Sumalvico <macjan(_at_)o2(_dot_)pl>, NLP Group @ University of Leipzig
 
 ## Publications
 
