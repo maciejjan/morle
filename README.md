@@ -58,6 +58,12 @@ The working directory must contain a list of words (optionally with
 frequencies, tab-separated) in a file named `input.training`. You can find
 examples of input files and configurations in the `examples/` subdirectory.
 
+## Preferred size of data
+
+Morle works best on datasets between 50k and 300k words. For less than 50k, the
+model performance is poor, while lists longer than 300k words lead to high
+memory consumption and long training times.
+
 ## Author
 
 Maciej Sumalvico <macjan@o2.pl>, NLP Group @ University of Leipzig
