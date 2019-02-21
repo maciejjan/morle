@@ -1,6 +1,6 @@
-from datastruct.graph import GraphEdge
-from datastruct.lexicon import LexiconEntry
-from datastruct.rules import Rule
+from morle.datastruct.graph import GraphEdge
+from morle.datastruct.lexicon import LexiconEntry
+from morle.datastruct.rules import Rule
 
 import numpy as np
 from typing import Dict, Tuple

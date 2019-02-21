@@ -1,27 +1,24 @@
-import algorithms.fst
-import algorithms.align
-from datastruct.graph import EdgeSet
-from datastruct.rules import Rule
-import hfst
-from utils.files import full_path
-import subprocess
-from scipy.sparse import csr_matrix
-
-from algorithms.mcmc.statistics import \
+import morle.algorithms.fst as FST
+from morle.algorithms.align import extract_all_rules
+from morle.algorithms.mcmc.statistics import \
     MCMCStatistic, ScalarStatistic, IterationStatistic, EdgeStatistic, \
     RuleStatistic, UnorderedWordPairStatistic
-from datastruct.lexicon import LexiconEntry, Lexicon
-from datastruct.graph import GraphEdge, Branching, FullGraph
-from models.suite import ModelSuite
-from utils.files import open_to_write, write_line
-import shared
+from morle.datastruct.lexicon import LexiconEntry, Lexicon
+from morle.datastruct.graph import EdgeSet, GraphEdge, Branching, FullGraph
+from morle.datastruct.rules import Rule
+from morle.models.suite import ModelSuite
+from morle.utils.files import full_path, open_to_write, write_line
+import morle.shared as shared
 
 from collections import defaultdict
+import hfst
 import logging
 import math
 import numpy as np
 from operator import itemgetter
 import random
+from scipy.sparse import csr_matrix
+import subprocess
 import sys
 import tqdm
 from typing import Callable, List, Tuple
@@ -543,13 +540,13 @@ class MCMCTagSampler(MCMCGraphSampler):
             return edge_set
 
         lexicon_tr = self.lexicon.to_fst()
-        lexicon_tr.concatenate(algorithms.fst.generator(self.tagset))
+        lexicon_tr.concatenate(FST.generator(self.tagset))
         rules_tr = self.model.rule_set.to_fst()
         tr = hfst.HfstTransducer(lexicon_tr)
         tr.compose(rules_tr)
         tr.determinize()
         tr.minimize()
-        algorithms.fst.save_transducer(tr, 'tr.fsm')
+        FST.save_transducer(tr, 'tr.fsm')
         
         tr_path = full_path('tr.fsm')
         cmd = ['hfst-fst2strings', tr_path]
@@ -563,7 +560,7 @@ class MCMCTagSampler(MCMCGraphSampler):
                 w1, w2 = line.split(':')
                 n1 = LexiconEntry(w1)
                 n2 = LexiconEntry(w2)
-                rules = algorithms.align.extract_all_rules(n1, n2)
+                rules = extract_all_rules(n1, n2)
                 for rule in rules:
                     if rule in rule_set:
                         edge_set.add(GraphEdge(n1, n2, rule))

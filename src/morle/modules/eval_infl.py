@@ -1,3 +1,5 @@
+#TODO deprecated module
+
 '''Inflection evaluation module.'''
 
 from collections import defaultdict, namedtuple

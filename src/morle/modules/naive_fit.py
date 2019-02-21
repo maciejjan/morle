@@ -1,9 +1,9 @@
-from datastruct.graph import FullGraph, EdgeSet
-from datastruct.lexicon import Lexicon
-from datastruct.rules import RuleSet
-from models.suite import ModelSuite
-from utils.files import file_exists
-import shared
+from morle.datastruct.graph import FullGraph, EdgeSet
+from morle.datastruct.lexicon import Lexicon
+from morle.datastruct.rules import RuleSet
+from morle.models.suite import ModelSuite
+from morle.utils.files import file_exists
+import morle.shared as shared
 
 import logging
 

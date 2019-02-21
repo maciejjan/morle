@@ -1,11 +1,11 @@
-from algorithms.mcmc.samplers import MCMCGraphSamplerFactory
-from algorithms.mcmc.statistics import ExpectedCostStatistic, \
+from morle.algorithms.mcmc.samplers import MCMCGraphSamplerFactory
+from morle.algorithms.mcmc.statistics import ExpectedCostStatistic, \
     AcceptanceRateStatistic, RuleExpectedContributionStatistic
-from datastruct.graph import FullGraph
-from datastruct.rules import Rule
-from models.generic import Model
-from models.marginal import MarginalModel
-import shared
+from morle.datastruct.graph import FullGraph
+from morle.datastruct.rules import Rule
+from morle.models.generic import Model
+from morle.models.marginal import MarginalModel
+import morle.shared as shared
 
 import logging
 import math

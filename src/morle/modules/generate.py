@@ -1,10 +1,10 @@
-from algorithms.analyzer import Analyzer
-import algorithms.fst
-from datastruct.lexicon import Lexicon, LexiconEntry, unnormalize_word
-from datastruct.graph import GraphEdge
-from models.suite import ModelSuite
-from utils.files import file_exists, full_path, open_to_write
-import shared
+from morle.algorithms.analyzer import Analyzer
+import morle.algorithms.fst as FST
+from morle.datastruct.lexicon import Lexicon, LexiconEntry, unnormalize_word
+from morle.datastruct.graph import GraphEdge
+from morle.models.suite import ModelSuite
+from morle.utils.files import file_exists, full_path, open_to_write
+import morle.shared as shared
 
 from collections import defaultdict
 import hfst
@@ -38,7 +38,7 @@ def create_new_words_acceptor_if_not_exists(filename, analyzer, lexicon):
         new_words_acceptor.minimize()
         new_words_acceptor.subtract(lexicon.to_fst())
         new_words_acceptor.minimize()
-        algorithms.fst.save_transducer(new_words_acceptor, filename)
+        FST.save_transducer(new_words_acceptor, filename)
 
 
 def generate_words(tr_file :str, analyzer :Analyzer, model :ModelSuite,

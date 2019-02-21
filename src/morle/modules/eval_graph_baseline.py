@@ -1,3 +1,5 @@
+#TODO deprecated module
+
 import algorithms.fst
 from datastruct.lexicon import Lexicon
 from datastruct.rules import Rule

@@ -1,12 +1,12 @@
-from algorithms.analyzer import get_analyzer
-from datastruct.lexicon import Lexicon, LexiconEntry, load_raw_vocabulary, \
-                               unnormalize_word
-from models.suite import ModelSuite
-from utils.files import file_exists
-import shared
-import sys
+from morle.algorithms.analyzer import get_analyzer
+from morle.datastruct.lexicon import \
+    Lexicon, LexiconEntry, load_raw_vocabulary, unnormalize_word
+from morle.models.suite import ModelSuite
+from morle.utils.files import file_exists
+import morle.shared as shared
 
 import logging
+import sys
 import tqdm
 
 

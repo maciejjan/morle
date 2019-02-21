@@ -1,5 +1,5 @@
-from utils.files import full_path, open_to_write, read_tsv_file, remove_file
-import shared
+from morle.utils.files import full_path, open_to_write, read_tsv_file, remove_file
+import morle.shared as shared
 
 from collections import defaultdict
 import hfst

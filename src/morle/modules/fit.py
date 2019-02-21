@@ -1,11 +1,11 @@
-import algorithms.em
-from datastruct.graph import FullGraph, EdgeSet
-from datastruct.lexicon import Lexicon
-from datastruct.rules import Rule, RuleSet
+from morle.algorithms.em import softem
+from morle.datastruct.graph import FullGraph, EdgeSet
+from morle.datastruct.lexicon import Lexicon
+from morle.datastruct.rules import Rule, RuleSet
 # from models.point import PointModel
-from models.suite import ModelSuite
-from utils.files import file_exists, read_tsv_file
-import shared
+from morle.models.suite import ModelSuite
+from morle.utils.files import file_exists, read_tsv_file
+import morle.shared as shared
 
 from collections import defaultdict
 import logging
@@ -45,5 +45,5 @@ def run() -> None:
 #     for rule, domsize in rules:
 #         model.add_rule(rule, domsize, freq=rule_freq[rule])
 
-    algorithms.em.softem(full_graph, model)
+    softem(full_graph, model)
 

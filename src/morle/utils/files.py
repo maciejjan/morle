@@ -1,4 +1,4 @@
-import shared
+import morle.shared as shared
 
 import csv
 import logging

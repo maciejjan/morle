@@ -1,12 +1,11 @@
-from algorithms.mcmc.samplers import MCMCGraphSamplerFactory
-import algorithms.mcmc.statistics as stats
-from datastruct.graph import EdgeSet, FullGraph
-from datastruct.lexicon import Lexicon
-from datastruct.rules import Rule, RuleSet
-from models.suite import ModelSuite
-from utils.files import file_exists, open_to_write, read_tsv_file, write_line
-import algorithms.mcmc
-import shared
+from morle.algorithms.mcmc.samplers import MCMCGraphSamplerFactory
+import morle.algorithms.mcmc.statistics as stats
+from morle.datastruct.graph import EdgeSet, FullGraph
+from morle.datastruct.lexicon import Lexicon
+from morle.datastruct.rules import Rule, RuleSet
+from morle.models.suite import ModelSuite
+from morle.utils.files import file_exists, open_to_write, read_tsv_file, write_line
+import morle.shared as shared
 
 from collections import defaultdict
 import logging

@@ -1,9 +1,9 @@
-from utils.files import full_path
+from morle.utils.files import full_path
+import morle.shared as shared
 
 from collections import defaultdict
 import hfst
 import os.path
-import shared
 import sys
 import tqdm
 import types

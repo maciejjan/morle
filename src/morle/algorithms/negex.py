@@ -1,8 +1,8 @@
-from datastruct.graph import GraphEdge, EdgeSet
-from datastruct.lexicon import LexiconEntry, Lexicon
-from datastruct.rules import Rule, RuleSet
-from utils.parallel import parallel_execute
-import shared
+from morle.datastruct.graph import GraphEdge, EdgeSet
+from morle.datastruct.lexicon import LexiconEntry, Lexicon
+from morle.datastruct.rules import Rule, RuleSet
+from morle.utils.parallel import parallel_execute
+import morle.shared as shared
 
 from collections import defaultdict
 import hfst

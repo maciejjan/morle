@@ -1,3 +1,5 @@
+#TODO deprecated module
+
 import algorithms.clustering
 from algorithms.mcmc.samplers import MCMCGraphSampler
 from algorithms.mcmc.statistics import *

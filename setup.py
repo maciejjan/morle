@@ -29,7 +29,7 @@ setup(
         'tqdm >= 4.11.2'
     ],
     package_data={
-        '': ['config-default.ini'],
+        'morle': ['config-default.ini'],
     },
     entry_points={
         'console_scripts': [

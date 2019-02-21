@@ -1,15 +1,14 @@
-import algorithms.align
-import algorithms.fst
-import algorithms.fstfastss
-from datastruct.lexicon import Lexicon, LexiconEntry
-from datastruct.rules import Rule
-from utils.files import aggregate_file, file_exists, full_path, \
-                        open_to_write, read_tsv_file, read_tsv_file_by_key, \
-                        remove_file, remove_file_if_exists, rename_file, \
-                        sort_file, update_file_size, write_line, \
-                        write_tsv_file
-from utils.parallel import parallel_execute
-import shared
+from morle.algorithms.align import extract_all_rules
+import morle.algorithms.fst as FST
+from morle.algorithms.fstfastss import build_fastss_cascade, similar_words
+from morle.datastruct.lexicon import Lexicon, LexiconEntry
+from morle.datastruct.rules import Rule
+from morle.utils.files import \
+    aggregate_file, file_exists, full_path, open_to_write, read_tsv_file, \
+    read_tsv_file_by_key, remove_file, remove_file_if_exists, rename_file, \
+    sort_file, update_file_size, write_line, write_tsv_file
+from morle.utils.parallel import parallel_execute
+import morle.shared as shared
 
 from hfst import HfstTransducer, compile_lexc_file
 import logging
@@ -123,9 +122,8 @@ def build_graph_fstfastss(
 
     logging.getLogger('main').info('Building the FastSS cascade...')
     max_word_len = max([len(e.word) for e in lexicon])
-    algorithms.fstfastss.build_fastss_cascade(lex_tr_file,
-                                              lexicon.alphabet,
-                                              max_word_len=max_word_len)
+    build_fastss_cascade(lex_tr_file, lexicon.alphabet,
+                         max_word_len=max_word_len)
 
     def _is_possible_edge(v1 :LexiconEntry, v2 :LexiconEntry) -> bool:
         return v1.is_possible_edge_source() and v2.is_possible_edge_target()
@@ -134,7 +132,7 @@ def build_graph_fstfastss(
                                  output_fun :Callable[..., None],
                                  lexicon :Lexicon,
                                  transducer_path :str) -> None:
-        sw = algorithms.fstfastss.similar_words(words, transducer_path)
+        sw = similar_words(words, transducer_path)
         for word_1, simwords in sw:
             v1_list = lexicon.get_by_symstr(word_1)
             for v1 in v1_list:
@@ -142,7 +140,7 @@ def build_graph_fstfastss(
                 for word_2 in simwords:
                     for v2 in lexicon.get_by_symstr(word_2):
                         if v1 != v2 and _is_possible_edge(v1, v2):
-                            rules = algorithms.align.extract_all_rules(v1, v2)
+                            rules = extract_all_rules(v1, v2)
                             for rule in rules:
                                 results_for_v1.append((v2.literal, str(rule)))
                 output_fun((v1.literal, results_for_v1))
@@ -167,7 +165,7 @@ def build_graph_from_training_edges(lexicon, training_file, graph_file):
             if word_1:
                 try:
                     n1, n2 = lexicon[word_1], lexicon[word_2]
-                    for rule in algorithms.align.extract_all_rules(n1, n2):
+                    for rule in extract_all_rules(n1, n2):
                         write_line(fp, (str(n1), str(n2), str(rule)))
                 except KeyError:
                     if word_1 not in lexicon:
@@ -199,7 +197,7 @@ def run() -> None:
     lexicon = Lexicon.load(shared.filenames['wordlist'])
     logging.getLogger('main').info('Building the lexicon transducer...')
     lexicon_tr = lexicon.to_fst()
-    algorithms.fst.save_transducer(lexicon_tr, shared.filenames['lexicon-tr'])
+    FST.save_transducer(lexicon_tr, shared.filenames['lexicon-tr'])
 
     if shared.config['General'].getboolean('supervised'):
         logging.getLogger('main').info('Building graph...')
@@ -223,7 +221,7 @@ def run() -> None:
                                                 key=3, show_progressbar=False):
         rules.append(Rule.from_string(rule_str))
     lexicon_tr = lexicon.to_fst()
-    algorithms.fst.save_transducer(lexicon_tr, shared.filenames['lexicon-tr'])
+    FST.save_transducer(lexicon_tr, shared.filenames['lexicon-tr'])
     logging.getLogger('main').info('Computing rule domain sizes...')
     write_tsv_file(shared.filenames['rules'],
                    ((str(rule), domsize)\

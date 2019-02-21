@@ -1,3 +1,5 @@
+#TODO deprecated module
+
 import algorithms.fst
 from datastruct.lexicon import normalize_word, unnormalize_word
 from datastruct.rules import Rule

@@ -1,7 +1,7 @@
-from datastruct.lexicon import Lexicon, LexiconEntry
-from datastruct.rules import Rule, RuleSet
-from utils.files import open_to_write, read_tsv_file, write_line
-import shared
+from morle.datastruct.lexicon import Lexicon, LexiconEntry
+from morle.datastruct.rules import Rule, RuleSet
+from morle.utils.files import open_to_write, read_tsv_file, write_line
+import morle.shared as shared
 
 from collections import defaultdict
 import logging

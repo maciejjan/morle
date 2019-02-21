@@ -1,4 +1,4 @@
-import algorithms.mcmc.samplers
+import algorithms.mcmc.samplers as samplers
 import algorithms.mcmc.statistics as stats
 from datastruct.graph import EdgeSet, FullGraph
 from datastruct.lexicon import Lexicon
@@ -46,7 +46,7 @@ def run() -> None:
 
     # prepare the sampler + run sampling
     sampler = \
-        algorithms.mcmc.samplers.MCMCTagSampler(\
+        samplers.MCMCTagSampler(\
             full_graph, model, tagset,
             warmup_iter=shared.config['sample-tags']\
                               .getint('warmup_iterations'),

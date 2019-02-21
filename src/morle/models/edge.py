@@ -1,10 +1,10 @@
-from algorithms.negex import NegativeExampleSampler
-from datastruct.lexicon import Lexicon
-from datastruct.graph import GraphEdge, EdgeSet
-from datastruct.rules import Rule, RuleSet
-from models.generic import Model, ModelFactory, UnknownModelTypeException
-from utils.files import read_tsv_file, write_tsv_file
-import shared
+from morle.algorithms.negex import NegativeExampleSampler
+from morle.datastruct.lexicon import Lexicon
+from morle.datastruct.graph import GraphEdge, EdgeSet
+from morle.datastruct.rules import Rule, RuleSet
+from morle.models.generic import Model, ModelFactory, UnknownModelTypeException
+from morle.utils.files import read_tsv_file, write_tsv_file
+import morle.shared as shared
 
 from collections import defaultdict
 from itertools import chain

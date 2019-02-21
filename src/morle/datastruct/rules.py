@@ -1,5 +1,6 @@
-import algorithms.fst
-from utils.files import *
+import morle.algorithms.fst as FST
+from morle.utils.files import *
+
 import hfst
 import re
 from operator import itemgetter
@@ -60,7 +61,7 @@ class Rule:
         if t.is_cyclic():
             logging.getLogger('main').warning('cyclic transducer for %s' %\
                                               self.__str__())
-        return algorithms.fst.number_of_paths(t)
+        return FST.number_of_paths(t)
 
     def seq(self):
         x_seq, y_seq = [], []
@@ -133,7 +134,7 @@ class Rule:
              ''.join(self.tag_subst[1]) if self.tag_subst else '')
     
     def to_fst(self, weight :int=0, alphabet=None) -> hfst.HfstTransducer:
-        return algorithms.fst.seq_to_transducer(\
+        return FST.seq_to_transducer(\
                    self.seq(), weight=weight, 
                    alphabet=shared.multichar_symbols)
     
@@ -202,7 +203,7 @@ class RuleSet:
 
     def to_fst(self, **kwargs) -> hfst.HfstTransducer:
         transducers = [rule.to_fst() for rule in self.items]
-        return algorithms.fst.binary_disjunct(transducers, **kwargs)
+        return FST.binary_disjunct(transducers, **kwargs)
 
     def save(self, filename :str) -> None:
         with open_to_write(filename) as fp:

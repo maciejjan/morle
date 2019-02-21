@@ -1,4 +1,5 @@
-import shared
+from morle import __version__
+import morle.shared as shared
 
 import argparse
 import importlib
@@ -25,7 +26,7 @@ def process_config():
         load_config(config_file_path)
     else:
         default_config_file_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            os.path.dirname(os.path.abspath(__file__)),
             shared.filenames['config-default'])
         if not os.path.isfile(default_config_file_path):
             raise RuntimeError('No configuration file found.')
@@ -65,7 +66,8 @@ def setup_logger(quiet, verbose):
 def setup():
     'Process command-line parameters and update config.'
     ap = argparse.ArgumentParser(prog='morle', \
-        description='morle -- MORphemeLEss MORphology LEarner 0.1 alpha')
+        description='morle -- MORphemeLEss MORphology LEarner v{}'\
+                    .format(__version__))
     # obligatory arguments
 #     ap.add_argument('mode', type=str, help='import, export, eval, run')
     ap.add_argument('modules', type=str, help='preprocess, modsel, fit')
@@ -79,7 +81,7 @@ def setup():
                           help='quiet mode: print less console output')
     ap.add_argument('-v', action='store_true', dest='verbose',
                           help='verbose mode: print more information in the log file')
-    ap.add_argument('--version', action='version', version='morle 0.1 alpha')
+    ap.add_argument('--version', action='version', version=__version__)
 #    ap.add_argument('-p', '--progress', action='store_true', help='print progress of performed operations')
     args = ap.parse_args()
     if args.workdir is not None:
@@ -97,13 +99,15 @@ def setup():
     return args.modules.split('+')
 
 
-def main(modules_to_run):
-    for module_name in modules_to_run:
-        module = importlib.import_module('modules.' + module_name)
+def run_modules(module_names):
+    for module_name in module_names:
+        module = importlib.import_module('morle.modules.' + module_name)
         module.run()
 
+def main():
+    modules = setup()
+    run_modules(modules)
 
 if __name__ == '__main__':
-    modules = setup()
-    main(modules)
+    main()
 

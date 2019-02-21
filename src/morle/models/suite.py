@@ -1,16 +1,15 @@
-import algorithms.fst
-from datastruct.lexicon import LexiconEntry, Lexicon
-from datastruct.graph import EdgeSet, GraphEdge, FullGraph
-from datastruct.rules import Rule, RuleSet
-from models.root import RootModelFactory
-from models.rule import RuleModelFactory
-from models.tag import TagModelFactory
-from models.edge import EdgeModelFactory
-from models.feature import RootFeatureModelFactory, EdgeFeatureModelFactory
-from models.frequency import RootFrequencyModelFactory, \
-                             EdgeFrequencyModelFactory
-from utils.files import file_exists
-import shared
+from morle.datastruct.lexicon import LexiconEntry, Lexicon
+from morle.datastruct.graph import EdgeSet, GraphEdge, FullGraph
+from morle.datastruct.rules import Rule, RuleSet
+from morle.models.root import RootModelFactory
+from morle.models.rule import RuleModelFactory
+from morle.models.tag import TagModelFactory
+from morle.models.edge import EdgeModelFactory
+from morle.models.feature import RootFeatureModelFactory, EdgeFeatureModelFactory
+from morle.models.frequency import RootFrequencyModelFactory, \
+                                   EdgeFrequencyModelFactory
+from morle.utils.files import file_exists
+import morle.shared as shared
 
 import logging
 import numpy as np

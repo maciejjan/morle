@@ -1,6 +1,6 @@
-import algorithms.fst
-from utils.files import full_path, open_to_write, remove_file
-import shared
+import morle.algorithms.fst as FST
+from morle.utils.files import full_path, open_to_write, remove_file
+import morle.shared as shared
 
 import hfst
 from operator import itemgetter
@@ -173,7 +173,7 @@ def similar_words_with_lookup(words, transducer_path):
     p.wait()
 
 def similar_words_with_pylookup(words, transducer_path):
-    transducers = algorithms.fst.load_cascade(transducer_path)
+    transducers = FST.load_cascade(transducer_path)
     for t in transducers:
         t.convert(hfst.ImplementationType.HFST_OL_TYPE)
     for word in words:
@@ -188,7 +188,7 @@ def similar_words_with_pylookup(words, transducer_path):
 def similar_words_with_pylookup_static(words, transducer_path):
     '''Not really feasible because of astronomical memory consumption.
        Implemented only for comparison.'''
-    t = algorithms.fst.load_transducer(transducer_path)
+    t = FST.load_transducer(transducer_path)
     t.minimize()
     t.convert(hfst.ImplementationType.HFST_OL_TYPE)
     for word in words:
@@ -250,7 +250,7 @@ def similar_words_with_block_composition(words, transducer_path):
             results_dict[word_1].append(word_2)
         return results_dict
 
-    delenv, right_tr = algorithms.fst.load_cascade(transducer_path)
+    delenv, right_tr = FST.load_cascade(transducer_path)
     tok = hfst.HfstTokenizer()
     for sym in shared.multichar_symbols:
         tok.add_multichar_symbol(sym)

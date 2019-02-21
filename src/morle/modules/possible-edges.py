@@ -1,10 +1,10 @@
-import algorithms.align
-import algorithms.fst
-from datastruct.graph import GraphEdge, EdgeSet
-from datastruct.lexicon import Lexicon, LexiconEntry
-from datastruct.rules import RuleSet
-from utils.files import file_exists, full_path
-import shared
+import morle.algorithms.align
+import morle.algorithms.fst as FST
+from morle.datastruct.graph import GraphEdge, EdgeSet
+from morle.datastruct.lexicon import Lexicon, LexiconEntry
+from morle.datastruct.rules import RuleSet
+from morle.utils.files import file_exists, full_path
+import morle.shared as shared
 
 import hfst
 import logging
@@ -28,7 +28,7 @@ def compute_possible_edges(lexicon :Lexicon, rule_set :RuleSet) -> EdgeSet:
     lexicon_tr = lexicon.to_fst()
     tag_seqs = extract_tag_symbols_from_rules(rule_set)
     if tag_seqs:
-        lexicon_tr.concatenate(algorithms.fst.generator(tag_seqs))
+        lexicon_tr.concatenate(FST.generator(tag_seqs))
     rules_tr = rule_set.to_fst()
     tr = hfst.HfstTransducer(lexicon_tr)
     tr.compose(rules_tr)
@@ -38,7 +38,7 @@ def compute_possible_edges(lexicon :Lexicon, rule_set :RuleSet) -> EdgeSet:
     tr.compose(lexicon_tr)
     tr.determinize()
     tr.minimize()
-    algorithms.fst.save_transducer(tr, 'tr.fsm')
+    FST.save_transducer(tr, 'tr.fsm')
     
     tr_path = full_path('tr.fsm')
     cmd = ['hfst-fst2strings', tr_path]

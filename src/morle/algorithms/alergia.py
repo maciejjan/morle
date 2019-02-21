@@ -6,8 +6,6 @@ import math
 from operator import itemgetter
 import re
 import sys
-
-import math
 from typing import Iterable
 
 

@@ -1,11 +1,11 @@
-from algorithms.align import extract_all_rules
-import algorithms.fst
-from datastruct.lexicon import tokenize_word, normalize_seq, normalize_word, \
+from morle.algorithms.align import extract_all_rules
+import morle.algorithms.fst as FST
+from morle.datastruct.lexicon import tokenize_word, normalize_seq, normalize_word, \
                                unnormalize_word, Lexicon, LexiconEntry
-from datastruct.graph import GraphEdge
-from models.suite import ModelSuite
-from utils.files import read_tsv_file
-import shared
+from morle.datastruct.graph import GraphEdge
+from morle.models.suite import ModelSuite
+from morle.utils.files import read_tsv_file
+import morle.shared as shared
 
 import hfst
 import logging
@@ -46,8 +46,8 @@ def inflect_word(lemma :LexiconEntry, tag :str, rules_tr, model, **kwargs):
 # TODO refactor
 def run():
     lexicon = Lexicon.load(shared.filenames['wordlist'])
-    lexicon_tr = algorithms.fst.load_transducer(shared.filenames['lexicon-tr'])
-    rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+    lexicon_tr = FST.load_transducer(shared.filenames['lexicon-tr'])
+    rules_tr = FST.load_transducer(shared.filenames['rules-tr'])
     rules_tr.convert(hfst.ImplementationType.HFST_OLW_TYPE)
     alphabet = lexicon_tr.get_alphabet()
     model = ModelSuite.load()

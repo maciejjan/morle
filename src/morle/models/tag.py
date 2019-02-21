@@ -1,7 +1,7 @@
-from datastruct.lexicon import LexiconEntry, Lexicon
-from models.generic import Model, ModelFactory, UnknownModelTypeException
-import shared
-from utils.files import open_to_read, open_to_write, read_tsv_file, write_line
+from morle.datastruct.lexicon import LexiconEntry, Lexicon
+from morle.models.generic import Model, ModelFactory, UnknownModelTypeException
+from morle.utils.files import open_to_read, open_to_write, read_tsv_file, write_line
+import morle.shared as shared
 
 from collections import defaultdict
 from keras.models import Sequential

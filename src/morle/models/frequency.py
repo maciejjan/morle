@@ -1,8 +1,8 @@
-from datastruct.graph import GraphEdge, EdgeSet
-from datastruct.lexicon import LexiconEntry, Lexicon
-from datastruct.rules import RuleSet
-from models.generic import Model, ModelFactory, UnknownModelTypeException
-from utils.files import full_path
+from morle.datastruct.graph import GraphEdge, EdgeSet
+from morle.datastruct.lexicon import LexiconEntry, Lexicon
+from morle.datastruct.rules import RuleSet
+from morle.models.generic import Model, ModelFactory, UnknownModelTypeException
+from morle.utils.files import full_path
 
 import logging
 import math

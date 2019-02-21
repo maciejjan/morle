@@ -1,4 +1,5 @@
-from datastruct.rules import *
+from morle.datastruct.rules import *
+
 import hfst
 from operator import itemgetter
 

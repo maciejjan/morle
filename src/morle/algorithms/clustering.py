@@ -1,5 +1,5 @@
-from datastruct.lexicon import LexiconEntry
-from datastruct.graph import FullGraph
+from morle.datastruct.lexicon import LexiconEntry
+from morle.datastruct.graph import FullGraph
 
 import logging
 import numpy as np

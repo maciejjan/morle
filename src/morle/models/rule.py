@@ -1,6 +1,6 @@
-from datastruct.rules import Rule
-from models.generic import Model, ModelFactory, UnknownModelTypeException
-from utils.files import open_to_write, read_tsv_file, write_line
+from morle.datastruct.rules import Rule
+from morle.models.generic import Model, ModelFactory, UnknownModelTypeException
+from morle.utils.files import open_to_write, read_tsv_file, write_line
 
 from collections import defaultdict
 from typing import Iterable

@@ -1,9 +1,9 @@
-import algorithms.alergia
-import algorithms.fst
-from datastruct.lexicon import LexiconEntry, Lexicon
-from models.generic import Model, ModelFactory, UnknownModelTypeException
-from utils.files import open_to_write, read_tsv_file, write_line
-import shared
+from morle.algorithms.alergia import alergia
+import morle.algorithms.fst as FST
+from morle.datastruct.lexicon import LexiconEntry, Lexicon
+from morle.models.generic import Model, ModelFactory, UnknownModelTypeException
+from morle.utils.files import open_to_write, read_tsv_file, write_line
+import morle.shared as shared
 
 from collections import defaultdict
 import hfst
@@ -101,11 +101,11 @@ class AlergiaRootModel(RootModel):
 #         alpha = shared.config['compile'].getfloat('alergia_alpha')
 #         freq_threshold = \
 #             shared.config['compile'].getint('alergia_freq_threshold')
-        self.automaton = \
-            algorithms.alergia.alergia(word_seqs,
-                                       alpha=self.alpha, 
-                                       freq_threshold=self.freq_threshold)\
-                      .to_hfst()
+        self.automaton = alergia(
+            word_seqs,
+            alpha=self.alpha,
+            freq_threshold=self.freq_threshold)\
+            .to_hfst()
 #         tag_automaton = \
 #             algorithms.alergia.prefix_tree_acceptor(tag_seqs).to_hfst()
 #         tag_automaton.minimize()
@@ -140,7 +140,7 @@ class AlergiaRootModel(RootModel):
 
     def save(self, filename :str) -> None:
         # TODO saving/loading smoothing and parameters
-        algorithms.fst.save_transducer(self.automaton, filename)
+        FST.save_transducer(self.automaton, filename)
         if self.smoothing > 0:
             self.smoothing_model.save(filename + '.smoothing')
 
@@ -148,7 +148,7 @@ class AlergiaRootModel(RootModel):
     def load(filename :str, **kwargs) -> 'AlergiaRootModel':
         # TODO saving/loading smoothing and parameters
         result = AlergiaRootModel(**kwargs)
-        result.automaton = algorithms.fst.load_transducer(filename)
+        result.automaton = FST.load_transducer(filename)
         if result.smoothing > 0:
             result.smoothing_model = \
                 UnigramRootModel.load(filename + '.smoothing')

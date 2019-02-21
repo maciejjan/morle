@@ -1,10 +1,10 @@
-from algorithms.mcmc.statistics import AcceptanceRateStatistic, \
+from morle.algorithms.mcmc.statistics import AcceptanceRateStatistic, \
     EdgeFrequencyStatistic, ExpectedCostStatistic
-from algorithms.mcmc.samplers import MCMCGraphSamplerFactory
-from datastruct.graph import FullGraph
+from morle.algorithms.mcmc.samplers import MCMCGraphSamplerFactory
+from morle.datastruct.graph import FullGraph
 # from models.point import PointModel
-from models.suite import ModelSuite
-import shared
+from morle.models.suite import ModelSuite
+import morle.shared as shared
 
 import numpy as np
 import logging

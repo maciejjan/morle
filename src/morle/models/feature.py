@@ -1,10 +1,9 @@
-import algorithms.fst
-from datastruct.graph import EdgeSet, FullGraph, GraphEdge
-from datastruct.lexicon import Lexicon, LexiconEntry
-from datastruct.rules import RuleSet, Rule
-from models.generic import Model, ModelFactory, UnknownModelTypeException
-from utils.files import full_path
-import shared
+from morle.datastruct.graph import EdgeSet, FullGraph, GraphEdge
+from morle.datastruct.lexicon import Lexicon, LexiconEntry
+from morle.datastruct.rules import RuleSet, Rule
+from morle.models.generic import Model, ModelFactory, UnknownModelTypeException
+from morle.utils.files import full_path
+import morle.shared as shared
 
 import keras.models
 from keras.layers import concatenate, Dense, Embedding, Flatten, Input, \

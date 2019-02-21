@@ -1,11 +1,11 @@
-from algorithms.align import extract_all_rules
-import algorithms.fst
-from datastruct.lexicon import Lexicon, LexiconEntry, unnormalize_word
-from datastruct.graph import GraphEdge, EdgeSet
-from datastruct.rules import RuleSet
-from models.suite import ModelSuite
-from utils.files import file_exists
-import shared
+from morle.algorithms.align import extract_all_rules
+import morle.algorithms.fst as FST
+from morle.datastruct.lexicon import Lexicon, LexiconEntry, unnormalize_word
+from morle.datastruct.graph import GraphEdge, EdgeSet
+from morle.datastruct.rules import RuleSet
+from morle.models.suite import ModelSuite
+from morle.utils.files import file_exists
+import morle.shared as shared
 
 import hfst
 import logging
@@ -130,11 +130,11 @@ class Analyzer:
         return results
 
     def _compile_fst(self) -> None:
-        rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+        rules_tr = FST.load_transducer(shared.filenames['rules-tr'])
         self.inv_rules_tr = hfst.HfstTransducer(rules_tr)
         self.inv_rules_tr.invert()
         logging.getLogger('main').info('Building lexicon transducer...')
-        lexicon_tr = algorithms.fst.load_transducer(\
+        lexicon_tr = FST.load_transducer(\
                        shared.filenames['lexicon-tr'])
         self.fst = hfst.HfstTransducer(lexicon_tr)
         logging.getLogger('main').info('Composing with rules...')
@@ -144,14 +144,14 @@ class Analyzer:
         self.fst.convert(hfst.ImplementationType.HFST_OLW_TYPE)
 
     def save(self, filename :str) -> None:
-        algorithms.fst.save_transducer(self.fst, filename)
+        FST.save_transducer(self.fst, filename)
 
     @staticmethod
     def load(filename :str, lexicon, model, **kwargs) -> None:
         kwargs['compile'] = False
         analyzer = Analyzer(lexicon, model, **kwargs)
-        analyzer.fst = algorithms.fst.load_transducer(filename)
-        rules_tr = algorithms.fst.load_transducer(shared.filenames['rules-tr'])
+        analyzer.fst = FST.load_transducer(filename)
+        rules_tr = FST.load_transducer(shared.filenames['rules-tr'])
         analyzer.inv_rules_tr = hfst.HfstTransducer(rules_tr)
         analyzer.inv_rules_tr.invert()
         return analyzer

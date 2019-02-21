@@ -1,9 +1,9 @@
-from algorithms.clustering import chinese_whispers
-from datastruct.lexicon import Lexicon, LexiconEntry
-from datastruct.graph import FullGraph, EdgeSet, GraphEdge
-from datastruct.rules import Rule
-from utils.files import full_path, read_tsv_file, open_to_write
-import shared
+from morle.algorithms.clustering import chinese_whispers
+from morle.datastruct.lexicon import Lexicon, LexiconEntry
+from morle.datastruct.graph import FullGraph, EdgeSet, GraphEdge
+from morle.datastruct.rules import Rule
+from morle.utils.files import full_path, read_tsv_file, open_to_write
+import morle.shared as shared
 
 import logging
 import numpy as np

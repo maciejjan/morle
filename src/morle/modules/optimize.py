@@ -1,3 +1,5 @@
+#TODO deprecated module
+
 import algorithms.em
 from datastruct.graph import EdgeSet, FullGraph
 from datastruct.lexicon import Lexicon
