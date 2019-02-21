@@ -1,8 +1,8 @@
-from algorithms.alergia import *
-import random
-import shared
+from morle.algorithms.alergia import *
+import morle.shared as shared
 
 import math
+import random
 import unittest
 
 

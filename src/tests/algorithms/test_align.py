@@ -1,5 +1,5 @@
-from datastruct.lexicon import LexiconEntry
-import shared
+from morle.datastruct.lexicon import LexiconEntry
+import morle.shared as shared
 
 import unittest
 

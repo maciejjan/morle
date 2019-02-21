@@ -1,6 +1,6 @@
-from datastruct.lexicon import Lexicon, LexiconEntry
-from datastruct.rules import Rule
-import shared
+from morle.datastruct.lexicon import Lexicon, LexiconEntry
+from morle.datastruct.rules import Rule
+import morle.shared as shared
 
 import hfst
 import unittest

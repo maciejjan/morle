@@ -1,8 +1,8 @@
-from algorithms.negex import NegativeExampleSampler
-from datastruct.lexicon import Lexicon, LexiconEntry
-from datastruct.rules import Rule, RuleSet
-from datastruct.graph import GraphEdge, EdgeSet
-import shared
+from morle.algorithms.negex import NegativeExampleSampler
+from morle.datastruct.lexicon import Lexicon, LexiconEntry
+from morle.datastruct.rules import Rule, RuleSet
+from morle.datastruct.graph import GraphEdge, EdgeSet
+import morle.shared as shared
 
 import unittest
 
