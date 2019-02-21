@@ -16,7 +16,7 @@ setup(
     long_description=README,
     long_description_content_type='text/markdown',
     url='https://gitlab.com/mmj/morle',
-    license='Apache License 2.0',
+    license='MIT',
     packages=find_packages('src', exclude=['tests', 'tests.*']),
     package_dir={'' : 'src'},
     install_requires=[
