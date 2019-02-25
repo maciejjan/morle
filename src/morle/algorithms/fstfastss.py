@@ -201,7 +201,6 @@ def similar_words_with_block_composition(words, transducer_path):
         for word in block:
             tr.disjunct(hfst.tokenized_fst(tokenizer.tokenize(word)))
         tr.minimize()
-        tr.convert(hfst.ImplementationType.SFST_TYPE)
         tr.compose(delenv)
         tr.minimize()
         tr.compose(right_tr)
