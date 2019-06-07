@@ -98,7 +98,7 @@ def build_fastss_cascade(lexicon_tr_file, alphabet, max_word_len=20,
     write_tag_absorber(tag_absorber_file, alphabet)
 
 #     cmd = ['hfst-xfst', '-f', 'sfst']
-    cmd = ['hfst-xfst']
+    cmd = ['hfst-xfst', '-p']
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                          stderr=None, universal_newlines=True)
     p.stdin.write('read att {}\n'.format(full_path(delfilter_file)))
