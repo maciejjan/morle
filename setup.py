@@ -10,7 +10,7 @@ with open('README.md') as fp:
 setup(
     name='morle',
     version='0.9.0b0',
-    author='Maciej Sumalvico',
+    author='Maciej Janicki',
     author_email='macjan@o2.pl',
     description='A MORphemeLEss MORphology LEarner.',
     long_description=README,

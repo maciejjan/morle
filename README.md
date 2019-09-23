@@ -66,9 +66,18 @@ memory consumption and long training times.
 
 ## Author
 
-Maciej Sumalvico <macjan(_at_)o2(_dot_)pl>, NLP Group @ University of Leipzig
+Maciej Janicki <macjan(_at_)o2(_dot_)pl>, NLP Group @ University of Leipzig
 
 ## Publications
 
-Maciej Sumalvico, *Unsupervised Learning of Morphology with Graph Sampling*,
+If you use Morle in your research, please cite:
+
+* Maciej Janicki, *Statistical and Computational Models for Whole Word
+  Morphology*, PhD thesis, University of Leipzig, 2019.
+
+Other Morle-related publications are:
+
+* Maciej Janicki, *Semi-supervised Induction of POS-tag Lexicons with Tree Models*,
+RANLP 2019, Varna, Bulgaria, 2019.
+* Maciej Sumalvico, *Unsupervised Learning of Morphology with Graph Sampling*,
 RANLP 2017, Varna, Bulgaria, 2017.
