@@ -21,7 +21,7 @@ setup(
     package_dir={'' : 'src'},
     test_suite='tests',
     install_requires=[
-        'hfst >= 3.12.0',
+        'hfst >= 3.12.0.0b0',
         'keras >= 2.2.0',
         'networkx >= 1.10, < 2.0',
         'numpy >= 1.15.2',
